@@ -200,3 +200,199 @@ including them would mean inventing entities with no backing data - a
 violation of docs/RULES.md's schema-fidelity rule. This is a real,
 documented gap in the V4 Universe (no supplier/PO layer yet), not something
 papered over with fabricated nodes.
+
+## Phase 4 Field-Fidelity Audit
+
+Phase 4 (verification/documentation, no new features) performed a genuine
+manual read-through of all 5 user-facing rendering modules -
+`lenses/universe.js`, `lenses/risk-board.js`, `panels/dashboard.js`,
+`panels/passport.js`, `panels/jarvis.js` - going beyond what
+`scripts/verify-field-map.mjs` checks. That script only verifies that every
+object-literal key `engine/derive.js` introduces is either a raw source
+field or listed in its own `KNOWN_OUTPUT_FIELDS` manifest; it says nothing
+about whether the 5 rendering modules display those fields honestly. This
+section records what that manual audit found.
+
+**Note on this audit's method.** The Phase 4 working session mirrored only
+`src/data/*.json` and the codebase itself into its local working copy (not
+the full `docs/` tree) - so `docs/RULES.md`, `docs/field-map.md`,
+`docs/PANEL_SPECIFICATIONS.md`, `docs/DATA_LAYER_AUDIT.md`,
+`docs/STATE_MODEL.md`, `docs/CAMERA_MODEL.md`, `docs/TIMELINE_ENGINE.md`,
+`docs/LENS_SPECIFICATIONS.md`, and `docs/data-contracts/*.md` were not
+present in that particular local checkout. These documents do exist in the
+repository (they are the same canonical docs every prior phase built
+against, verified present on `main` by the orchestrator against the live
+repository both before this phase and again while reconciling this file
+afterward) - their absence was a gap in that one working copy, not a fact
+about the project. Because of that gap, the audit below verified each
+displayed value directly against (a) the real `src/data/*.json` files, (b)
+the already-passing `engine/derive.js` -> `KNOWN_OUTPUT_FIELDS` contract, and
+(c) internal consistency across the codebase's own cross-references (e.g.
+confirming a `sourceField` annotation's claimed raw field genuinely exists
+and genuinely holds the value being displayed), rather than literally
+diffing each rendered label against `field-map.md`'s prose line by line.
+The orchestrator subsequently cross-checked this section's findings against
+the actual `docs/field-map.md` tables and confirmed every category named
+below (Dashboard's 7 KPI names, Universe's node/edge fields, Risk Board's
+commitment fields, Passport's 7 sections including the real
+status/category/evidence_summary/created_at recommendation fields
+field-map.md itself calls out, and Jarvis's 4 fields) matches by name and by
+the "supported"/"derived_supported" designation `field-map.md` assigns -
+see `docs/V4_PLAN.md`'s acceptance checklist item 8, which is checked off on
+that combined basis.
+
+### Findings by category
+
+**1. `panels/jarvis.js` - no chatbot/LLM framing.** Checked, no issues
+found. The module's own header comment states the requirement explicitly
+("Jarvis is not a chatbot in the lab... every word rendered here traces
+directly to a bundle.jarvis field") and the actual rendering code matches:
+no chat input box, no typing animation, no first-person "I think" language,
+no free-text generation of any kind. Every string rendered is either a
+label (`"Context"`, `"Important Changes"`, `"Suggested Next Step"`,
+`"Evidence Reference"`, `"Lens"`, `"Time slice"`, `"Depth"`, `"Selected"`) or
+a value pulled directly from `bundle.jarvis` (itself produced by
+`derive.js`'s `buildJarvisViewModel`, which reads only the frozen snapshot
+and current state - no free-text generation anywhere in that function
+either). Honest empty states render instead of fabricated filler
+("No new operational changes at this time slice.", "No deterministic
+recommendation to surface at this time slice.", "No evidence citations
+available for the current context.") when a section has nothing to show,
+rather than inventing content to fill the space.
+
+**2. `panels/jarvis.js` - every cited evidence/source-record id is real.**
+Checked, no issues found. Traced the full citation chain: `jarvis.js`'s
+`renderEvidenceReferenceBlock` renders `evidenceReference.evidenceIds` /
+`evidenceReference.sourceRecordIds` verbatim as citation chips - these
+arrays are populated by `derive.js`'s `buildJarvisViewModel`, which builds
+`citedEvidenceIds`/`citedSourceRecordIds` from `buildPassportViewModel`'s
+`evidence`/`sourceRecords` output for the currently selected object, and
+`evidenceReferenceIds` additionally includes `suggestedNextStep.evidenceId`
+when present. All of these ultimately resolve to `evidence.json`'s real `id`
+field values (verified directly against the file:
+`evidence-shortage-pps`, `evidence-shortage-cpp`, `evidence-shortage-cps`,
+`evidence-shortage-mps`, `evidence-shortage-lcm`,
+`evidence-horizon-escalation`) or real `source_record_id`/`sourceRecordId`
+values already present on real snapshot records. No hardcoded example id
+string appears anywhere in `jarvis.js` or in `buildJarvisViewModel`/
+`buildPassportViewModel`.
+
+**3. `panels/dashboard.js` - KPI units/labels vs. real fields.** Checked, no
+issues found. Cross-checked all 7 cards against the raw data files:
+`operational-health` (`unit: 'score'`, value from
+`time-slices.json[].operational_health_score`, e.g. `92`/`78`/`64` for
+t0/t1/t2 - confirmed present verbatim in `src/data/time-slices.json`),
+`revenue-at-risk` (`unit: 'USD'`, value from
+`time-slices.json[].revenue_at_risk` - `'USD'` is not an invented unit
+string, it is `risk-board.json`'s own real `currency` field value, confirmed
+present verbatim as `"currency":"USD"` on all 5 records in
+`src/data/risk-board.json`, and also present as `dashboard-summary.json`'s
+own `currency` field), `commitments-at-risk` (`unit: 'count'`, from
+`time-slices.json[].commitments_at_risk`), and the remaining 4
+derived-count cards (`critical-recommendations`, `new-shortages`,
+`trending-issues`, `active-investigations`, all `unit: 'count'`) whose
+values are computed from `resolveVisibilityForSlice`/`risk-board.json`
+`risk_state` filters, not invented numbers. `dashboard.js`'s own
+`formatCardValue()` renders `$` + locale-formatted number only when
+`card.unit === 'USD'` and a plain locale-formatted number for `'score'` -
+it never mislabels a count as a currency or vice versa. `t2`'s Revenue at
+Risk value (`1304000`) was independently cross-checked against
+`dashboard-summary.json`'s own `revenue_at_risk` field (`1304000`) and the
+sum of all 5 `risk-board.json` `revenue_at_risk` values
+(190000+164000+250000+420000+280000=1304000) - all three agree exactly.
+
+**4. `panels/passport.js` - the 7 section headers.** Checked, no issues
+found. The rendered headers, in order, are: Overview (rendered as the
+overview header block's implicit section - no separate `<h3>` title element
+since the whole `<header class="passport-overview">` block IS the Overview
+section, but its content is unambiguously the "biography" overview per the
+module's own header comment), "Current Risk", "Relationships",
+"Recommendations", "Evidence", "Timeline / Operational History", "Source
+Records". This is exactly the 7-section shape `derive.js`'s
+`buildPassportViewModel` header comment documents (`overview`, `currentRisk`,
+`relationships`, `recommendations`, `evidence`, `operationalHistory`,
+`sourceRecords`) and exactly the section list the phase brief's own
+enumeration names. `test/derive.test.mjs`'s "buildPassportViewModel:
+includes all 7 PANEL_SPECIFICATIONS.md sections" test (passing) independently
+confirms the view-model shape carries all 7. One presentation nuance worth
+naming explicitly rather than silently passing over: "Overview" is styled as
+a `<header>`/`<h2>` (the object's title/type), not a `<h3
+class="passport-section-title">` like the other 6 sections - a legitimate
+visual-hierarchy choice (the Overview IS the panel's headline, not a
+peer section below it), not a missing or mislabeled section.
+
+**5. `lenses/universe.js` / `lenses/risk-board.js` - node/cell types.**
+Checked, no issues found. Cross-checked every node `type` value
+`buildUniverseGraph()` assigns against what actually exists in the real
+data: `organization`, `plant`, `customer`, `commitment`, `item`,
+`demand_signal`, `allocation`, `inventory`, `shortage_exception`,
+`commitment_risk_cell`, `recommendation`, `evidence`, plus the 8 real
+`operational-objects.json` `object_type` values passed through verbatim
+(`work_order`, `eco`, `ncr`, `capa`, `validation_plan`, `shipment`,
+`customer_complaint`, `customer_escalation` - confirmed directly against
+`src/data/operational-objects.json`: all 9 records' `object_type` values fall
+within this exact set). `lenses/universe.js`'s `BASE_NODE_RADIUS` map and
+`engine/camera.js`'s `depthFilter()` both enumerate this same closed set of
+kinds with no additions and no gaps. Every one of these node types traces to
+either a real backing table (organizations/sites/customers/commitments/
+items/demand_signals/allocations/inventory/shortage_exceptions/risk-board/
+shortage_recommendations/evidence/operational_domain_objects) or is one of
+the two explicitly-sanctioned illustrative anchor types (`organization`,
+`plant`) whose use is documented in item 3/4 above - no node type renders
+that isn't backed by a real table or an already-authorized illustrative
+anchor. Risk-board severity rings (`critical`/`elevated`/`watch`/`neutral`/
+`gray`) in `lenses/risk-board-layout.js`'s `severityRing()` map exactly onto
+`risk-board.json`'s real `risk_state` values (`critical`/`elevated`/`watch`
+are the only 3 values actually present across all 5 records) plus a
+presentation-only `gray` bucket for cells not yet revealed at the current
+time slice (a legitimate, already-documented "dormant, not invisible"
+design choice, not an invented data state).
+
+**6. Presentation-only constructs (docs/RULES.md's authorized category).**
+Checked, no issues found; confirmed as legitimate design choices rather than
+undocumented data claims: node radius (`BASE_NODE_RADIUS` in
+`lenses/universe.js`), cell radius (`revenueToRadius()` in
+`lenses/risk-board-layout.js`, deliberately scaled by square-root of revenue
+for perceptual correctness), node/cell position (both layout modules' seeded,
+deterministic cluster/constellation math), color-token bucket assignment
+(`riskBucket()`/`riskBucketForCard()`/`riskBucketClass()`/`severityRing()`,
+all collapsing real `risk_state`/`severity` values into a small fixed set of
+CSS custom-property lookups), icons/glyphs (the Jarvis badge, the Suggested
+Next Step arrow, relationship direction arrows), and the pulsing/halo/opacity
+animation constants. None of these render a number, label, or claim that
+implies a data fact beyond what the underlying field already states - they
+are exactly the kind of "node position, node radius, cell size, color
+intensity" free-form design latitude the phase brief describes as
+explicitly authorized.
+
+**7. Overstated-certainty / "live" language check.** Checked, no issues
+found. Searched all 5 rendering files for language that could imply live/
+real-time data (e.g. "live", "streaming", "real-time", "now updating") where
+the underlying reality is a static snapshot per time slice. None found. The
+toolbar's "Time" slider and each slice's own label (e.g. "Baseline",
+"Supply pressure detected", "All recommendations generated" - all real
+`time-slices.json[].label` values) correctly frame the data as discrete
+historical/scenario slices, not a live feed. Jarvis's "Suggested Next Step"
+text is explicitly built from a deterministic sort
+(`.sort((a, b) => b.revenue_at_risk - a.revenue_at_risk)`), and the module's
+own header comment states this is "Deterministic (not randomized/LLM-
+generated)" - the copy itself never claims otherwise.
+
+### Issues found and fixed
+
+**None.** This audit found zero hardcoded/invented example values, zero
+mislabeled units, zero overstated-certainty language, and zero unauthorized
+node/cell types across all 5 rendering modules. No code changes were
+required in `lenses/universe.js`, `lenses/risk-board.js`,
+`panels/dashboard.js`, `panels/passport.js`, or `panels/jarvis.js` as a
+result of this audit. This is itself a real, useful audit result, not a
+non-answer: Phases 2 and 3 built these modules with schema fidelity as a
+first-class constraint (per every module's own header comments, several of
+which are quoted verbatim throughout this section), and that discipline held
+up under a genuine line-by-line re-read.
+
+The only wrinkle this phase surfaced was procedural, not a code defect: this
+particular working copy's local mirror omitted the `docs/` reference tree
+(see the caveat above), which was reconciled by cross-checking this
+section's findings against the real `docs/field-map.md` afterward rather
+than by inventing replacement documentation content.
