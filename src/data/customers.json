@@ -1,0 +1,11 @@
+{
+  "derived_from": "operational_domain_objects.customer and demand_signals.customer",
+  "records": [
+    {"customer":"Atlas Data Infrastructure","source":"demand_signals","related_demand_signal_id":"1052ae04-053c-4652-8cf1-7f4610a0128f","primary_item_number":"ITEM-NR-LCM-5000"},
+    {"customer":"AquaGrid Utilities","source":"demand_signals","related_demand_signal_id":"f72181ab-fb31-4597-a2d3-a946a6a7f0d9","primary_item_number":"ITEM-NR-PPS-2000"},
+    {"customer":"Horizon LNG Partners","source":"demand_signals","related_demand_signal_id":"8f1b4016-d025-477c-b17d-0d96e0104e1f","primary_item_number":"ITEM-NR-CPP-1000"},
+    {"customer":"Frontier Mining","source":"demand_signals","related_demand_signal_id":"b3499e4b-3ae2-4812-b83b-f21dee0a9553","primary_item_number":"ITEM-NR-MPS-4000"},
+    {"customer":"Catalyst Chemical","source":"demand_signals","related_demand_signal_id":"d262ff48-d27e-4784-9b5d-af940d2000d2","primary_item_number":"ITEM-NR-CPS-3000"},
+    {"customer":"Helios Hydrogen","source":"operational_domain_objects","source_identifier":"WAR-NR-2026-024","primary_context":"CPP-1000 startup vibration investigation"}
+  ]
+}
