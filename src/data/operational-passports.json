@@ -1,0 +1,44 @@
+{
+  "derived_from": ["operational-objects", "relationships", "timeline-events", "evidence", "recommendations"],
+  "records": [
+    {
+      "object_id": "9a0aeed8-d434-4da0-a88a-21e605ea0554",
+      "object_key": "custesc:CESC-NR-2026-014",
+      "title": "CPP-1000 commissioning delay escalation",
+      "object_type": "customer_escalation",
+      "overview": "Customer escalation for Horizon LNG Partners tied to CPP-1000 commissioning delay.",
+      "current_risk": "critical",
+      "timeline_event_ids": ["tl-rec-cpp"],
+      "relationship_ids": ["rel-war021-to-cesc014"],
+      "evidence_ids": ["evidence-shortage-cpp"],
+      "recommendation_ids": ["091ebb8d-c7d8-49aa-beda-3858e8eece5a"],
+      "source_records": ["operational_domain_objects:9a0aeed8-d434-4da0-a88a-21e605ea0554"]
+    },
+    {
+      "object_id": "RB-CPP-HORIZON",
+      "object_key": "risk-board:RB-CPP-HORIZON",
+      "title": "Horizon CPP commitment risk",
+      "object_type": "commitment_risk_cell",
+      "overview": "Commitment-level risk board object derived from demand signal, allocation, shortage exception, and shortage recommendation data.",
+      "current_risk": "critical",
+      "timeline_event_ids": ["tl-rec-cpp"],
+      "relationship_ids": ["rel-rb-cpp-to-rec"],
+      "evidence_ids": ["evidence-shortage-cpp"],
+      "recommendation_ids": ["091ebb8d-c7d8-49aa-beda-3858e8eece5a"],
+      "source_records": ["demand_signals:8f1b4016-d025-477c-b17d-0d96e0104e1f"]
+    },
+    {
+      "object_id": "a69f50f1-a694-48b0-933b-0cc237334117",
+      "object_key": "fat:FAT-NR-2026-3002",
+      "title": "CPP-1000 factory acceptance test",
+      "object_type": "validation_plan",
+      "overview": "Factory acceptance test is a quality gate before shipment to Horizon LNG Partners.",
+      "current_risk": "watch",
+      "timeline_event_ids": [],
+      "relationship_ids": ["rel-capa047-to-fat3002", "rel-fat3002-to-shp7011"],
+      "evidence_ids": [],
+      "recommendation_ids": [],
+      "source_records": ["operational_domain_objects:a69f50f1-a694-48b0-933b-0cc237334117"]
+    }
+  ]
+}
