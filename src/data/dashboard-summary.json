@@ -1,0 +1,17 @@
+{
+  "derived_from": ["risk-board", "shortage_recommendations", "demand_signal_values"],
+  "records": [
+    {
+      "id": "dashboard-current",
+      "operational_health_score": 64,
+      "revenue_at_risk": 1304000,
+      "currency": "USD",
+      "commitments_at_risk": 5,
+      "active_shortage_exceptions": 5,
+      "active_recommendations": 5,
+      "critical_commitments": 2,
+      "elevated_commitments": 2,
+      "watch_commitments": 1
+    }
+  ]
+}
