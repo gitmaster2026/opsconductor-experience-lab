@@ -1,66 +1,66 @@
 {
-  "version": "2026-07-02-time-states-v1",
-  "purpose": "Static time slices used by the Experience Lab timeline slider. Values are UX sample states derived from existing risk/shortage/recommendation/evidence concepts.",
+  "version": "2026-07-02-v4",
+  "purpose": "Static time slices used by the Experience Lab timeline slider. Values are UX sample states derived from existing risk/shortage/recommendation/evidence concepts documented in docs/field-map.md.",
   "timeSlices": [
     {
-      "id": "t0",
-      "label": "Before constraint",
-      "date": "2026-08-01",
-      "dashboard": { "operational_health": 92, "revenue_at_risk_usd": 0, "commitments_at_risk": 0, "active_recommendations": 0 },
-      "commitmentRisk": {
-        "COM-NR-HORIZON-CPP": "green",
-        "COM-NR-AQUAGRID-PPS": "green",
-        "COM-NR-CATALYST-CPS": "green",
-        "COM-NR-ATLAS-LCM": "green",
-        "COM-NR-FRONTIER-MPS": "green"
-      },
+      "id": "ts_baseline",
+      "label": "Baseline",
+      "date": "2026-06-28",
+      "dashboard": { "operational_health": 94, "revenue_at_risk_usd": 0, "commitments_at_risk": 0, "active_recommendations": 0 },
+      "commitmentRisk": { "commit_c1042": "green", "commit_c1088": "green" },
+      "rootCauseSummary": { "commit_c1042": "No current exception detected.", "commit_c1088": "No current exception detected." },
+      "riskIntensity": { "commit_c1042": 0.1, "commit_c1088": 0.1 },
       "visibleEvidenceIds": [],
-      "visibleRecommendationIds": []
+      "visibleRecommendationIds": [],
+      "timelineEvents": [
+        { "id": "tl_1001", "object_id": "commit_c1042", "event_type": "state_snapshot", "event_label": "Commitment normal", "source_record_id": "SO-1042" },
+        { "id": "tl_1002", "object_id": "commit_c1088", "event_type": "state_snapshot", "event_label": "Commitment normal", "source_record_id": "SO-1088" }
+      ]
     },
     {
-      "id": "t1",
-      "label": "Supplier issue appears",
-      "date": "2026-08-18",
-      "dashboard": { "operational_health": 86, "revenue_at_risk_usd": 500000, "commitments_at_risk": 1, "active_recommendations": 1 },
-      "commitmentRisk": {
-        "COM-NR-HORIZON-CPP": "yellow",
-        "COM-NR-AQUAGRID-PPS": "green",
-        "COM-NR-CATALYST-CPS": "green",
-        "COM-NR-ATLAS-LCM": "green",
-        "COM-NR-FRONTIER-MPS": "green"
-      },
-      "visibleEvidenceIds": ["EV-NR-CPP-APEX"],
-      "visibleRecommendationIds": ["REC-NR-HORIZON-CPP"]
+      "id": "ts_watch",
+      "label": "Supplier Watch",
+      "date": "2026-06-30",
+      "dashboard": { "operational_health": 84, "revenue_at_risk_usd": 275000, "commitments_at_risk": 1, "active_recommendations": 1 },
+      "commitmentRisk": { "commit_c1042": "yellow", "commit_c1088": "yellow" },
+      "rootCauseSummary": { "commit_c1042": "Supplier date movement requires review.", "commit_c1088": "Rotor assembly buffer is narrowing." },
+      "riskIntensity": { "commit_c1042": 0.35, "commit_c1088": 0.3 },
+      "visibleEvidenceIds": [],
+      "visibleRecommendationIds": ["rec_9002"],
+      "timelineEvents": [
+        { "id": "tl_2001", "object_id": "po_7812", "event_type": "supplier_update", "event_label": "Kestrel buffer narrowed", "source_record_id": "PO-7812" },
+        { "id": "tl_2002", "object_id": "rec_9002", "event_type": "recommendation_created", "event_label": "Review alternate allocation", "source_record_id": "REC-9002" }
+      ]
     },
     {
-      "id": "t2",
-      "label": "Allocation pressure builds",
-      "date": "2026-09-05",
-      "dashboard": { "operational_health": 78, "revenue_at_risk_usd": 690000, "commitments_at_risk": 2, "active_recommendations": 2 },
-      "commitmentRisk": {
-        "COM-NR-HORIZON-CPP": "orange",
-        "COM-NR-AQUAGRID-PPS": "green",
-        "COM-NR-CATALYST-CPS": "green",
-        "COM-NR-ATLAS-LCM": "yellow",
-        "COM-NR-FRONTIER-MPS": "green"
-      },
-      "visibleEvidenceIds": ["EV-NR-CPP-APEX", "EV-NR-LCM-ALLOC"],
-      "visibleRecommendationIds": ["REC-NR-HORIZON-CPP", "REC-NR-ATLAS-LCM"]
+      "id": "ts_elevated",
+      "label": "Allocation Pressure",
+      "date": "2026-07-01",
+      "dashboard": { "operational_health": 72, "revenue_at_risk_usd": 695000, "commitments_at_risk": 2, "active_recommendations": 2 },
+      "commitmentRisk": { "commit_c1042": "orange", "commit_c1088": "yellow" },
+      "rootCauseSummary": { "commit_c1042": "PO-7731 delay threatens Valve Body A17 allocation coverage.", "commit_c1088": "Rotor assembly supply remains on watch." },
+      "riskIntensity": { "commit_c1042": 0.7, "commit_c1088": 0.35 },
+      "visibleEvidenceIds": ["ev_5001"],
+      "visibleRecommendationIds": ["rec_9001", "rec_9002"],
+      "timelineEvents": [
+        { "id": "tl_3001", "object_id": "po_7731", "event_type": "supplier_update", "event_label": "Orion date moved", "source_record_id": "PO-7731" },
+        { "id": "tl_3002", "object_id": "rec_9001", "event_type": "recommendation_created", "event_label": "Expedite PO-7731", "source_record_id": "REC-9001" }
+      ]
     },
     {
-      "id": "t3",
-      "label": "Current state",
-      "date": "2026-09-20",
-      "dashboard": { "operational_health": 64, "revenue_at_risk_usd": 1304000, "commitments_at_risk": 5, "active_recommendations": 5 },
-      "commitmentRisk": {
-        "COM-NR-HORIZON-CPP": "red",
-        "COM-NR-AQUAGRID-PPS": "orange",
-        "COM-NR-CATALYST-CPS": "yellow",
-        "COM-NR-ATLAS-LCM": "red",
-        "COM-NR-FRONTIER-MPS": "orange"
-      },
-      "visibleEvidenceIds": ["EV-NR-CPP-APEX", "EV-NR-LCM-ALLOC"],
-      "visibleRecommendationIds": ["REC-NR-HORIZON-CPP", "REC-NR-ATLAS-LCM"]
+      "id": "ts_critical",
+      "label": "Critical Commitment Risk",
+      "date": "2026-07-02",
+      "dashboard": { "operational_health": 58, "revenue_at_risk_usd": 695000, "commitments_at_risk": 2, "active_recommendations": 2 },
+      "commitmentRisk": { "commit_c1042": "red", "commit_c1088": "orange" },
+      "rootCauseSummary": { "commit_c1042": "Allocation shortfall now directly affects C-1042 required date.", "commit_c1088": "Alternate allocation review remains open." },
+      "riskIntensity": { "commit_c1042": 0.95, "commit_c1088": 0.6 },
+      "visibleEvidenceIds": ["ev_5001", "ev_5002"],
+      "visibleRecommendationIds": ["rec_9001", "rec_9002"],
+      "timelineEvents": [
+        { "id": "tl_4001", "object_id": "alloc_a17_01", "event_type": "allocation_result", "event_label": "Allocation shortfall detected", "source_record_id": "ALLOC-A17-01" },
+        { "id": "tl_4002", "object_id": "ev_5002", "event_type": "evidence_linked", "event_label": "Evidence linked to recommendation", "source_record_id": "ALLOC-A17-01" }
+      ]
     }
   ]
 }
