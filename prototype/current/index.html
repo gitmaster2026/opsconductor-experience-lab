@@ -10,20 +10,26 @@
   <div id="app">
     <header class="toolbar">
       <div class="brand">OpsConductor <span>Experience Lab V4</span></div>
-      <div class="control-group">
+      <div class="control-group" role="group" aria-label="Workspace lens">
         <button id="lensUniverse" class="active">Universe</button>
         <button id="lensRisk">Risk Board</button>
       </div>
-      <div class="control-group">
+      <div class="control-group" role="group" aria-label="Left panel">
         <button id="panelDashboard" class="active">Dashboard</button>
         <button id="panelPassport">Passport</button>
       </div>
       <div class="spacer"></div>
-      <label>Zoom <input id="zoom" type="range" min="60" max="240" value="100" /></label>
-      <label>Time <input id="time" type="range" min="0" max="3" value="3" step="1" /></label>
-      <div id="timeLabel" class="time-label">Current state</div>
+      <label class="slider-control">
+        Depth
+        <input id="zoom" type="range" min="0" max="7" value="0" step="1" />
+        <span id="zoomLabel" class="slider-value">Organization</span>
+      </label>
+      <label class="slider-control">
+        Time
+        <input id="time" type="range" min="0" max="2" value="2" step="1" />
+      </label>
+      <div id="timeLabel" class="time-label">All recommendations generated</div>
     </header>
-
     <main class="layout">
       <aside id="leftPanel" class="panel left-panel"></aside>
       <section class="workspace">

@@ -1,1 +1,484 @@
-:root{--bg:#030712;--panel:rgba(8,15,31,.82);--line:rgba(132,169,255,.18);--text:#edf4ff;--muted:#91a6ca;--blue:#6aa8ff;--cyan:#74efff;--green:#58efb3;--yellow:#ffd166;--orange:#ff9b45;--red:#ff5f78;--gray:#526071}*{box-sizing:border-box}html,body,#app{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at 50% 35%,#10203a 0,#050814 48%,#01030a 100%);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Arial}.toolbar{height:64px;display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--line);background:rgba(4,9,20,.82);backdrop-filter:blur(18px)}.brand{font-weight:850;font-size:18px}.brand span{display:block;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}.control-group{display:flex;gap:7px;padding:4px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.04)}button{border:1px solid transparent;border-radius:10px;background:transparent;color:#cfe0ff;padding:8px 11px;cursor:pointer}button:hover,button.active{background:rgba(106,168,255,.22);border-color:rgba(116,239,255,.22);color:#fff}.spacer{flex:1}label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}input[type=range]{accent-color:var(--cyan)}.time-label{min-width:150px;font-size:12px;color:#d9e6ff}.layout{height:calc(100% - 64px);display:grid;grid-template-columns:340px 1fr 350px;gap:12px;padding:12px}.panel,.workspace{border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 20px 70px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.04);backdrop-filter:blur(18px)}.panel{padding:16px;overflow:auto}.workspace{position:relative;overflow:hidden;background:radial-gradient(circle at center,rgba(42,76,135,.18),rgba(3,7,18,.92) 58%,rgba(0,0,0,.96))}canvas{position:absolute;inset:0;width:100%;height:100%}.hidden{display:none!important}h2{font-size:17px;margin:0 0 12px}h3{font-size:12px;margin:16px 0 8px;color:#cbdaf7;letter-spacing:.08em;text-transform:uppercase}.muted{color:var(--muted);font-size:12px;line-height:1.45}.kpi,.passport-card,.commitment-cell{border:1px solid rgba(132,169,255,.16);border-radius:14px;background:linear-gradient(180deg,rgba(28,43,75,.76),rgba(14,24,45,.74));padding:12px;margin:10px 0;cursor:pointer}.kpi:hover,.passport-card:hover,.commitment-cell:hover{border-color:rgba(116,239,255,.4);transform:translateY(-1px)}.big{font-size:25px;font-weight:850}.row{display:flex;justify-content:space-between;gap:10px}.pill{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:3px 8px;background:rgba(255,255,255,.05)}.risk-board{position:absolute;inset:0;padding:28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));align-content:center;gap:18px}.commitment-cell{min-height:145px;margin:0;position:relative;overflow:hidden}.commitment-cell:after{content:"";position:absolute;inset:auto 0 0 0;height:5px;background:var(--state)}.state-green{--state:var(--green)}.state-yellow{--state:var(--yellow)}.state-orange{--state:var(--orange)}.state-red{--state:var(--red)}.state-gray{--state:var(--gray)}.state-green .risk{color:var(--green)}.state-yellow .risk{color:var(--yellow)}.state-orange .risk{color:var(--orange)}.state-red .risk{color:var(--red)}.state-gray .risk{color:var(--gray)}.timeline-event{border-left:2px solid var(--cyan);padding-left:10px;margin:10px 0;color:#dce8ff;font-size:12px}.source{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#9eb8e6}.jarvis-note{border:1px solid rgba(116,239,255,.18);border-radius:14px;background:rgba(116,239,255,.06);padding:12px;margin:10px 0}.empty{height:100%;display:grid;place-items:center;color:var(--muted)}
+/* styles.css
+ *
+ * Dark cinematic aesthetic for the Experience Lab, per the product brief's
+ * "operational equivalent of J.A.R.V.I.S." direction: near-black radial
+ * gradient backdrop, glassmorphic panels, cyan/blue accent glow, and the
+ * canonical risk color tokens (--green/--yellow/--orange/--red/--gray)
+ * that both lenses (and Phase 3's panels) read from a single shared
+ * vocabulary rather than each defining their own colors.
+ *
+ * This phase extends the existing visual language rather than replacing
+ * it: new rules below are for the Universe lens's cluster/pulse treatment
+ * and the Risk Board's constellation layout, which is a genuinely new
+ * layout mechanism (replacing the old CSS-grid .risk-board) but keeps the
+ * same color tokens, glass panel treatment, and toolbar chrome.
+ */
+
+:root {
+  /* Risk color tokens - the single shared vocabulary for both lenses and
+     future panels (docs/LENS_SPECIFICATIONS.md: critical/elevated/watch/
+     green/gray). */
+  --green: #35d48a;
+  --yellow: #e8c34a;
+  --orange: #f0904a;
+  --red: #ef5350;
+  --gray: #7c8896;
+
+  --cyan-accent: #5ad1ff;
+  --edge-color: rgba(150, 180, 210, 0.35);
+  --label-color: rgba(230, 240, 250, 0.92);
+
+  --bg-void: #04070c;
+  --bg-glow: radial-gradient(ellipse at 50% -10%, rgba(70, 130, 200, 0.16), transparent 55%),
+    radial-gradient(ellipse at 85% 110%, rgba(90, 209, 255, 0.08), transparent 45%),
+    radial-gradient(ellipse at 0% 100%, rgba(50, 90, 140, 0.1), transparent 50%);
+
+  --panel-bg: rgba(16, 22, 32, 0.6);
+  --panel-border: rgba(120, 160, 200, 0.16);
+  --panel-blur: 18px;
+
+  --text-primary: #e7eef6;
+  --text-secondary: #9aa9b8;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--bg-void);
+  background-image: var(--bg-glow);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.boot-error {
+  background: rgba(239, 83, 80, 0.15);
+  border: 1px solid var(--red);
+  color: #ffd8d6;
+  padding: 12px 16px;
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 30vh;
+  overflow: auto;
+}
+
+/* ---------------------------------------------------------------------
+   Toolbar
+   --------------------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 20px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  border-bottom: 1px solid var(--panel-border);
+  z-index: 10;
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.brand span {
+  font-weight: 400;
+  color: var(--cyan-accent);
+  margin-left: 6px;
+}
+
+.control-group {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.control-group button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  font-size: 12.5px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.control-group button:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.control-group button.active {
+  background: rgba(90, 209, 255, 0.14);
+  color: var(--cyan-accent);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.slider-control input[type='range'] {
+  width: 120px;
+  accent-color: var(--cyan-accent);
+}
+
+.slider-value {
+  min-width: 92px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.time-label {
+  font-size: 11.5px;
+  color: var(--cyan-accent);
+  min-width: 160px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------
+   Layout
+   --------------------------------------------------------------------- */
+
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  min-height: 0;
+}
+
+.panel {
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  overflow-y: auto;
+  padding: 16px 18px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.left-panel {
+  border-right: 1px solid var(--panel-border);
+}
+
+.jarvis-panel {
+  border-left: 1px solid var(--panel-border);
+}
+
+.panel h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cyan-accent);
+  margin: 0 0 10px;
+}
+
+.panel p {
+  margin: 6px 0;
+  line-height: 1.5;
+}
+
+.panel-note {
+  font-style: italic;
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.plain-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plain-list li {
+  border-left: 2px solid var(--panel-border);
+  padding: 4px 8px;
+  font-size: 11.5px;
+  word-break: break-word;
+}
+
+.workspace {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 45%, rgba(20, 35, 55, 0.55), transparent 65%);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------------------------------------------------------------------
+   Universe lens (canvas)
+   --------------------------------------------------------------------- */
+
+#universeCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+/* ---------------------------------------------------------------------
+   Risk Board lens - "operational constellation", not a card grid.
+   --------------------------------------------------------------------- */
+
+.risk-board {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.risk-constellation-surface {
+  position: absolute;
+  inset: 24px;
+}
+
+.risk-constellation-surface.is-empty::after {
+  content: 'No risk-board cells at this time slice.';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.risk-control-point {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--cyan-accent);
+  box-shadow: 0 0 18px 4px rgba(90, 209, 255, 0.55);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.risk-control-point span {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cyan-accent);
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+.risk-ring-guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.risk-ring-guide {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px dashed rgba(120, 160, 200, 0.14);
+  border-radius: 50%;
+}
+
+.risk-cell {
+  position: absolute;
+  appearance: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.08), rgba(10, 14, 20, 0.55) 70%);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  z-index: 2;
+  transition: left 0.7s cubic-bezier(0.22, 1, 0.36, 1), top 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.7s cubic-bezier(0.22, 1, 0.36, 1), height 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.5s ease, border-color 0.5s ease, transform 0.2s ease;
+  box-shadow: 0 0 0 1px var(--risk-cell-color, var(--gray)) inset, 0 0 22px -4px var(--risk-cell-color, var(--gray));
+}
+
+.risk-cell:hover,
+.risk-cell:focus-visible {
+  transform: scale(1.05);
+  z-index: 5;
+  outline: none;
+  box-shadow: 0 0 0 1.5px var(--risk-cell-color, var(--gray)) inset, 0 0 32px -2px var(--risk-cell-color, var(--gray));
+}
+
+.risk-cell.is-selected {
+  border-color: var(--cyan-accent);
+  box-shadow: 0 0 0 2px var(--cyan-accent) inset, 0 0 36px -2px var(--cyan-accent);
+  z-index: 6;
+}
+
+.risk-cell.is-dormant {
+  opacity: 0.4;
+  filter: saturate(0.5);
+}
+
+.risk-cell.is-critical {
+  animation: risk-cell-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes risk-cell-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--risk-cell-color, var(--red)) inset, 0 0 20px -4px var(--risk-cell-color, var(--red));
+  }
+  50% {
+    box-shadow: 0 0 0 1.5px var(--risk-cell-color, var(--red)) inset, 0 0 44px 4px var(--risk-cell-color, var(--red));
+  }
+}
+
+.risk-cell-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, var(--risk-cell-color, var(--gray)) 0%, transparent 70%);
+  opacity: 0.18;
+}
+
+.risk-cell-body {
+  position: relative;
+  text-align: center;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.risk-cell-customer {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 90%;
+  margin: 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-cell-revenue {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--risk-cell-color, var(--text-primary));
+  margin-top: 2px;
+}
+
+.risk-cell-detail {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  min-width: 190px;
+  background: rgba(8, 12, 18, 0.92);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 20;
+  backdrop-filter: blur(10px);
+}
+
+.risk-cell:hover .risk-cell-detail,
+.risk-cell:focus-visible .risk-cell-detail,
+.risk-cell.is-selected .risk-cell-detail {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.risk-cell-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 1px 0;
+}
+
+.risk-cell-detail-row span {
+  color: var(--text-secondary);
+}
+
+.risk-cell-detail-row strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+}
+
+.risk-cell-detail-summary {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------------
+   Scrollbars (subtle, matches the glassmorphic dark aesthetic)
+   --------------------------------------------------------------------- */
+
+.panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.panel::-webkit-scrollbar-thumb {
+  background: rgba(150, 180, 210, 0.2);
+  border-radius: 4px;
+}
+
+.panel::-webkit-scrollbar-track {
+  background: transparent;
+}
