@@ -1,0 +1,60 @@
+{
+  "version": "2026-07-02-static-mirror-v1",
+  "source": {
+    "repo": "gitmaster2026/OpsConductor",
+    "authority": "docs/living-factory/generated/NorthRiver_Demo_Data_Map.md",
+    "note": "Static mirror for UX exploration only. Values are sample/demo values and must remain traceable to canonical NorthRiver concepts."
+  },
+  "organization": {
+    "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+    "name": "NorthRiver Industrial Systems",
+    "source_system": "northriver-canon"
+  },
+  "plants": [
+    { "id": "PLT-100", "name": "Denver Engineering Center", "location": "Denver, CO", "primary_role": "Engineering & Product Development Center" },
+    { "id": "PLT-200", "name": "Pueblo Manufacturing Campus", "location": "Pueblo, CO", "primary_role": "Core Manufacturing Campus" },
+    { "id": "PLT-300", "name": "Grand Junction Systems Integration", "location": "Grand Junction, CO", "primary_role": "Systems Integration & Factory Acceptance Testing" },
+    { "id": "SVC-400", "name": "Houston Service Center", "location": "Houston, TX", "primary_role": "Service, Warranty & Spare Parts Operations" }
+  ],
+  "items": [
+    { "id": "ITEM-NR-CPP-1000", "item_number": "ITEM-NR-CPP-1000", "description": "CPP-1000 Cryogenic pump package", "product_family": "CPP", "primary_plant": "PLT-200", "unit_price_usd": 125000 },
+    { "id": "ITEM-NR-PPS-2000", "item_number": "ITEM-NR-PPS-2000", "description": "PPS-2000 Process pump system", "product_family": "PPS", "primary_plant": "PLT-200", "unit_price_usd": 82000 },
+    { "id": "ITEM-NR-CPS-3000", "item_number": "ITEM-NR-CPS-3000", "description": "CPS-3000 Compressor package", "product_family": "CPS", "primary_plant": "PLT-300", "unit_price_usd": 140000 },
+    { "id": "ITEM-NR-MPS-4000", "item_number": "ITEM-NR-MPS-4000", "description": "MPS-4000 Modular process skid", "product_family": "MPS", "primary_plant": "PLT-300", "unit_price_usd": 210000 },
+    { "id": "ITEM-NR-LCM-5000", "item_number": "ITEM-NR-LCM-5000", "description": "LCM-5000 Liquid cooling module", "product_family": "LCM", "primary_plant": "PLT-300", "unit_price_usd": 95000 }
+  ],
+  "customers": [
+    { "id": "CUST-HORIZON", "name": "Horizon LNG Partners", "notes": "Primary CPP-1000 customer; Apex Foundry narrative" },
+    { "id": "CUST-AQUAGRID", "name": "AquaGrid Utilities", "notes": "PPS-2000 warranty recovery case" },
+    { "id": "CUST-CATALYST", "name": "Catalyst Chemical", "notes": "CPS-3000 FAT witness" },
+    { "id": "CUST-ATLAS", "name": "Atlas Data Infrastructure", "notes": "LCM-5000 datacenter expansion" },
+    { "id": "CUST-FRONTIER", "name": "Frontier Mining", "notes": "MPS-4000 FAT gate / weld doc gap" }
+  ],
+  "suppliers": [
+    { "id": "SUP-APEX", "name": "Apex Foundry", "source_system": "northriver-canon" },
+    { "id": "SUP-SEAL", "name": "SealWorks Industrial", "source_system": "northriver-canon" },
+    { "id": "SUP-CTRL", "name": "ControlGrid Automation", "source_system": "northriver-canon" }
+  ],
+  "commitments": [
+    { "id": "COM-NR-HORIZON-CPP", "type": "customer_order_line", "customer_id": "CUST-HORIZON", "item_id": "ITEM-NR-CPP-1000", "required_date": "2026-09-20", "quantity": 4, "revenue_value_usd": 500000, "risk_state_current": "critical", "source_system": "northriver-canon", "source_record_id": "DMD-NR-PLANNER-CPP-HORIZON-EXPEDITE" },
+    { "id": "COM-NR-AQUAGRID-PPS", "type": "customer_order_line", "customer_id": "CUST-AQUAGRID", "item_id": "ITEM-NR-PPS-2000", "required_date": "2026-09-22", "quantity": 2, "revenue_value_usd": 164000, "risk_state_current": "elevated", "source_system": "northriver-canon", "source_record_id": "DMD-NR-PLANNER-PPS-AQUAGRID-RECOVERY" },
+    { "id": "COM-NR-CATALYST-CPS", "type": "customer_order_line", "customer_id": "CUST-CATALYST", "item_id": "ITEM-NR-CPS-3000", "required_date": "2026-09-24", "quantity": 2, "revenue_value_usd": 280000, "risk_state_current": "watch", "source_system": "northriver-canon", "source_record_id": "DMD-NR-PLANNER-CPS-CATALYST-WITNESS" },
+    { "id": "COM-NR-ATLAS-LCM", "type": "customer_order_line", "customer_id": "CUST-ATLAS", "item_id": "ITEM-NR-LCM-5000", "required_date": "2026-09-26", "quantity": 2, "revenue_value_usd": 190000, "risk_state_current": "critical", "source_system": "northriver-canon", "source_record_id": "DMD-NR-PLANNER-LCM-ATLAS-DATACENTER" },
+    { "id": "COM-NR-FRONTIER-MPS", "type": "customer_order_line", "customer_id": "CUST-FRONTIER", "item_id": "ITEM-NR-MPS-4000", "required_date": "2026-09-28", "quantity": 1, "revenue_value_usd": 210000, "risk_state_current": "elevated", "source_system": "northriver-canon", "source_record_id": "DMD-NR-PLANNER-MPS-FRONTIER-FAT" }
+  ],
+  "demand_signals": [
+    { "id": "DMD-NR-PLANNER-CPP-HORIZON-EXPEDITE", "commitment_id": "COM-NR-HORIZON-CPP", "signal_type": "sales_order", "item_id": "ITEM-NR-CPP-1000", "quantity": 4, "value_source": "erp_unit_price" },
+    { "id": "DMD-NR-PLANNER-PPS-AQUAGRID-RECOVERY", "commitment_id": "COM-NR-AQUAGRID-PPS", "signal_type": "sales_order", "item_id": "ITEM-NR-PPS-2000", "quantity": 2, "value_source": "erp_unit_price" },
+    { "id": "DMD-NR-PLANNER-CPS-CATALYST-WITNESS", "commitment_id": "COM-NR-CATALYST-CPS", "signal_type": "sales_order", "item_id": "ITEM-NR-CPS-3000", "quantity": 2, "value_source": "erp_unit_price" },
+    { "id": "DMD-NR-PLANNER-LCM-ATLAS-DATACENTER", "commitment_id": "COM-NR-ATLAS-LCM", "signal_type": "sales_order", "item_id": "ITEM-NR-LCM-5000", "quantity": 2, "value_source": "erp_unit_price" },
+    { "id": "DMD-NR-PLANNER-MPS-FRONTIER-FAT", "commitment_id": "COM-NR-FRONTIER-MPS", "signal_type": "sales_order", "item_id": "ITEM-NR-MPS-4000", "quantity": 1, "value_source": "erp_unit_price" }
+  ],
+  "recommendations": [
+    { "id": "REC-NR-HORIZON-CPP", "commitment_id": "COM-NR-HORIZON-CPP", "recommendation_text": "Expedite constrained supply", "rationale": "Open shortage exception with supplier constraint evidence", "confidence": 0.86, "status": "generated", "created_at": "2026-09-20T08:00:00Z" },
+    { "id": "REC-NR-ATLAS-LCM", "commitment_id": "COM-NR-ATLAS-LCM", "recommendation_text": "Review allocation conflict", "rationale": "Allocation state and demand value indicate current commitment risk", "confidence": 0.82, "status": "generated", "created_at": "2026-09-20T08:05:00Z" }
+  ],
+  "evidence": [
+    { "id": "EV-NR-CPP-APEX", "recommendation_id": "REC-NR-HORIZON-CPP", "evidence_type": "source_record", "source_table": "purchase_order_lines", "source_record_id": "PO-4611", "evidence_summary": "Apex Foundry casting constraint affects CPP-1000 supply", "confidence_contribution": 0.46 },
+    { "id": "EV-NR-LCM-ALLOC", "recommendation_id": "REC-NR-ATLAS-LCM", "evidence_type": "allocation", "source_table": "allocations", "source_record_id": "ALLOC-NR-LCM-ATLAS", "evidence_summary": "LCM-5000 allocation conflict affects Atlas datacenter commitment", "confidence_contribution": 0.41 }
+  ]
+}
