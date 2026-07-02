@@ -120,3 +120,32 @@ Suggested paths:
 - `prototype/archive/v2/`
 
 Direct commits to `main` are acceptable unless the user explicitly asks for PRs.
+
+## 11. Immutable Source Data Rule
+
+The Experience Lab is a read-only consumer of production-backed data.
+
+Source datasets mirrored from Supabase are immutable within the Experience Lab.
+
+Do not:
+
+- modify source values
+- rename source fields
+- remove source fields
+- normalize imported values
+- invent additional source fields
+- overwrite mirrored production snapshots
+
+Instead:
+
+- derive visualization datasets
+- derive summaries
+- derive graph layouts
+- derive timeline states
+- derive clustering
+- derive visual attributes
+- maintain transient UI state
+
+All visualization-specific information belongs either in derived datasets or runtime UI state.
+
+The objective is that the final production UI can replace the static JSON files with live API calls without changing the interaction model.
