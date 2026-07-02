@@ -1,0 +1,15 @@
+{
+  "source_table": "operational_domain_object_links and derived relationships",
+  "records": [
+    {"id":"rel-eco-to-wo1101","from_id":"4601e11d-f71a-4843-8fa8-781cbf87ea55","to_id":"1b90519c-e268-4ad0-90db-718ff7dc2078","relationship_type":"unblocks"},
+    {"id":"rel-wo1101-to-ncr231","from_id":"1b90519c-e268-4ad0-90db-718ff7dc2078","to_id":"3b8a22c4-f2cd-4a3a-9b4a-1510282fc8ee","relationship_type":"produced_quality_event"},
+    {"id":"rel-ncr231-to-capa047","from_id":"3b8a22c4-f2cd-4a3a-9b4a-1510282fc8ee","to_id":"b5f944d6-bdeb-4f57-9a88-3be80add29b9","relationship_type":"requires_corrective_action"},
+    {"id":"rel-capa047-to-fat3002","from_id":"b5f944d6-bdeb-4f57-9a88-3be80add29b9","to_id":"a69f50f1-a694-48b0-933b-0cc237334117","relationship_type":"gates"},
+    {"id":"rel-fat3002-to-shp7011","from_id":"a69f50f1-a694-48b0-933b-0cc237334117","to_id":"68936e38-e7c3-49a6-a699-7cce577a623a","relationship_type":"gates"},
+    {"id":"rel-shp7011-to-war021","from_id":"68936e38-e7c3-49a6-a699-7cce577a623a","to_id":"6567e6c5-dd58-427e-b58a-16b849ceeee3","relationship_type":"precedes"},
+    {"id":"rel-war021-to-cesc014","from_id":"6567e6c5-dd58-427e-b58a-16b849ceeee3","to_id":"9a0aeed8-d434-4da0-a88a-21e605ea0554","relationship_type":"escalates_to"},
+    {"id":"rel-rb-cpp-to-rec","from_id":"RB-CPP-HORIZON","to_id":"091ebb8d-c7d8-49aa-beda-3858e8eece5a","relationship_type":"has_recommendation"},
+    {"id":"rel-rb-lcm-to-rec","from_id":"RB-LCM-ATLAS","to_id":"0e55ded9-85c0-45b6-8a7f-5afbdddeb937","relationship_type":"has_recommendation"},
+    {"id":"rel-rb-mps-to-rec","from_id":"RB-MPS-FRONTIER","to_id":"5cd7fbc1-46e3-4b3b-9e72-fe3e6f8c829b","relationship_type":"has_recommendation"}
+  ]
+}
