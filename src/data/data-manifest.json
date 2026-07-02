@@ -1,0 +1,22 @@
+{
+  "version": "2026-07-02-data-layer-v1",
+  "source": {
+    "kind": "static_snapshot",
+    "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b"
+  },
+  "rule": "Displayed fields must map to existing data fields or documented derived concepts.",
+  "table_counts": {
+    "organizations": 1,
+    "sites": 1,
+    "item_master": 8,
+    "commitments": 5,
+    "demand_signals": 5,
+    "demand_signal_values": 5,
+    "inventory_positions": 5,
+    "allocations": 5,
+    "shortage_exceptions": 5,
+    "shortage_recommendations": 5,
+    "operational_domain_objects": 324,
+    "operational_domain_object_links": 398
+  }
+}
