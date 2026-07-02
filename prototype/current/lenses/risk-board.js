@@ -76,13 +76,25 @@ function formatDate(dateStr) {
  *   lens (or a prior Risk Board visit) still renders as selected here,
  *   per LENS_SPECIFICATIONS.md's "switching to Universe should preserve
  *   the selected commitment focus" (and the reverse direction).
+ * @param {() => string[]} [callbacks.getHighlightIds] - OPTIONAL, added in
+ *   Phase 3 for the Dashboard KPI "focus objects" flow (see
+ *   lenses/universe.js's matching callbacks.getHighlightIds JSDoc for the
+ *   full rationale - app.js's transient, non-canonical highlightedIds
+ *   state, NOT part of engine/state.js's canonical AppState). When
+ *   provided, returns the ids of risk-board cells that should render with
+ *   a distinct "spotlight" treatment (an `.is-highlighted` class - see
+ *   styles.css) while every other cell dims slightly, for a couple of
+ *   seconds / until the next explicit selection. Purely additive: omitting
+ *   this callback (every Phase 1/2 caller) preserves the exact prior
+ *   rendering behavior, since the one new render() code path below is
+ *   gated behind `typeof getHighlightIds === 'function'`.
  * @returns {{ render: () => void, resize: () => void, destroy: () => void }}
  */
 export function mountRiskBoardLens(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountRiskBoardLens: containerEl must be a DOM element');
   }
-  const { getBundle, onSelect, onHover, getSelectedId } = callbacks;
+  const { getBundle, onSelect, onHover, getSelectedId, getHighlightIds } = callbacks;
   if (typeof getBundle !== 'function') {
     throw new Error('mountRiskBoardLens: callbacks.getBundle is required');
   }
@@ -185,6 +197,13 @@ export function mountRiskBoardLens(containerEl, callbacks) {
     const riskBoard = bundle?.riskBoard ?? { cells: [] };
     const cells = Array.isArray(riskBoard.cells) ? riskBoard.cells : [];
     const selectedId = typeof getSelectedId === 'function' ? getSelectedId() : null;
+    // Phase 3 addition: optional multi-object highlight set (Dashboard KPI
+    // "focus objects" flow). Empty Set when getHighlightIds is omitted, so
+    // every `highlightIds.has(...)` check below is simply always false in
+    // that case - byte-identical to pre-Phase-3 behavior.
+    const highlightList = typeof getHighlightIds === 'function' ? getHighlightIds() : null;
+    const highlightIds = new Set(Array.isArray(highlightList) ? highlightList : []);
+    const isHighlightActive = highlightIds.size > 0;
 
     const rect = containerEl.getBoundingClientRect();
     const width = Math.max(1, rect.width);
@@ -220,6 +239,12 @@ export function mountRiskBoardLens(containerEl, callbacks) {
       el.classList.toggle('is-dormant', placed.ring === 'gray');
       el.classList.toggle('is-selected', cell.id === selectedId);
       el.setAttribute('aria-pressed', cell.id === selectedId ? 'true' : 'false');
+      // Phase 3 addition: "spotlight" a Dashboard-KPI-focused cell and dim
+      // every other cell, giving the same figure/ground emphasis split
+      // lenses/universe.js applies to its nodes for the same flow (see
+      // that module's isHighlighted/HIGHLIGHT_DIM_FACTOR treatment).
+      el.classList.toggle('is-highlighted', isHighlightActive && highlightIds.has(cell.id));
+      el.classList.toggle('is-dimmed-by-highlight', isHighlightActive && !highlightIds.has(cell.id));
 
       const rootCause = cell.rootCauseSummary || cell.evidenceSummary || 'No evidence-backed root cause yet at this time slice.';
       el.title = [

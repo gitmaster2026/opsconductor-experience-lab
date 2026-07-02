@@ -78,6 +78,21 @@ const CAMERA_TRANSITION_MS = 550;
 /** How long (ms) a single "traveling pulse" dash takes to run the length of a selected edge. */
 const EDGE_TRAVEL_PERIOD_MS = 1100;
 
+/**
+ * Phase 3 addition: how long (ms) a Dashboard KPI "focus objects" spotlight
+ * stays active before fading back to normal. Per the phase brief: "dimming
+ * everything else slightly for a couple of seconds / until the next
+ * explicit selection." A single-selection click (onSelect) still clears
+ * the spotlight immediately regardless of this timer, since a fresh single
+ * selection is a stronger, more specific signal than the prior multi-
+ * object highlight.
+ */
+const HIGHLIGHT_SPOTLIGHT_PULSE_MS = 900;
+/** How much extra halo a freshly-spotlighted node gets, in px, decaying over HIGHLIGHT_SPOTLIGHT_PULSE_MS. */
+const HIGHLIGHT_SPOTLIGHT_HALO_AMPLITUDE = 12;
+/** How dim non-highlighted nodes get while a highlight set is active (multiplies their normal alpha). */
+const HIGHLIGHT_DIM_FACTOR = 0.32;
+
 const MIN_USER_SCALE = 0.35;
 const MAX_USER_SCALE = 3.5;
 
@@ -155,13 +170,29 @@ function riskBucket(node) {
  *   canvas; the caller (app.js) is expected to turn this into a
  *   store.setZoom(clampZoom(current + delta)) call. This module never
  *   calls engine/state.js itself (see module header).
+ * @param {() => string[]} [callbacks.getHighlightIds] - OPTIONAL, added in
+ *   Phase 3 for the Dashboard KPI "focus objects" flow
+ *   (docs/PANEL_SPECIFICATIONS.md's Dashboard mode: "clicking updates
+ *   selected object... may switch left panel to Passport," realized end-
+ *   to-end via app.js's transient, non-canonical highlightedIds state -
+ *   see app.js header comment on why that state is NOT part of
+ *   engine/state.js's canonical AppState). When provided, returns the ids
+ *   of nodes that should render with a distinct "spotlight" treatment
+ *   (brighter/un-dimmed, briefly pulsing) while every other node dims
+ *   slightly, for a multi-object emphasis distinct from single-node
+ *   selection. Purely additive: omitting this callback (every Phase 1/2
+ *   caller, and every existing test) preserves the exact prior rendering
+ *   behavior byte-for-byte, since every highlight-related code path below
+ *   is gated behind `typeof getHighlightIds === 'function'` and falls back
+ *   to the pre-Phase-3 behavior (no highlight set, no dimming, no
+ *   spotlight) when absent.
  * @returns {{ render: () => void, resize: () => void, destroy: () => void, recenter: () => void }}
  */
 export function mountUniverseLens(canvasEl, callbacks) {
   if (!canvasEl || typeof canvasEl.getContext !== 'function') {
     throw new Error('mountUniverseLens: canvasEl must be a <canvas> element');
   }
-  const { getBundle, onSelect, onHover, getZoomLevel, getSelectedId, onWheelZoom } = callbacks;
+  const { getBundle, onSelect, onHover, getZoomLevel, getSelectedId, onWheelZoom, getHighlightIds } = callbacks;
   if (typeof getBundle !== 'function') {
     throw new Error('mountUniverseLens: callbacks.getBundle is required');
   }
@@ -385,6 +416,13 @@ export function mountUniverseLens(canvasEl, callbacks) {
 
   let lastFocusedSelection = undefined;
 
+  // Phase 3 addition: track the highlight-set identity so a fresh
+  // getHighlightIds() result (a new Dashboard KPI click) starts a new
+  // decaying pulse, while re-reading the SAME set on every animation frame
+  // (as draw() naturally does) does not restart the pulse each frame.
+  let lastHighlightKey = '';
+  let highlightPulseStart = 0;
+
   // --- Hit testing -------------------------------------------------------
 
   function nodeRadiusFor(node, depth) {
@@ -433,6 +471,21 @@ export function mountUniverseLens(canvasEl, callbacks) {
       lastFocusedSelection = selectedId;
       if (selectedId) focusOnNode(selectedId);
     }
+
+    // Phase 3 addition: resolve the optional multi-object highlight set.
+    // `highlightIds`/`isHighlightActive` stay at their safe defaults (empty
+    // Set / false) whenever getHighlightIds is omitted, which is exactly
+    // the pre-Phase-3 behavior every existing caller/test relies on.
+    const highlightList = typeof getHighlightIds === 'function' ? getHighlightIds() : null;
+    const highlightIds = new Set(Array.isArray(highlightList) ? highlightList : []);
+    const isHighlightActive = highlightIds.size > 0;
+    const highlightKey = [...highlightIds].sort().join('|');
+    if (highlightKey !== lastHighlightKey) {
+      lastHighlightKey = highlightKey;
+      if (isHighlightActive) highlightPulseStart = now;
+    }
+    const highlightPulseT = clamp((now - highlightPulseStart) / HIGHLIGHT_SPOTLIGHT_PULSE_MS, 0, 1);
+    const highlightPulseDecay = 1 - easeOutCubic(highlightPulseT); // 1 at pulse start, 0 once settled
 
     ctx.save();
     ctx.translate(layoutWidth / 2, layoutHeight / 2);
@@ -499,6 +552,10 @@ export function mountUniverseLens(canvasEl, callbacks) {
       const radius = nodeRadiusFor(node, depth);
       const isSelected = node.id === selectedId;
       const isHovered = node.id === hoveredId;
+      // Phase 3 addition: is this node a member of the current Dashboard
+      // KPI "focus objects" highlight set (app.js's transient
+      // highlightedIds, threaded through as getHighlightIds)?
+      const isHighlighted = isHighlightActive && highlightIds.has(node.id);
 
       // Risk pulsing: critical nodes get a slow breathing halo via
       // shadowBlur, a technique extended from the prior prototype's
@@ -513,6 +570,13 @@ export function mountUniverseLens(canvasEl, callbacks) {
       const isPulsing = bucket === 'critical' && opacity > 0.5;
       const haloBoost = isPulsing ? PULSE_HALO_AMPLITUDE * pulseT : 0;
       const focusBoost = isSelected ? 14 : isHovered ? 7 : 0;
+      // Spotlight halo decays from HIGHLIGHT_SPOTLIGHT_HALO_AMPLITUDE down
+      // to a small resting boost over HIGHLIGHT_SPOTLIGHT_PULSE_MS, so a
+      // freshly-focused set reads as a brief "pulse of attention" rather
+      // than a static permanent glow.
+      const highlightBoost = isHighlighted
+        ? 3 + HIGHLIGHT_SPOTLIGHT_HALO_AMPLITUDE * highlightPulseDecay
+        : 0;
 
       // Final alpha blends two independent dimming sources: the animated
       // time-visibility opacity (dominant - always fully applied via the
@@ -522,12 +586,23 @@ export function mountUniverseLens(canvasEl, callbacks) {
       // least 60% of its time-opacity), while a time-dormant node still
       // reads as clearly muted regardless of zoom depth.
       const safeOpacity = clamp(opacity, 0.05, 1);
-      ctx.globalAlpha = safeOpacity * ((depth.opacity ?? 1) * 0.4 + 0.6);
+      let finalAlpha = safeOpacity * ((depth.opacity ?? 1) * 0.4 + 0.6);
+      // Phase 3 addition: while a highlight set is active, un-dim spotlight
+      // members to full strength and dim everyone else, so "focus objects"
+      // reads as a clear figure/ground split rather than just an extra
+      // glow competing with everything else at full brightness. Gated
+      // entirely behind isHighlightActive, so omitting getHighlightIds (or
+      // an empty highlight set) leaves finalAlpha byte-identical to the
+      // pre-Phase-3 expression above.
+      if (isHighlightActive) {
+        finalAlpha = isHighlighted ? Math.max(finalAlpha, 0.9) : finalAlpha * HIGHLIGHT_DIM_FACTOR;
+      }
+      ctx.globalAlpha = finalAlpha;
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = color;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 6 + haloBoost + focusBoost;
+      ctx.shadowColor = isHighlighted ? resolveCssVar(canvasEl, '--cyan-accent', '#5ad1ff') : color;
+      ctx.shadowBlur = 6 + haloBoost + focusBoost + highlightBoost;
       ctx.fill();
 
       if (isSelected) {
@@ -535,10 +610,15 @@ export function mountUniverseLens(canvasEl, callbacks) {
         ctx.strokeStyle = resolveCssVar(canvasEl, '--cyan-accent', '#5ad1ff');
         ctx.shadowBlur = 0;
         ctx.stroke();
+      } else if (isHighlighted) {
+        ctx.lineWidth = 1.75;
+        ctx.strokeStyle = resolveCssVar(canvasEl, '--cyan-accent', '#5ad1ff');
+        ctx.shadowBlur = 0;
+        ctx.stroke();
       }
       ctx.shadowBlur = 0;
 
-      if (depth.labelVisible && (isSelected || isHovered || depth.emphasized)) {
+      if (depth.labelVisible && (isSelected || isHovered || isHighlighted || depth.emphasized)) {
         ctx.globalAlpha = clamp(opacity, 0.15, 1);
         ctx.fillStyle = resolveCssVar(canvasEl, '--label-color', 'rgba(230,240,250,0.92)');
         ctx.font = isSelected || isHovered ? '600 12px system-ui, sans-serif' : '500 11px system-ui, sans-serif';

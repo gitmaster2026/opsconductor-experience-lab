@@ -7,11 +7,23 @@
  * that both lenses (and Phase 3's panels) read from a single shared
  * vocabulary rather than each defining their own colors.
  *
- * This phase extends the existing visual language rather than replacing
- * it: new rules below are for the Universe lens's cluster/pulse treatment
- * and the Risk Board's constellation layout, which is a genuinely new
- * layout mechanism (replacing the old CSS-grid .risk-board) but keeps the
- * same color tokens, glass panel treatment, and toolbar chrome.
+ * Phase 2 extended this for the Universe lens's cluster/pulse treatment
+ * and the Risk Board's constellation layout - a genuinely new layout
+ * mechanism (replacing the old CSS-grid .risk-board) that keeps the same
+ * color tokens, glass panel treatment, and toolbar chrome.
+ *
+ * Phase 3 (this addition, see the "Panels" section far below) gives
+ * Dashboard/Passport/Jarvis their OWN clear visual identity as "context
+ * surfaces" distinct from the two main-workspace lenses: Dashboard/
+ * Passport read as a biography/dossier (structured typography hierarchy,
+ * card and section rhythm), Jarvis reads as a persistent copilot readout
+ * (a distinct accent treatment - a soft violet-cyan blend - so it never
+ * gets mistaken for "just another data visualization" competing with
+ * Universe/Risk Board's cinematic attention). All of it still draws from
+ * the exact same :root custom properties and risk color tokens defined
+ * below - no new color vocabulary invented, only new LAYOUT/TYPOGRAPHY
+ * treatment for a different kind of surface (context/biography, not
+ * graph/heatmap).
  */
 
 :root {
@@ -27,6 +39,23 @@
   --cyan-accent: #5ad1ff;
   --edge-color: rgba(150, 180, 210, 0.35);
   --label-color: rgba(230, 240, 250, 0.92);
+
+  /* Phase 3: Jarvis's own distinct accent (a soft violet blended with the
+     shared cyan) - gives the persistent copilot readout a visually
+     distinct identity from Dashboard/Passport (which use the standard
+     cyan-accent) without introducing an unrelated color family. */
+  --jarvis-accent: #b39dff;
+  --jarvis-glow: rgba(179, 157, 255, 0.35);
+
+  /* Phase 3: shared panel-surface tokens (Dashboard/Passport/Jarvis) -
+     slightly different from the lens-facing --panel-bg/--panel-border so
+     these "context surface" cards read as a distinct material from the
+     glass toolbar/panel chrome, per the phase brief's "give Dashboard/
+     Passport/Jarvis their own clear visual identity" requirement. */
+  --card-bg: rgba(255, 255, 255, 0.035);
+  --card-bg-hover: rgba(255, 255, 255, 0.06);
+  --card-border: rgba(150, 180, 210, 0.14);
+  --section-divider: rgba(150, 180, 210, 0.12);
 
   --bg-void: #04070c;
   --bg-glow: radial-gradient(ellipse at 50% -10%, rgba(70, 130, 200, 0.16), transparent 55%),
@@ -366,6 +395,33 @@ body {
   filter: saturate(0.5);
 }
 
+/* Phase 3: Dashboard KPI "focus objects" cross-lens highlight (see
+   lenses/risk-board.js's getHighlightIds option and app.js's
+   highlightedIds transient state). A spotlighted cell brightens and gets
+   a cyan-accent ring (matching the equivalent treatment
+   lenses/universe.js applies to its own nodes); every other cell dims,
+   creating a clear figure/ground split while the highlight is active. */
+.risk-cell.is-highlighted {
+  border-color: var(--cyan-accent);
+  box-shadow: 0 0 0 2px var(--cyan-accent) inset, 0 0 40px 2px var(--cyan-accent);
+  z-index: 7;
+  animation: risk-cell-spotlight-pulse 0.9s ease-out 1;
+}
+
+.risk-cell.is-dimmed-by-highlight {
+  opacity: 0.28;
+  filter: saturate(0.55);
+}
+
+@keyframes risk-cell-spotlight-pulse {
+  0% {
+    box-shadow: 0 0 0 2px var(--cyan-accent) inset, 0 0 60px 10px var(--cyan-accent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px var(--cyan-accent) inset, 0 0 40px 2px var(--cyan-accent);
+  }
+}
+
 .risk-cell.is-critical {
   animation: risk-cell-pulse 2.2s ease-in-out infinite;
 }
@@ -481,4 +537,897 @@ body {
 
 .panel::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* ===========================================================================
+   Panels (Phase 3): Dashboard / Passport / Jarvis
+   ===========================================================================
+   Shared building blocks first (risk dots/badges, section rhythm,
+   citation chips, empty states - reused across all 3 panel modules), then
+   panel-specific rules. Dashboard/Passport share the #leftPanel host
+   element (panels/dashboard.js and panels/passport.js each fully replace
+   its innerHTML depending on state.leftPanelMode - see app.js), Jarvis
+   owns #jarvisPanel exclusively.
+   =========================================================================== */
+
+.panel-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.panel-heading h2 {
+  margin: 0;
+}
+
+.panel-subhead {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.85;
+}
+
+/* --- Shared: risk dot / badge vocabulary -----------------------------------
+   One small colored dot/badge language shared by Dashboard KPI cards,
+   Passport's Current Risk section, and the Top Commitment Risks list -
+   all keyed off the exact same --green/--yellow/--orange/--red/--gray
+   tokens the lenses already use, so risk color reads identically no
+   matter which surface you're looking at. */
+
+.risk-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.risk-dot--critical {
+  background: var(--red);
+  box-shadow: 0 0 8px 1px rgba(239, 83, 80, 0.55);
+}
+
+.risk-dot--elevated {
+  background: var(--orange);
+  box-shadow: 0 0 8px 1px rgba(240, 144, 74, 0.5);
+}
+
+.risk-dot--watch {
+  background: var(--yellow);
+  box-shadow: 0 0 6px 1px rgba(232, 195, 74, 0.45);
+}
+
+.risk-dot--neutral {
+  background: var(--gray);
+}
+
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-transform: capitalize;
+  letter-spacing: 0.01em;
+  width: fit-content;
+  border: 1px solid transparent;
+}
+
+.risk-badge--critical {
+  color: #ffd9d7;
+  background: rgba(239, 83, 80, 0.14);
+  border-color: rgba(239, 83, 80, 0.4);
+}
+
+.risk-badge--elevated {
+  color: #ffe0c7;
+  background: rgba(240, 144, 74, 0.14);
+  border-color: rgba(240, 144, 74, 0.4);
+}
+
+.risk-badge--watch {
+  color: #fbeeb9;
+  background: rgba(232, 195, 74, 0.14);
+  border-color: rgba(232, 195, 74, 0.4);
+}
+
+.risk-badge--neutral {
+  color: var(--text-secondary);
+  background: rgba(124, 136, 150, 0.14);
+  border-color: rgba(124, 136, 150, 0.35);
+}
+
+/* --- Shared: section rhythm / empty states ---------------------------------- */
+
+.dash-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--section-divider);
+}
+
+.dash-section-title,
+.passport-section-title,
+.jarvis-section-title {
+  margin: 0;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.passport-section-count {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.12);
+  border-radius: 999px;
+  padding: 1px 7px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.dash-section-empty {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+/* --- Shared: monospace source-citation vocabulary ---------------------------
+   Used by Passport's Evidence/Source-Records sections and Jarvis's
+   Evidence Reference block - "cite evidence/source record IDs when
+   visible" (PANEL_SPECIFICATIONS.md) reads as real, verifiable lineage
+   rather than paraphrased-away prose, so these get a distinct monospace/
+   compact treatment wherever they appear. */
+
+.source-cite {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+.citation-chip {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 9.5px;
+  color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.08);
+  border: 1px solid rgba(90, 209, 255, 0.22);
+  border-radius: 5px;
+  padding: 3px 7px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.dormant-tag {
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  opacity: 0.65;
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------------------
+   Dashboard panel
+   ---------------------------------------------------------------------------
+   "Answer what deserves attention now" (PANEL_SPECIFICATIONS.md). Revenue
+   at Risk renders as the headline metric per the founder's own example -
+   a single large card above the KPI grid - with the remaining 6 cards in
+   a compact 2-column grid below, each colored by its own severity
+   classification (panels/dashboard.js's riskBucketForCard()). A "Top
+   Commitment Risks" list closes the panel, satisfying
+   PANEL_SPECIFICATIONS.md's explicit "show top commitment risks"
+   requirement.
+   --------------------------------------------------------------------- */
+
+.kpi-headline {
+  margin-bottom: -6px;
+}
+
+.kpi-card {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
+  cursor: default;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+}
+
+.kpi-card.is-clickable {
+  cursor: pointer;
+}
+
+.kpi-card.is-clickable:hover {
+  background: var(--card-bg-hover);
+  transform: translateY(-1px);
+}
+
+.kpi-card.is-clickable:active {
+  transform: translateY(0);
+}
+
+.kpi-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.kpi-card-title {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.kpi-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  line-height: 1.15;
+}
+
+.kpi-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  min-height: 8px;
+}
+
+/* Headline card (Revenue at Risk): larger type, a subtle risk-colored
+   border glow, and a full-bleed card rather than sharing the 2-col grid -
+   this is the one KPI the founder's brief explicitly singles out as
+   deserving headline treatment. */
+.kpi-card--headline {
+  padding: 18px 18px 16px;
+  border-radius: 14px;
+}
+
+.kpi-card--headline .kpi-card-title {
+  font-size: 11px;
+}
+
+.kpi-card--headline .kpi-card-value {
+  font-size: 32px;
+  letter-spacing: -0.01em;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Per-severity accent: a colored top border + faint tinted background,
+   readable at a glance without needing to parse the number itself. */
+.kpi-card--critical {
+  border-color: rgba(239, 83, 80, 0.4);
+  box-shadow: inset 0 1px 0 0 rgba(239, 83, 80, 0.5);
+}
+
+.kpi-card--critical .kpi-card-value {
+  color: #ffb3b0;
+}
+
+.kpi-card--elevated {
+  border-color: rgba(240, 144, 74, 0.35);
+  box-shadow: inset 0 1px 0 0 rgba(240, 144, 74, 0.45);
+}
+
+.kpi-card--elevated .kpi-card-value {
+  color: #ffc999;
+}
+
+.kpi-card--watch {
+  border-color: rgba(232, 195, 74, 0.3);
+  box-shadow: inset 0 1px 0 0 rgba(232, 195, 74, 0.4);
+}
+
+.kpi-card--watch .kpi-card-value {
+  color: #f3e0a0;
+}
+
+.dash-toplist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dash-toplist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.dash-toplist-item:hover,
+.dash-toplist-item:focus-visible {
+  background: var(--card-bg-hover);
+  outline: none;
+}
+
+.dash-toplist-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dash-toplist-label strong {
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-toplist-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.dash-toplist-value {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Passport panel
+   ---------------------------------------------------------------------------
+   "The biography of the selected operational object"
+   (PANEL_SPECIFICATIONS.md). Overview reads as a header/masthead block;
+   Current Risk is a prominent badge (shared .risk-badge styles above);
+   Relationships/Recommendations/Evidence/Operational History are clearly
+   delineated sections with their own internal rhythm; Source Records
+   closes the panel as a compact monospace lineage footer.
+   --------------------------------------------------------------------- */
+
+.passport-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--section-divider);
+}
+
+.passport-overview-type {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--cyan-accent);
+}
+
+.passport-overview-label {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.passport-overview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 2px 0 0;
+}
+
+.passport-overview-meta div {
+  display: flex;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.passport-overview-meta dt {
+  color: var(--text-secondary);
+}
+
+.passport-overview-meta dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.passport-overview-summary {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.passport-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--section-divider);
+}
+
+.passport-current-risk {
+  border-top: none;
+  padding-top: 0;
+}
+
+.passport-relationship-list,
+.passport-entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.passport-relationship-item {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.passport-relationship-item:hover,
+.passport-relationship-item:focus-visible {
+  background: var(--card-bg-hover);
+  border-color: var(--cyan-accent);
+  outline: none;
+}
+
+.passport-relationship-dir {
+  color: var(--cyan-accent);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.passport-relationship-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.passport-relationship-body strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.passport-relationship-type {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.passport-relationship-kind {
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  background: rgba(150, 180, 210, 0.1);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.passport-entry {
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+/* Dormant (not yet visible at the current time slice) recommendations/
+   evidence: muted, not hidden - "reveal over time, don't hard-cut," the
+   same principle Phase 2's lenses already apply to time-gated nodes. */
+.passport-entry.is-dormant {
+  opacity: 0.5;
+  filter: saturate(0.6);
+}
+
+.passport-entry-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.passport-entry-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--text-primary);
+}
+
+.passport-entry-status {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cyan-accent);
+}
+
+.passport-entry-summary {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.passport-entry-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+.passport-effective-dating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin-top: -2px;
+}
+
+.passport-eff-label {
+  color: var(--text-secondary);
+  opacity: 0.7;
+  margin-right: 4px;
+}
+
+/* Operational History: a real vertical timeline (distinct from the
+   toolbar's GLOBAL time slider) - a left rail with markers, matching the
+   "Timeline" step of the required exploration flow. */
+.passport-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+.passport-history-item {
+  display: flex;
+  gap: 12px;
+  padding: 0 0 16px 0;
+  position: relative;
+}
+
+.passport-history-item:last-child {
+  padding-bottom: 0;
+}
+
+.passport-history-marker {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cyan-accent);
+  margin-top: 5px;
+  position: relative;
+}
+
+.passport-history-item:not(:last-child) .passport-history-marker::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 3.5px;
+  width: 1px;
+  height: calc(100% + 10px);
+  background: var(--section-divider);
+}
+
+.passport-history-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.passport-history-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.passport-history-head strong {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.passport-history-time {
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.passport-history-summary {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.passport-source-records {
+  padding-bottom: 4px;
+}
+
+.source-record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.source-record-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.source-record-identifier {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 10px;
+  color: var(--text-primary);
+}
+
+.source-record-via {
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+.passport-empty-state .panel-note {
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   Jarvis panel
+   ---------------------------------------------------------------------------
+   "Persistent deterministic intelligence. Jarvis is not a chatbot in the
+   lab" (PANEL_SPECIFICATIONS.md). This is intentionally styled as a
+   readout/instrument panel, not a chat surface - no input affordance
+   anywhere, no message-bubble visual language. The --jarvis-accent violet
+   (blended with the shared cyan) gives it a distinct identity from
+   Dashboard/Passport while still living in the same dark-glass material
+   language.
+   --------------------------------------------------------------------- */
+
+.jarvis-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.jarvis-badge {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--jarvis-accent);
+  box-shadow: 0 0 10px 2px var(--jarvis-glow);
+  flex-shrink: 0;
+  animation: jarvis-badge-breathe 3.4s ease-in-out infinite;
+}
+
+@keyframes jarvis-badge-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 8px 1px var(--jarvis-glow);
+    opacity: 0.85;
+  }
+  50% {
+    box-shadow: 0 0 16px 4px var(--jarvis-glow);
+    opacity: 1;
+  }
+}
+
+.jarvis-heading h2 {
+  color: var(--jarvis-accent);
+}
+
+.jarvis-heading .panel-subhead {
+  width: 100%;
+}
+
+.jarvis-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--section-divider);
+}
+
+.jarvis-context:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.jarvis-context-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+}
+
+.jarvis-context-grid div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+}
+
+.jarvis-context-grid dt {
+  color: var(--text-secondary);
+}
+
+.jarvis-context-grid dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-align: right;
+}
+
+.jarvis-selected-object {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: rgba(179, 157, 255, 0.06);
+  border: 1px solid rgba(179, 157, 255, 0.2);
+}
+
+.jarvis-selected-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--jarvis-accent);
+}
+
+.jarvis-selected-summary {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.jarvis-change-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.jarvis-change-item {
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: var(--card-bg);
+  border-left: 2px solid var(--jarvis-accent);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.jarvis-change-customer {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.jarvis-change-summary {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.jarvis-change-revenue {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--orange);
+}
+
+.jarvis-next-step-button {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(179, 157, 255, 0.12), rgba(90, 209, 255, 0.08));
+  border: 1px solid rgba(179, 157, 255, 0.35);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.12s ease, background 0.16s ease;
+}
+
+.jarvis-next-step-button:hover,
+.jarvis-next-step-button:focus-visible {
+  border-color: var(--jarvis-accent);
+  background: linear-gradient(135deg, rgba(179, 157, 255, 0.18), rgba(90, 209, 255, 0.12));
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.jarvis-next-step-icon {
+  font-size: 15px;
+  color: var(--jarvis-accent);
+  flex-shrink: 0;
+}
+
+.jarvis-next-step-text {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.jarvis-citation-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.jarvis-citation-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+}
+
+.jarvis-citation-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }

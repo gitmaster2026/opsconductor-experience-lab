@@ -2,27 +2,47 @@
 //
 // Bootstrap / wiring layer for the Experience Lab prototype. This is the
 // ONLY file that imports both the engine (state/data-repository/derive/
-// camera/timeline) and the lenses (universe/risk-board) - every other
-// module keeps that separation (see each engine file's own header comment
-// on why: state.js never imports derive.js, lenses/*.js never import
+// camera/timeline), the lenses (universe/risk-board), and (as of Phase 3)
+// the panels (dashboard/passport/jarvis) - every other module keeps that
+// separation (see each engine file's own header comment on why: state.js
+// never imports derive.js, lenses/*.js and panels/*.js never import
 // engine/state.js, etc). app.js is where those pieces get wired together
 // into a running page.
 //
-// Responsibilities (and ONLY these - see the phase brief's explicit scope
-// note that Dashboard/Passport/Jarvis panels stay deliberately minimal
-// this phase, Phase 3's job):
+// Responsibilities (and ONLY these):
 //   1. Load data (engine/data-repository.js's loadAll()).
 //   2. Initialize shared state (engine/state.js's initState()) and the
 //      timeline orchestrator (engine/timeline.js's initTimeline()).
 //   3. Wire toolbar controls (lens/panel toggle buttons, zoom + time
 //      sliders) to the appropriate store mutators.
 //   4. Mount the two lenses (lenses/universe.js, lenses/risk-board.js) and
-//      re-render whichever is active whenever a fresh derived bundle
-//      arrives.
-//   5. Render extremely minimal, unstyled Dashboard/Passport/Jarvis panel
-//      content directly from bundle.dashboard/bundle.passport/bundle.jarvis
-//      so the app is fully functional end-to-end, without investing real
-//      design effort there this phase.
+//      the three panels (panels/dashboard.js, panels/passport.js,
+//      panels/jarvis.js), and re-render whichever are active whenever a
+//      fresh derived bundle arrives.
+//   5. Own ONE small piece of transient, non-canonical state this phase
+//      adds: `highlightedIds` (see "Cross-lens highlight" below) - this is
+//      NOT part of engine/state.js's canonical AppState (that contract is
+//      frozen at a single `selectedObjectId`, per docs/STATE_MODEL.md), so
+//      it lives here in app.js instead, exactly per the phase brief's
+//      explicit instruction.
+//
+// --- Cross-lens highlight ("focus objects") --------------------------------
+//
+// The founder's brief requires that clicking a multi-object Dashboard KPI
+// (e.g. "Revenue at Risk") visibly makes Universe/Risk Board "focus
+// affected objects," not just silently update a single selection.
+// engine/state.js's canonical AppState intentionally has only one
+// `selectedObjectId` field (frozen contract - never extended here). The
+// multi-object emphasis is implemented as small, EXTRA, app.js-owned
+// transient state: `highlightedIds` below, with a setter
+// (`setHighlightedIds`) passed into panels/dashboard.js as
+// `onFocusObjects`, and a `getHighlightIds` accessor passed into BOTH
+// lenses' mount calls (an additive, backward-compatible option this phase
+// adds to lenses/universe.js and lenses/risk-board.js - see those files'
+// own header/JSDoc comments for the exact diff). A fresh explicit single
+// selection (selectObject via any onSelect callback) clears the highlight
+// set, since a specific selection is a stronger, more targeted signal than
+// the prior multi-object emphasis.
 
 import { loadAll } from './engine/data-repository.js';
 import * as derive from './engine/derive.js';
@@ -31,6 +51,9 @@ import { initTimeline } from './engine/timeline.js';
 import { clampZoom, zoomLevelInfo } from './engine/camera.js';
 import { mountUniverseLens } from './lenses/universe.js';
 import { mountRiskBoardLens } from './lenses/risk-board.js';
+import { mountDashboardPanel } from './panels/dashboard.js';
+import { mountPassportPanel } from './panels/passport.js';
+import { mountJarvisPanel } from './panels/jarvis.js';
 
 // ---------------------------------------------------------------------------
 // DOM references (same element ids as the previous prototype iteration, so
@@ -51,6 +74,29 @@ const els = {
   universeCanvas: document.getElementById('universeCanvas'),
   riskBoardEl: document.getElementById('riskBoard'),
 };
+
+// ---------------------------------------------------------------------------
+// Transient, non-canonical cross-lens highlight state (see module header's
+// "Cross-lens highlight" section for the full rationale). Deliberately a
+// plain module-level variable, not part of engine/state.js - it never
+// triggers a timeline recompute on its own (it's a pure rendering
+// emphasis, not derived data), so app.js re-renders the two lenses
+// directly whenever it changes rather than going through
+// store.setState()/timeline.onUpdate().
+// ---------------------------------------------------------------------------
+let highlightedIds = [];
+
+function setHighlightedIds(ids) {
+  highlightedIds = Array.isArray(ids) ? [...ids] : [];
+}
+
+function clearHighlightedIds() {
+  if (highlightedIds.length > 0) highlightedIds = [];
+}
+
+function getHighlightedIds() {
+  return highlightedIds;
+}
 
 async function main() {
   const snapshot = await loadAll();
@@ -89,13 +135,27 @@ async function main() {
   els.timeSlider.value = String(initialSliceIndex);
   store.setTimeSlice(timeSliceRecords[initialSliceIndex].id);
 
+  // --- Selection wrapper -----------------------------------------------------
+  //
+  // A single choke point for "the user explicitly picked ONE concrete
+  // object" (as opposed to a Dashboard KPI's multi-object focus). Every
+  // onSelect callback below (lenses, panels) routes through this, so an
+  // explicit selection always clears any lingering cross-lens highlight
+  // set - per the phase brief: dimming/spotlight persists "for a couple of
+  // seconds / until the next explicit selection."
+  function selectAndClearHighlight(id) {
+    clearHighlightedIds();
+    store.selectObject(id);
+  }
+
   // --- Lens mounting -------------------------------------------------------
 
   const universeLens = mountUniverseLens(els.universeCanvas, {
     getBundle: () => timeline.getDerivedBundle(),
     getZoomLevel: () => store.getState().zoomLevel,
     getSelectedId: () => store.getState().selectedObjectId,
-    onSelect: (nodeId) => store.selectObject(nodeId),
+    getHighlightIds: () => getHighlightedIds(),
+    onSelect: (nodeId) => selectAndClearHighlight(nodeId),
     onHover: (nodeId) => store.setHovered(nodeId),
     onWheelZoom: (delta) => {
       const next = clampZoom(store.getState().zoomLevel + delta);
@@ -106,8 +166,46 @@ async function main() {
   const riskBoardLens = mountRiskBoardLens(els.riskBoardEl, {
     getBundle: () => timeline.getDerivedBundle(),
     getSelectedId: () => store.getState().selectedObjectId,
-    onSelect: (cellId) => store.selectObject(cellId),
+    getHighlightIds: () => getHighlightedIds(),
+    onSelect: (cellId) => selectAndClearHighlight(cellId),
     onHover: (cellId) => store.setHovered(cellId),
+  });
+
+  // --- Panel mounting ------------------------------------------------------
+  //
+  // Dashboard KPI clicks are the entry point for the founder's required
+  // exploration flow ("Dashboard -> Universe -> Risk Board -> Operational
+  // Passport -> Evidence -> Related Objects -> Timeline -> Source
+  // Records"): onFocusObjects registers the transient highlight set (drawn
+  // by both lenses above), onSetLens switches the workspace to whichever
+  // lens best shows that set, and onSelect (routed through
+  // selectAndClearHighlight, same as the lenses) gives Passport/Jarvis a
+  // concrete subject.
+
+  const dashboardPanel = mountDashboardPanel(els.leftPanel, {
+    getBundle: () => timeline.getDerivedBundle(),
+    onSelect: (id) => selectAndClearHighlight(id),
+    onFocusObjects: (ids) => {
+      setHighlightedIds(ids);
+      universeLens.render();
+      riskBoardLens.render();
+    },
+    onSetLens: (lens) => store.setLens(lens),
+  });
+
+  const passportPanel = mountPassportPanel(els.leftPanel, {
+    getBundle: () => timeline.getDerivedBundle(),
+    // Passport's Relationships section is the "Related Objects" step of
+    // the exploration flow - a related-object click is itself an explicit
+    // single selection, so it also clears any lingering highlight set.
+    onSelect: (id) => selectAndClearHighlight(id),
+  });
+
+  const jarvisPanel = mountJarvisPanel(els.jarvisPanel, {
+    getBundle: () => timeline.getDerivedBundle(),
+    // Acting on Jarvis's Suggested Next Step navigates to that risk-board
+    // cell, closing the "Jarvis... open passports" loop from the brief.
+    onSelect: (id) => selectAndClearHighlight(id),
   });
 
   // --- Toolbar wiring --------------------------------------------------------
@@ -164,96 +262,31 @@ async function main() {
     }
   }
 
-  // --- Minimal, deliberately unstyled panel rendering (Phase 3 rebuilds
-  // these against the full derive.js contracts - this phase's creative
-  // effort belongs to Universe + Risk Board only, per the brief). ---------
+  // --- Left panel (Dashboard/Passport) mode switching ----------------------
+  //
+  // Dashboard and Passport share the single #leftPanel <aside> element
+  // (same as the prior placeholder implementation), so only whichever
+  // panel module matches state.leftPanelMode actually renders into it on
+  // any given renderAll() pass - this keeps their DOM completely separate
+  // (no stale Dashboard markup lingering under Passport's hood or vice
+  // versa), since each panel's render() fully replaces el.innerHTML.
 
-  function renderLeftPanel(bundle, state) {
+  function renderLeftPanel(state) {
     if (state.leftPanelMode === 'dashboard') {
-      renderDashboardPanel(bundle.dashboard);
+      dashboardPanel.render();
     } else {
-      renderPassportPanel(bundle.passport);
+      passportPanel.render();
     }
-  }
-
-  function renderDashboardPanel(dashboard) {
-    const cards = Array.isArray(dashboard?.cards) ? dashboard.cards : [];
-    els.leftPanel.innerHTML = `
-      <h2>Dashboard (placeholder)</h2>
-      <p class="panel-note">Minimal text rendering for Phase 2. Phase 3 rebuilds this panel.</p>
-      <ul class="plain-list">
-        ${cards
-          .map(
-            (card) => `
-          <li>
-            <strong>${escapeHtml(card.title)}</strong>: ${escapeHtml(String(card.value ?? '—'))} ${escapeHtml(card.unit ?? '')}
-          </li>`
-          )
-          .join('')}
-      </ul>
-    `;
-  }
-
-  function renderPassportPanel(passport) {
-    if (!passport) {
-      els.leftPanel.innerHTML = `
-        <h2>Passport (placeholder)</h2>
-        <p class="panel-note">Select a node in Universe or a cell in Risk Board to see its passport.</p>
-      `;
-      return;
-    }
-    els.leftPanel.innerHTML = `
-      <h2>Passport (placeholder)</h2>
-      <p class="panel-note">Minimal text rendering for Phase 2. Phase 3 rebuilds this panel.</p>
-      <p><strong>Type:</strong> ${escapeHtml(passport.overview?.objectType ?? '—')}</p>
-      <p><strong>Current risk:</strong> ${escapeHtml(passport.currentRisk ?? '—')}</p>
-      <p><strong>Relationships:</strong> ${passport.relationships?.length ?? 0}</p>
-      <p><strong>Recommendations:</strong> ${passport.recommendations?.length ?? 0}</p>
-      <p><strong>Evidence:</strong> ${passport.evidence?.length ?? 0}</p>
-      <ul class="plain-list">
-        ${(passport.recommendations ?? [])
-          .map((rec) => `<li>${escapeHtml(rec.category ?? 'recommendation')} - ${escapeHtml(rec.status ?? '')}</li>`)
-          .join('')}
-      </ul>
-    `;
-  }
-
-  function renderJarvisPanel(jarvis) {
-    if (!jarvis) {
-      els.jarvisPanel.innerHTML = '<h2>Jarvis (placeholder)</h2>';
-      return;
-    }
-    els.jarvisPanel.innerHTML = `
-      <h2>Jarvis (placeholder)</h2>
-      <p class="panel-note">Minimal text rendering for Phase 2. Phase 3 rebuilds this panel.</p>
-      <p><strong>Lens:</strong> ${escapeHtml(jarvis.currentContext?.workspaceLens ?? '—')}</p>
-      <p><strong>Time slice:</strong> ${escapeHtml(jarvis.currentContext?.timeSliceLabel ?? jarvis.currentContext?.timeSliceId ?? '—')}</p>
-      <p><strong>Suggested next step:</strong> ${escapeHtml(jarvis.suggestedNextStep?.text ?? '—')}</p>
-      <p><strong>Important changes:</strong></p>
-      <ul class="plain-list">
-        ${(jarvis.importantChanges ?? []).map((c) => `<li>${escapeHtml(JSON.stringify(c))}</li>`).join('')}
-      </ul>
-    `;
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   }
 
   function renderAll() {
     const state = store.getState();
-    const bundle = timeline.getDerivedBundle();
 
     applyLensVisibility(state);
     applyPanelVisibility(state);
     updateToolbarLabels(state);
-    renderLeftPanel(bundle, state);
-    renderJarvisPanel(bundle.jarvis);
+    renderLeftPanel(state);
+    jarvisPanel.render();
 
     universeLens.render();
     riskBoardLens.render();
