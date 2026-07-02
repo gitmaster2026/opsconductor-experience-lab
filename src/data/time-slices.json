@@ -1,0 +1,29 @@
+{
+  "derived_from": ["shortage_recommendations", "risk-board"],
+  "records": [
+    {
+      "id": "t0",
+      "label": "Baseline",
+      "date": "2026-07-01",
+      "operational_health_score": 92,
+      "revenue_at_risk": 0,
+      "commitments_at_risk": 0
+    },
+    {
+      "id": "t1",
+      "label": "Supply pressure detected",
+      "date": "2026-07-02T04:36:02Z",
+      "operational_health_score": 78,
+      "revenue_at_risk": 414000,
+      "commitments_at_risk": 2
+    },
+    {
+      "id": "t2",
+      "label": "All recommendations generated",
+      "date": "2026-07-02T04:36:04Z",
+      "operational_health_score": 64,
+      "revenue_at_risk": 1304000,
+      "commitments_at_risk": 5
+    }
+  ]
+}
