@@ -1,0 +1,67 @@
+[
+  {
+    "id": "102ddae4-d7ef-42ee-ad0d-e85e7004dbb4",
+    "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+    "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+    "demand_signal_id": "8f1b4016-d025-477c-b17d-0d96e0104e1f",
+    "unit_value": 125000,
+    "extended_value": null,
+    "currency": "USD",
+    "value_source": "erp_unit_price",
+    "as_of": "2026-07-01",
+    "created_at": "2026-07-02T04:35:59.064991+00:00",
+    "updated_at": "2026-07-02T04:35:59.064991+00:00"
+  },
+  {
+    "id": "920c1edf-49ef-4ce9-894f-932e1596b81a",
+    "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+    "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+    "demand_signal_id": "d262ff48-d27e-4784-9b5d-af940d2000d2",
+    "unit_value": 140000,
+    "extended_value": null,
+    "currency": "USD",
+    "value_source": "erp_unit_price",
+    "as_of": "2026-07-01",
+    "created_at": "2026-07-02T04:35:59.064991+00:00",
+    "updated_at": "2026-07-02T04:35:59.064991+00:00"
+  },
+  {
+    "id": "911ea8c8-ba96-4f23-85e3-0fbe1e824e97",
+    "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+    "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+    "demand_signal_id": "b3499e4b-3ae2-4812-b83b-f21dee0a9553",
+    "unit_value": 210000,
+    "extended_value": null,
+    "currency": "USD",
+    "value_source": "erp_unit_price",
+    "as_of": "2026-07-01",
+    "created_at": "2026-07-02T04:35:59.064991+00:00",
+    "updated_at": "2026-07-02T04:35:59.064991+00:00"
+  },
+  {
+    "id": "b48bb4c8-5ff9-4474-a3c2-5d85e816976a",
+    "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+    "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+    "demand_signal_id": "1052ae04-053c-4652-8cf1-7f4610a0128f",
+    "unit_value": 95000,
+    "extended_value": null,
+    "currency": "USD",
+    "value_source": "erp_unit_price",
+    "as_of": "2026-07-01",
+    "created_at": "2026-07-02T04:35:59.064991+00:00",
+    "updated_at": "2026-07-02T04:35:59.064991+00:00"
+  },
+  {
+    "id": "43fc7067-d54f-4e7f-a265-8a480c613773",
+    "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+    "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+    "demand_signal_id": "f72181ab-fb31-4597-a2d3-a946a6a7f0d9",
+    "unit_value": 82000,
+    "extended_value": null,
+    "currency": "USD",
+    "value_source": "erp_unit_price",
+    "as_of": "2026-07-01",
+    "created_at": "2026-07-02T04:35:59.064991+00:00",
+    "updated_at": "2026-07-02T04:35:59.064991+00:00"
+  }
+]
