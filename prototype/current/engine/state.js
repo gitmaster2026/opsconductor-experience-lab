@@ -1,0 +1,350 @@
+// engine/state.js
+//
+// The single shared application state for the Experience Lab.
+// Implements the canonical state shape and transition semantics from
+// docs/STATE_MODEL.md. No lens or panel owns its own truth: every module
+// reads from this store and calls its mutator functions to change state.
+//
+// This module is deliberately tiny and dependency-free (per STATE_MODEL.md:
+// "The store should be tiny and dependency-free for V4."). It has zero
+// knowledge of the data layer (engine/data-repository.js, engine/derive.js)
+// or the DOM. Anything that requires looking at operational data (e.g.
+// "does this object trace to a commitment?") is injected by the caller as a
+// plain function, so state.js never imports derive.js or fetches data
+// itself. This keeps the store reusable even if the data layer changes.
+//
+// Canonical state (docs/STATE_MODEL.md):
+//   workspaceLens: 'universe' | 'risk_board'
+//   leftPanelMode: 'dashboard' | 'passport'
+//   selectedObjectId: string | null
+//   focusedCommitmentId: string | null
+//   timeSliceId: string
+//   zoomLevel: number
+//   hoveredObjectId: string | null
+
+const WORKSPACE_LENSES = Object.freeze(['universe', 'risk_board']);
+const LEFT_PANEL_MODES = Object.freeze(['dashboard', 'passport']);
+
+/**
+ * @typedef {Object} AppState
+ * @property {'universe'|'risk_board'} workspaceLens
+ * @property {'dashboard'|'passport'} leftPanelMode
+ * @property {string|null} selectedObjectId
+ * @property {string|null} focusedCommitmentId
+ * @property {string} timeSliceId
+ * @property {number} zoomLevel
+ * @property {string|null} hoveredObjectId
+ */
+
+/**
+ * Module-level store instance. initState() (re)creates it; every other
+ * exported function operates on whichever instance was last created. This
+ * mirrors the "one shared application state" principle from STATE_MODEL.md
+ * while still allowing tests to call initState() repeatedly for isolation.
+ */
+let store = null;
+
+/**
+ * Create (or recreate) the shared store.
+ *
+ * @param {Object} [options]
+ * @param {string} [options.initialTimeSliceId='t0'] - id of the time slice
+ *   to start on. Defaults to 't0' (time-slices.json's baseline record) but
+ *   the caller may pass any valid slice id once data is loaded.
+ * @param {(objectId: string) => (string|null)} [options.resolveCommitmentForObject]
+ *   Injected resolver: given a selected object id, return the commitment id
+ *   it traces to, or null if it does not trace to a commitment. This keeps
+ *   state.js data-layer-agnostic (see module header) while still letting it
+ *   implement STATE_MODEL.md's "Select object" transition effect: "update
+ *   focusedCommitmentId when selection is or traces to a commitment."
+ *   If omitted, focusedCommitmentId is never auto-derived from selection
+ *   (callers may still set it directly via setState).
+ * @param {number} [options.initialZoomLevel=0] - starting zoom level.
+ * @param {'universe'|'risk_board'} [options.initialLens='universe']
+ * @param {'dashboard'|'passport'} [options.initialLeftPanel='dashboard']
+ * @returns {AppState} the freshly-initialized state (a copy)
+ */
+export function initState(options = {}) {
+  const {
+    initialTimeSliceId = 't0',
+    resolveCommitmentForObject = null,
+    initialZoomLevel = 0,
+    initialLens = 'universe',
+    initialLeftPanel = 'dashboard',
+  } = options;
+
+  if (!WORKSPACE_LENSES.includes(initialLens)) {
+    throw new Error(`initState: invalid initialLens "${initialLens}"`);
+  }
+  if (!LEFT_PANEL_MODES.includes(initialLeftPanel)) {
+    throw new Error(`initState: invalid initialLeftPanel "${initialLeftPanel}"`);
+  }
+  if (
+    resolveCommitmentForObject !== null &&
+    typeof resolveCommitmentForObject !== 'function'
+  ) {
+    throw new Error(
+      'initState: options.resolveCommitmentForObject must be a function or null'
+    );
+  }
+
+  /** @type {AppState} */
+  const state = {
+    workspaceLens: initialLens,
+    leftPanelMode: initialLeftPanel,
+    selectedObjectId: null,
+    focusedCommitmentId: null,
+    timeSliceId: initialTimeSliceId,
+    zoomLevel: initialZoomLevel,
+    hoveredObjectId: null,
+  };
+
+  const listeners = new Set();
+
+  store = {
+    state,
+    listeners,
+    resolveCommitmentForObject,
+  };
+
+  return { ...state };
+}
+
+function assertInitialized() {
+  if (!store) {
+    throw new Error(
+      'engine/state.js: store not initialized. Call initState() first.'
+    );
+  }
+}
+
+/**
+ * Return a shallow copy of the current state. Callers must not mutate the
+ * returned object; treat it as read-only. A copy is returned (rather than
+ * the live object) so external code cannot silently mutate shared state
+ * outside of setState/the dedicated mutators.
+ *
+ * @returns {AppState}
+ */
+export function getState() {
+  assertInitialized();
+  return { ...store.state };
+}
+
+/**
+ * Merge `patch` into state and notify subscribers if anything changed.
+ * This is the low-level primitive; prefer the named transition functions
+ * (selectObject, setLens, setLeftPanel, setTimeSlice, setZoom, setHovered)
+ * where one exists, since they encode the STATE_MODEL.md transition rules.
+ * setState itself performs no transition-specific side effects — it is a
+ * raw merge, used internally by the named transitions and available to
+ * callers who need to set multiple fields atomically (one notification)
+ * without any special-cased effects.
+ *
+ * @param {Partial<AppState>} patch
+ */
+export function setState(patch) {
+  assertInitialized();
+  if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) {
+    throw new Error('setState: patch must be a plain object');
+  }
+
+  const next = { ...store.state, ...patch };
+  const changed = Object.keys(next).some((key) => next[key] !== store.state[key]);
+  store.state = next;
+
+  if (changed) {
+    notify();
+  }
+}
+
+/**
+ * Register a listener to be called (with no arguments — listeners should
+ * call getState() themselves) whenever state changes. Returns an
+ * unsubscribe function.
+ *
+ * @param {() => void} listener
+ * @returns {() => void} unsubscribe
+ */
+export function subscribe(listener) {
+  assertInitialized();
+  if (typeof listener !== 'function') {
+    throw new Error('subscribe: listener must be a function');
+  }
+  store.listeners.add(listener);
+  return () => {
+    store.listeners.delete(listener);
+  };
+}
+
+function notify() {
+  // Snapshot the listener set before iterating so a listener that
+  // subscribes/unsubscribes during notification doesn't corrupt iteration.
+  for (const listener of [...store.listeners]) {
+    listener();
+  }
+}
+
+/**
+ * "Select object" transition (docs/STATE_MODEL.md).
+ *
+ * Triggered by: Universe node click, Risk Board commitment click, Dashboard
+ * KPI click, Passport related-object click.
+ *
+ * Effects per STATE_MODEL.md:
+ *   - update selectedObjectId
+ *   - update focusedCommitmentId when selection is or traces to a commitment
+ *   - (Passport content / Jarvis context / Universe highlight / Risk Board
+ *     highlight are all *downstream renderer* effects driven by subscribing
+ *     to this state change — they are not this function's job. This module
+ *     only owns shared state, not rendering, per STATE_MODEL.md's "Rendering
+ *     behavior" section: "All modules subscribe to state changes.")
+ *
+ * Design note - auto-switch to Passport on selection:
+ *   STATE_MODEL.md's own "Select object" transition section does not
+ *   explicitly say selection changes leftPanelMode. However:
+ *     (a) the existing shipped prototype (prototype/current/app.js, prior
+ *         phases) already auto-switches the left panel to 'passport' when
+ *         an object is selected, and
+ *     (b) docs/PANEL_SPECIFICATIONS.md documents Dashboard-mode click
+ *         behavior as "clicking updates selected object/focused commitment
+ *         and may switch left panel to Passport."
+ *   To preserve continuity with the already-shipped UX and satisfy (b), we
+ *   intentionally implement: selectObject() always sets leftPanelMode to
+ *   'passport'. This is a deliberate behavioral choice layered on top of
+ *   (not contradicting) STATE_MODEL.md, called out here since the base doc
+ *   is silent on it. If a caller selects an object but wants to stay on
+ *   Dashboard, they can call setState({ leftPanelMode: 'dashboard' })
+ *   immediately after, but the default and expected UX is the auto-switch.
+ *
+ * @param {string|null} id - object id to select, or null to clear selection.
+ */
+export function selectObject(id) {
+  assertInitialized();
+  if (id !== null && typeof id !== 'string') {
+    throw new Error('selectObject: id must be a string or null');
+  }
+
+  let focusedCommitmentId = null;
+  if (id !== null && typeof store.resolveCommitmentForObject === 'function') {
+    const resolved = store.resolveCommitmentForObject(id);
+    focusedCommitmentId = typeof resolved === 'string' ? resolved : null;
+  }
+
+  setState({
+    selectedObjectId: id,
+    focusedCommitmentId,
+    // See design note above: selection always surfaces the Passport, per
+    // the existing shipped app.js behavior and PANEL_SPECIFICATIONS.md.
+    leftPanelMode: id === null ? store.state.leftPanelMode : 'passport',
+  });
+}
+
+/**
+ * "Change workspace lens" transition (docs/STATE_MODEL.md).
+ *
+ * Effects: update workspaceLens; preserve selected object; preserve focused
+ * commitment; preserve time slice; preserve zoom level unless a
+ * lens-specific default is needed (V4 does not define any lens-specific
+ * zoom default, so zoom is always preserved here).
+ *
+ * @param {'universe'|'risk_board'} lens
+ */
+export function setLens(lens) {
+  assertInitialized();
+  if (!WORKSPACE_LENSES.includes(lens)) {
+    throw new Error(
+      `setLens: invalid lens "${lens}" (expected one of ${WORKSPACE_LENSES.join(', ')})`
+    );
+  }
+  // Only workspaceLens changes. selectedObjectId, focusedCommitmentId,
+  // timeSliceId, and zoomLevel are intentionally omitted from the patch so
+  // setState's merge preserves them untouched.
+  setState({ workspaceLens: lens });
+}
+
+/**
+ * "Change left panel mode" transition (docs/STATE_MODEL.md).
+ *
+ * Effects: update leftPanelMode; do not change workspace lens.
+ *
+ * @param {'dashboard'|'passport'} mode
+ */
+export function setLeftPanel(mode) {
+  assertInitialized();
+  if (!LEFT_PANEL_MODES.includes(mode)) {
+    throw new Error(
+      `setLeftPanel: invalid mode "${mode}" (expected one of ${LEFT_PANEL_MODES.join(', ')})`
+    );
+  }
+  setState({ leftPanelMode: mode });
+}
+
+/**
+ * "Change time" transition (docs/STATE_MODEL.md).
+ *
+ * Triggered by: global time slider.
+ * Effects: update timeSliceId only. STATE_MODEL.md lists downstream effects
+ * (recompute visible risk states / Dashboard KPIs / Passport
+ * timeline-evidence-recommendations / Jarvis narrative) but those are
+ * derived-data recomputations performed by engine/timeline.js +
+ * engine/derive.js in response to this state change, not state.js's job.
+ * Per docs/CAMERA_MODEL.md and docs/UX_ARCHITECTURE.md's zoom principle,
+ * time must never change zoom, and this function never touches zoomLevel.
+ * It also intentionally leaves selectedObjectId/focusedCommitmentId alone:
+ * Risk Board's "preserve selected commitment across time" requirement
+ * (docs/TIMELINE_ENGINE.md) depends on selection surviving a time change.
+ *
+ * @param {string} id - time slice id (e.g. 't0', 't1', 't2').
+ */
+export function setTimeSlice(id) {
+  assertInitialized();
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new Error('setTimeSlice: id must be a non-empty string');
+  }
+  setState({ timeSliceId: id });
+}
+
+/**
+ * "Change zoom" transition (docs/STATE_MODEL.md).
+ *
+ * Triggered by: global zoom slider or wheel.
+ * Effects: update zoomLevel; affect visual detail density; never change
+ * time. This function intentionally never touches timeSliceId, matching
+ * docs/CAMERA_MODEL.md's "Separation from time" principle: "Zoom never
+ * changes time."
+ *
+ * @param {number} level - zoom level. Not clamped here (state.js has no
+ *   opinion on valid zoom ranges); callers should clamp with
+ *   engine/camera.js's clampZoom() before calling this, keeping the zoom
+ *   hierarchy definition in one place (camera.js), not duplicated here.
+ */
+export function setZoom(level) {
+  assertInitialized();
+  if (typeof level !== 'number' || Number.isNaN(level)) {
+    throw new Error('setZoom: level must be a number');
+  }
+  setState({ zoomLevel: level });
+}
+
+/**
+ * Update hoveredObjectId. Not one of STATE_MODEL.md's named transitions
+ * with documented multi-field effects, but hoveredObjectId is part of the
+ * canonical state shape and needs a dedicated mutator for symmetry with the
+ * other fields (and so renderers don't reach for raw setState for such a
+ * frequent, low-stakes interaction).
+ *
+ * @param {string|null} id
+ */
+export function setHovered(id) {
+  assertInitialized();
+  if (id !== null && typeof id !== 'string') {
+    throw new Error('setHovered: id must be a string or null');
+  }
+  setState({ hoveredObjectId: id });
+}
+
+// Exported for tests / advanced callers that want to inspect the allowed
+// enum values without hardcoding them a second time.
+export const WORKSPACE_LENS_VALUES = WORKSPACE_LENSES;
+export const LEFT_PANEL_MODE_VALUES = LEFT_PANEL_MODES;

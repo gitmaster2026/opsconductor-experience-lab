@@ -1,0 +1,21 @@
+{
+  "name": "opsconductor-experience-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Experience Lab V4 - interaction-design laboratory for OpsConductor. Prototype code only, not production. Zero external dependencies by design (see docs/STATE_MODEL.md).",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "check": "node scripts/check-syntax.mjs",
+    "lint": "node scripts/lint.mjs",
+    "verify-data": "node scripts/verify-field-map.mjs",
+    "build": "npm run check && npm run verify-data && npm run test",
+    "serve": "node scripts/serve.mjs",
+    "start": "npm run serve"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
