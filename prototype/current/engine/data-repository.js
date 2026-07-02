@@ -2,14 +2,15 @@
 //
 // The only module in the Experience Lab allowed to call fetch() against
 // src/data/*.json. Loads every file required by the 5 data contracts
-// (docs/data-contracts/Universe.md, RiskBoard.md, Dashboard.md, Passport.md,
-// Timeline.md) plus a handful of supporting reference files, and returns a
-// single frozen "snapshot" object that engine/derive.js consumes.
+// (docs/data-contracts/Universe.md, RiskBoard.md, Dashboard.md,
+// Passport.md, Timeline.md) plus a handful of supporting reference files,
+// and returns a single frozen "snapshot" object that engine/derive.js
+// consumes.
 //
 // Runtime rule (docs/RULES.md #9, docs/data-contracts/README.md): static
 // JSON only, no live Supabase reads. Files are fetched with plain fetch()
-// from a base URL (default '/src/data') so a real API can later swap in
-// without changing the interaction model, per the project brief.
+// from a module-relative base URL so the same code works locally from
+// `npm run serve` and on GitHub Pages project URLs.
 //
 // Immutability (docs/RULES.md #11 "Immutable Source Data Rule"): once
 // loaded, every top-level array/object in the snapshot is Object.freeze()'d
@@ -36,9 +37,7 @@
  *   - Timeline.md requires: timeline-events, time-slices
  * Plus supporting reference files explicitly called out in the phase brief:
  * organization, sites, customers, items, schema-authority, commitments,
- * inventory, operational-graph-snapshot (the sanctioned illustrative
- * backbone used for Organization/Plant anchor nodes, per the phase brief's
- * "Universe graph composition" decision).
+ * inventory, operational-graph-snapshot.
  *
  * Deliberately NOT loaded (per phase brief): time-states.json (stale, see
  * docs/V4_DATA_RECONCILIATION.md), any northriver-supabase-mirror.json, and
@@ -70,7 +69,10 @@ const FILES = Object.freeze({
   operationalGraphSnapshot: 'operational-graph-snapshot.json',
 });
 
-const DEFAULT_BASE_URL = '/src/data';
+// Module-relative path from prototype/current/engine/data-repository.js to
+// repo-root src/data. This avoids absolute '/src/data' paths, which break on
+// GitHub Pages project sites served from /<repo-name>/.
+const DEFAULT_BASE_URL = new URL('../../../src/data', import.meta.url).toString();
 
 /** @type {Promise<Object>|null} in-flight or resolved load, keyed by baseUrl */
 let cachedLoad = null;
@@ -79,11 +81,7 @@ let cachedBaseUrl = null;
 /**
  * Deeply freeze a value: freezes the object/array itself and recurses into
  * own enumerable properties/elements that are objects. Primitives and
- * already-frozen values are returned as-is. This is the enforcement
- * mechanism for docs/RULES.md #11 (Immutable Source Data Rule) — freezing
- * only the top level would still allow `snapshot.riskBoard.records[0].id =
- * 'x'` to silently succeed, which is exactly the kind of drift the rule
- * exists to prevent.
+ * already-frozen values are returned as-is.
  *
  * @template T
  * @param {T} value
@@ -124,23 +122,10 @@ async function fetchJson(baseUrl, filename) {
 /**
  * Load every required static JSON file and return a single frozen snapshot
  * object keyed by the same names as FILES above. Cached after first
- * successful call — repeat calls (even with the same baseUrl) return the
- * cached snapshot without re-fetching. Calling with a different baseUrl
- * than a previous cached call will still return the original cached
- * snapshot; call resetCache() first if you need to load from a new
- * location (this mirrors "one shared operational reality" - the lab is not
- * expected to hot-swap data sources mid-session).
+ * successful call.
  *
- * @param {string} [baseUrl='/src/data']
- * @returns {Promise<Object>} frozen snapshot: { organization, sites,
- *   schemaAuthority, dataManifest, items, customers, demandSignals,
- *   demandValues, commitments, allocations, inventory, shortageExceptions,
- *   riskBoard, recommendations, evidence, operationalObjects,
- *   relationships, operationalPassports, timelineEvents, timeSlices,
- *   dashboardSummary, operationalGraphSnapshot }
- *   Each value is the parsed JSON exactly as the file contains it (e.g.
- *   `snapshot.riskBoard.records` is the array of risk-board row objects),
- *   deep-frozen.
+ * @param {string} [baseUrl]
+ * @returns {Promise<Object>} frozen snapshot
  */
 export function loadAll(baseUrl = DEFAULT_BASE_URL) {
   if (cachedLoad) {
@@ -164,9 +149,6 @@ export function loadAll(baseUrl = DEFAULT_BASE_URL) {
     return snapshot;
   })();
 
-  // If the load fails, clear the cache so a subsequent call can retry
-  // (e.g. transient network error during dev) instead of permanently
-  // caching a rejected promise.
   cachedLoad.catch(() => {
     cachedLoad = null;
     cachedBaseUrl = null;
@@ -175,28 +157,16 @@ export function loadAll(baseUrl = DEFAULT_BASE_URL) {
   return cachedLoad;
 }
 
-/**
- * Clear the module-level cache. Exposed primarily for tests, so each test
- * can start from a clean slate (e.g. to point at a different baseUrl or to
- * verify loadAll() re-fetches after a prior failure).
- */
+/** Clear the module-level cache. Exposed primarily for tests. */
 export function resetCache() {
   cachedLoad = null;
   cachedBaseUrl = null;
 }
 
-/**
- * The filename map, exported read-only so other modules (or tests) can
- * introspect exactly which files this repository considers part of the
- * documented contract, without re-deriving the list themselves.
- */
+/** Filename map for documented contract files. */
 export const REQUIRED_FILES = FILES;
 
-/**
- * Returns the baseUrl used by the currently cached (or in-flight) load, or
- * null if loadAll() has not been called yet / cache was reset. Useful for
- * diagnostics only.
- */
+/** Returns the baseUrl used by the cached load, or null. */
 export function getCachedBaseUrl() {
   return cachedBaseUrl;
 }
