@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpsConductor Experience Lab V4</title>
+    <link rel="stylesheet" href="src/styles.css" />
+  </head>
+  <body>
+    <main id="app" class="app-shell" aria-label="OpsConductor Experience Lab V4">
+      <aside id="left-panel" class="panel left-panel"></aside>
+      <section class="workspace-shell">
+        <header class="topbar">
+          <div>
+            <div class="eyebrow">Experience Lab V4</div>
+            <h1>Operational Universe</h1>
+          </div>
+          <nav class="toolbar" aria-label="Workspace controls">
+            <button class="segmented is-active" data-lens="universe">Universe</button>
+            <button class="segmented" data-lens="risk_board">Risk Board</button>
+            <button class="segmented" data-panel="dashboard">Dashboard</button>
+            <button class="segmented" data-panel="passport">Passport</button>
+          </nav>
+        </header>
+
+        <section id="workspace" class="workspace" aria-live="polite"></section>
+
+        <footer class="control-rail">
+          <label>
+            Time Slice
+            <input id="time-slider" type="range" min="0" max="0" value="0" />
+            <span id="time-label"></span>
+          </label>
+          <label>
+            Zoom Depth
+            <input id="zoom-slider" type="range" min="1" max="8" value="4" />
+            <span id="zoom-label"></span>
+          </label>
+        </footer>
+      </section>
+      <aside id="jarvis-panel" class="panel jarvis-panel"></aside>
+    </main>
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>
