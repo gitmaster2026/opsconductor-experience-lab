@@ -6,11 +6,11 @@
 // dependency constraint - no express, no bundler, nothing from
 // registry.npmjs.org).
 //
-// Serves the repo root as static files. Requests to "/" are served the
-// prototype's entry point at /prototype/current/index.html (that file does
-// not exist yet as of Phase 1 - engine/scripts/tests only - so a request to
-// "/" during Phase 1 will 404 until a later phase adds it; this is expected
-// and does not indicate a server bug).
+// Serves the repo root as static files. Requests to "/" get an HTTP redirect
+// to the prototype's entry point at /prototype/current/index.html (a real
+// redirect, not an in-place rewrite, so the browser's location updates and
+// the entry point's relative asset paths - app.js, styles.css - resolve
+// correctly).
 //
 // Usage: node scripts/serve.mjs
 // Port: process.env.PORT, defaulting to 4173.
@@ -79,9 +79,14 @@ function sendServerError(res, err) {
 
 const server = http.createServer((req, res) => {
   const requestUrl = req.url ?? '/';
-  const urlPath = requestUrl === '/' ? ENTRY_POINT : requestUrl;
 
-  const filePath = resolveSafePath(urlPath);
+  if (requestUrl === '/') {
+    res.writeHead(302, { Location: ENTRY_POINT });
+    res.end();
+    return;
+  }
+
+  const filePath = resolveSafePath(requestUrl);
   if (!filePath) {
     sendNotFound(res, 'Forbidden path');
     return;
