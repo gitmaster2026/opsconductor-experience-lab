@@ -1,0 +1,66 @@
+{
+  "version": "2026-07-02-time-states-v1",
+  "purpose": "Static time slices used by the Experience Lab timeline slider. Values are UX sample states derived from existing risk/shortage/recommendation/evidence concepts.",
+  "timeSlices": [
+    {
+      "id": "t0",
+      "label": "Before constraint",
+      "date": "2026-08-01",
+      "dashboard": { "operational_health": 92, "revenue_at_risk_usd": 0, "commitments_at_risk": 0, "active_recommendations": 0 },
+      "commitmentRisk": {
+        "COM-NR-HORIZON-CPP": "green",
+        "COM-NR-AQUAGRID-PPS": "green",
+        "COM-NR-CATALYST-CPS": "green",
+        "COM-NR-ATLAS-LCM": "green",
+        "COM-NR-FRONTIER-MPS": "green"
+      },
+      "visibleEvidenceIds": [],
+      "visibleRecommendationIds": []
+    },
+    {
+      "id": "t1",
+      "label": "Supplier issue appears",
+      "date": "2026-08-18",
+      "dashboard": { "operational_health": 86, "revenue_at_risk_usd": 500000, "commitments_at_risk": 1, "active_recommendations": 1 },
+      "commitmentRisk": {
+        "COM-NR-HORIZON-CPP": "yellow",
+        "COM-NR-AQUAGRID-PPS": "green",
+        "COM-NR-CATALYST-CPS": "green",
+        "COM-NR-ATLAS-LCM": "green",
+        "COM-NR-FRONTIER-MPS": "green"
+      },
+      "visibleEvidenceIds": ["EV-NR-CPP-APEX"],
+      "visibleRecommendationIds": ["REC-NR-HORIZON-CPP"]
+    },
+    {
+      "id": "t2",
+      "label": "Allocation pressure builds",
+      "date": "2026-09-05",
+      "dashboard": { "operational_health": 78, "revenue_at_risk_usd": 690000, "commitments_at_risk": 2, "active_recommendations": 2 },
+      "commitmentRisk": {
+        "COM-NR-HORIZON-CPP": "orange",
+        "COM-NR-AQUAGRID-PPS": "green",
+        "COM-NR-CATALYST-CPS": "green",
+        "COM-NR-ATLAS-LCM": "yellow",
+        "COM-NR-FRONTIER-MPS": "green"
+      },
+      "visibleEvidenceIds": ["EV-NR-CPP-APEX", "EV-NR-LCM-ALLOC"],
+      "visibleRecommendationIds": ["REC-NR-HORIZON-CPP", "REC-NR-ATLAS-LCM"]
+    },
+    {
+      "id": "t3",
+      "label": "Current state",
+      "date": "2026-09-20",
+      "dashboard": { "operational_health": 64, "revenue_at_risk_usd": 1304000, "commitments_at_risk": 5, "active_recommendations": 5 },
+      "commitmentRisk": {
+        "COM-NR-HORIZON-CPP": "red",
+        "COM-NR-AQUAGRID-PPS": "orange",
+        "COM-NR-CATALYST-CPS": "yellow",
+        "COM-NR-ATLAS-LCM": "red",
+        "COM-NR-FRONTIER-MPS": "orange"
+      },
+      "visibleEvidenceIds": ["EV-NR-CPP-APEX", "EV-NR-LCM-ALLOC"],
+      "visibleRecommendationIds": ["REC-NR-HORIZON-CPP", "REC-NR-ATLAS-LCM"]
+    }
+  ]
+}
