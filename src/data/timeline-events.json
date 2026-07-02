@@ -1,0 +1,11 @@
+{
+  "derived_from": ["shortage_recommendations", "operational_domain_objects"],
+  "records": [
+    {"id":"tl-2026-07-01-baseline","object_id":"dashboard-current","event_type":"state_snapshot","occurred_at":"2026-07-01T00:00:00Z","title":"Baseline operational state","summary":"No shortage recommendations visible in baseline slice.","source_table":"derived_time_slice","source_record_id":"t0"},
+    {"id":"tl-rec-pps","object_id":"967f356a-e3d2-4b49-9c83-24c214abbcf1","event_type":"recommendation_generated","occurred_at":"2026-07-02T04:36:02.036104Z","title":"PPS shortage recommendation generated","summary":"AquaGrid PPS demand has 2 units short out of 6 required.","source_table":"shortage_recommendations","source_record_id":"967f356a-e3d2-4b49-9c83-24c214abbcf1"},
+    {"id":"tl-rec-cpp","object_id":"091ebb8d-c7d8-49aa-beda-3858e8eece5a","event_type":"recommendation_generated","occurred_at":"2026-07-02T04:36:02.501714Z","title":"CPP shortage recommendation generated","summary":"Horizon CPP demand has 2 units short out of 6 required.","source_table":"shortage_recommendations","source_record_id":"091ebb8d-c7d8-49aa-beda-3858e8eece5a"},
+    {"id":"tl-rec-cps","object_id":"55a44639-be9e-4527-969c-452294231a7b","event_type":"recommendation_generated","occurred_at":"2026-07-02T04:36:02.963383Z","title":"CPS shortage recommendation generated","summary":"Catalyst CPS demand has 2 units short out of 5 required.","source_table":"shortage_recommendations","source_record_id":"55a44639-be9e-4527-969c-452294231a7b"},
+    {"id":"tl-rec-mps","object_id":"5cd7fbc1-46e3-4b3b-9e72-fe3e6f8c829b","event_type":"recommendation_generated","occurred_at":"2026-07-02T04:36:03.425381Z","title":"MPS shortage recommendation generated","summary":"Frontier MPS demand has 2 units short out of 5 required.","source_table":"shortage_recommendations","source_record_id":"5cd7fbc1-46e3-4b3b-9e72-fe3e6f8c829b"},
+    {"id":"tl-rec-lcm","object_id":"0e55ded9-85c0-45b6-8a7f-5afbdddeb937","event_type":"recommendation_generated","occurred_at":"2026-07-02T04:36:03.886921Z","title":"LCM shortage recommendation generated","summary":"Atlas LCM demand has 2 units short out of 7 required.","source_table":"shortage_recommendations","source_record_id":"0e55ded9-85c0-45b6-8a7f-5afbdddeb937"}
+  ]
+}
