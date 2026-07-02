@@ -1,0 +1,50 @@
+{
+  "snapshot_version": "2026-07-02-supabase-checkpoint-1",
+  "project_id": "acdmxbjrbhnxztfpkjtt",
+  "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+  "purpose": "Static Experience Lab mirror of production-shaped Supabase data. Used for local UX exploration only.",
+  "rules": {
+    "live_supabase_access_in_prototype": false,
+    "fake_values_allowed": true,
+    "fake_fields_allowed": false,
+    "visible_fields_must_map_to_schema": true,
+    "derived_fields_must_be_documented": true
+  },
+  "verified_counts": {
+    "organizations": 1,
+    "sites": 1,
+    "item_master": 8,
+    "commitments": 5,
+    "demand_signals": 5,
+    "demand_signal_values": 5,
+    "inventory_positions": 5,
+    "allocations": 5,
+    "shortage_exceptions": 5,
+    "shortage_recommendations": 5,
+    "recommendations": 0,
+    "recommendation_evidence": 0,
+    "risks": 0,
+    "operational_domain_objects": 324,
+    "operational_domain_object_links": 398
+  },
+  "files": [
+    "organizations.json",
+    "sites.json",
+    "item_master.json",
+    "item_aliases.json",
+    "commitments.json",
+    "demand_signals.json",
+    "demand_signal_values.json",
+    "inventory_positions.json",
+    "allocations.json"
+  ],
+  "next_checkpoint_files": [
+    "shortage_exceptions.json",
+    "shortage_recommendations.json",
+    "shortage_exception_events.json",
+    "shortage_recommendation_events.json",
+    "operational_domain_objects.json",
+    "operational_domain_object_links.json",
+    "activity_log.json"
+  ]
+}
