@@ -14,8 +14,9 @@
 // itself. This keeps the store reusable even if the data layer changes.
 //
 // Canonical state (docs/STATE_MODEL.md, extended by docs/V5_DESIGN_SPEC.md
-// §1.2 for the fields marked NEW below):
-//   workspaceLens: 'universe' | 'risk_board' | 'spider' | 'text'
+// §1.2 for the fields marked NEW below, and by V5 Phase 4.5 for
+// 'workbench' - docs/V5_HANDOVER.md §9.2):
+//   workspaceLens: 'universe' | 'risk_board' | 'spider' | 'text' | 'workbench'
 //   leftPanelMode: 'dashboard' | 'passport'
 //   selectedObjectId: string | null
 //   focusedCommitmentId: string | null
@@ -48,13 +49,13 @@
 // cell ids. Same "orthogonal state, isolated mutator" pattern as
 // timeSliceId/zoomLevel: setScope() touches scopeContext ONLY.
 
-const WORKSPACE_LENSES = Object.freeze(['universe', 'risk_board', 'spider', 'text']);
+const WORKSPACE_LENSES = Object.freeze(['universe', 'risk_board', 'spider', 'text', 'workbench']);
 const LEFT_PANEL_MODES = Object.freeze(['dashboard', 'passport']);
 const CAMERA_PHASES = Object.freeze(['idle', 'depart', 'travel', 'arrive']);
 
 /**
  * @typedef {Object} AppState
- * @property {'universe'|'risk_board'|'spider'|'text'} workspaceLens
+ * @property {'universe'|'risk_board'|'spider'|'text'|'workbench'} workspaceLens
  * @property {'dashboard'|'passport'} leftPanelMode
  * @property {string|null} selectedObjectId
  * @property {string|null} focusedCommitmentId
@@ -91,7 +92,7 @@ let store = null;
  *   If omitted, focusedCommitmentId is never auto-derived from selection
  *   (callers may still set it directly via setState).
  * @param {number} [options.initialZoomLevel=0] - starting zoom level.
- * @param {'universe'|'risk_board'|'spider'|'text'} [options.initialLens='universe']
+ * @param {'universe'|'risk_board'|'spider'|'text'|'workbench'} [options.initialLens='universe']
  * @param {'dashboard'|'passport'} [options.initialLeftPanel='dashboard']
  * @returns {AppState} the freshly-initialized state (a copy)
  */
@@ -385,7 +386,7 @@ export function popFocus() {
  * touches only workspaceLens, so setState's merge leaves everything else,
  * including the new camera/focus fields, untouched.
  *
- * @param {'universe'|'risk_board'|'spider'|'text'} lens
+ * @param {'universe'|'risk_board'|'spider'|'text'|'workbench'} lens
  */
 export function setLens(lens) {
   assertInitialized();

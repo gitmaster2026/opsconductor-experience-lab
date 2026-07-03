@@ -73,7 +73,7 @@ concept" and "did this invent a new entity type."
 | 3.5 — Operational Scope + global sync (4 surfaces) | ✅ Done, merged, live-validated | merged |
 | 2.6+ (consolidated) — label policy, centering fix/diagnose, contrast, click-detail, Nav History rail, Scope Explorer multi-select/collections | 🟡 **Prompt sent, outcome not yet logged in this doc — see §10 for scope** | pending |
 | 4 — Spider, Text View, Collection Passport | ⬜ Not started | — |
-| 4.5 — Workbench | ⬜ Not started | — |
+| 4.5 — Workbench | ✅ Done, not yet live-validated by a human | pending PR |
 | 4.6 — Saved Views/Reports/Action Bar (UI-only) | ⬜ Not started | — |
 | 5 — Motion grammar + doc reconciliation | ⬜ Not started | — |
 | Mobile/responsive/touch | 🔶 Backlogged, out of scope — see §6 | — |
@@ -818,3 +818,24 @@ once §11.1 is resolved.
   (Workbench) BEFORE Phase 4.7 (Conductor Studio). Workbench builds the
   one real filter/column engine; Conductor Studio imports it directly.
   Phase 4.7 prompt HELD pending Workbench completion — do not send yet.
+| +11 | Phase 4.5 (Workbench) executed, per §9.2/§11.6 resequencing —
+  run ahead of Phase 4 (Spider/Text/Collection Passport), which §9.2
+  only listed as "ideally" a prerequisite, not hard-blocking. New:
+  `engine/relationship-dataset.js` (pure `buildRelationshipDataset()` -
+  traverses the same merged graph `buildUniverseGraph()` already builds
+  from relationships.json, domain-selection only, no manual join UI);
+  `engine/filterable-table.js` (THE REUSABLE COMPONENT for §11.6 - sort +
+  per-column text filter, pure logic split from a generic DOM renderer,
+  zero Workbench-specific coupling — verified via a standalone Playwright
+  probe against synthetic non-operational data); `lenses/workbench.js`
+  (root-type + domain selector, column picker, minimal bar/line chart,
+  Save Layout / Export UI-only placeholders per §9.4). Wired into the
+  lens switcher as a 3rd working button (Universe/Risk Board/Workbench —
+  Spider/Text still enum-only placeholders in `engine/state.js`'s
+  `WORKSPACE_LENSES`, pending Phase 4). Live-validated: scoping to a
+  customer via the real Scope Explorer narrows Workbench's joined
+  dataset 5→1 rows in sync with Dashboard/Jarvis; lens-switch invariant
+  (selectedObjectId/timeSliceId/zoomLevel survive a round trip) holds.
+  28 new tests, 274 total passing. **Not yet reviewed live by a human**
+  (V5 Handover's own standing rule: test-green is necessary but not
+  sufficient for a visually-load-bearing phase) — flag for next session.
