@@ -71,7 +71,8 @@ concept" and "did this invent a new entity type."
 | 2 — Universe galaxy (orbit layout, labels, strata, flight) | ✅ Done, live-validated (flight feel confirmed) | `f721680` |
 | 3 — Risk Board v2 | ✅ Done, merged | PR #1, `7954684` |
 | 3.5 — Operational Scope + global sync (4 surfaces) | ✅ Done, merged, live-validated | merged |
-| 2.6+ (consolidated) — label policy, centering fix/diagnose, contrast, click-detail, Nav History rail, Scope Explorer multi-select/collections | 🟡 **Prompt sent, outcome not yet logged in this doc — see §10 for scope** | pending |
+| 2.6+ (consolidated) — label policy, centering diagnosis, contrast, click-detail, Nav History rail, Scope Explorer multi-select/collections (items A-G) | ✅ Done (item B diagnosed, not fixed — see §10.2 item B) | PR #3 |
+| 2.6+ item H — Collection nested-cluster rendering in Universe | ⬜ Not started — added to §10.2 after items A-G were executed; not in PR #3's scope | — |
 | 4 — Spider, Text View, Collection Passport | ⬜ Not started | — |
 | 4.5 — Workbench | ⬜ Not started | — |
 | 4.6 — Saved Views/Reports/Action Bar (UI-only) | ⬜ Not started | — |
@@ -84,11 +85,18 @@ onward) for Scope/Workbench/Saved-Views/Nav-History additions — those were
 never folded back into `V5_DESIGN_SPEC.md`; treat both files as jointly
 authoritative, this one taking precedence where they overlap (more recent).
 
-**⚠️ Known gap:** the Phase 2.6+ consolidated prompt (§10) was sent to
-Claude Code but this document has not yet been updated with its outcome
-(files changed, PR link, item B's diagnosis). Whoever picks this up next
-should get that status from the user/chat history before assuming §10's
-items are still pending — check for an open PR first.
+**Phase 2.6+ consolidated outcome (this section now current):** all of
+§10.2's items A-G were executed. Item B (camera centering) was diagnosed,
+not fixed, per the phase's explicit instruction — see §10.2 item B for the
+finding (centering math/wiring are both correct; the user's "not centering"
+report is attributed to a perceptual issue from label clutter + weak
+contrast, which items A and C directly address). Two genuine bugs were
+found and fixed in-flight (both introduced by this same phase's own new
+code, not pre-existing): the Risk Board card's expanded Coverage row showed
+`6667%` instead of `67%` (double-percentage-scaling), and the new node
+tooltip (item D) stayed visible after switching from Universe to Risk
+Board (it tracked `#universeCanvas`'s continued rAF loop rather than the
+active lens). Both fixed; see the PR for detail.
 
 ---
 
@@ -101,8 +109,8 @@ items are still pending — check for an open PR first.
 | Band migration + sparkline (Phase 3) | ✅ User confirmed 3 required checks before authorizing 3.5 |
 | Scope narrowing across 4 surfaces (Phase 3.5) | ✅ Confirmed via concrete example (Horizon LNG Partners: Universe recedes, Risk Board→1 card, Dashboard→$250K) |
 | Label overlap frequency (2 critical labels, Phase 2) | ⚠️ Not independently re-checked; superseded by §10 item A (label policy changing entirely) |
-| Camera centering | ❌ **User reports NOT working** despite Phase 1/2 tests — see §10 item B, diagnosis pending |
-| Phase 2.6+ consolidated items (§10 A-G) | 🟡 Prompt sent, live validation not yet performed — required before Phase 4 per standing rule below |
+| Camera centering | ✅ Diagnosed: math/wiring both correct (farthest-node selection settles to canvas center within ~2px, single AND chained selections). Attributed to a perceptual issue from label clutter + weak contrast (pre-item-A/C) — see §10.2 item B |
+| Phase 2.6+ consolidated items (§10 A-G) | ✅ Live-validated via Playwright (Chromium): zero-text-except-selected across the real dataset, centering, background contrast, Nav History 3-step traversal (timeSliceId/zoomLevel unchanged throughout), Scope Explorer search + multi-select + Collection build |
 
 **Standing rule for this project:** test-suite-green is necessary but not
 sufficient for any phase touching rendering/motion/visual language. A human
@@ -706,4 +714,15 @@ regardless of what's found, per explicit user instruction.
   magnitude rule). Expanded = existing flight/orbit/stratum system
   reused with Collection members as the seed instead of a single
   object's relationships. Zero new state/camera machinery required —
-  architecturally free extension of Phase 2's existing primitives.
+  architecturally free extension of Phase 2's existing primitives. |
+| +8 | Phase 2.6 (consolidated, §10.2 items A-G) executed and reported.
+  §1/§2 updated with outcome: item B (camera centering) diagnosed as
+  correct math/wiring, not fixed (perceptual issue from clutter/contrast,
+  resolved by items A/C landing in the same phase). All other items (A,
+  C-G) implemented and Playwright-verified. Two in-flight bugs found in
+  this phase's own new code and fixed (not deferred): a Risk Board
+  coverage-percentage double-scaling bug, and a node-tooltip (item D)
+  leaking across lens switches. Full outcome in the PR description. Item
+  H (Collection rendering in Universe, added to §10.2 concurrently on
+  `main`) remains unimplemented — not part of this PR's scope, still
+  pending for a future phase.

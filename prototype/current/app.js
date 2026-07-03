@@ -55,6 +55,7 @@ import { mountDashboardPanel } from './panels/dashboard.js';
 import { mountPassportPanel } from './panels/passport.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
 import { mountScopePanel } from './panels/scope.js';
+import { mountNavHistoryRail } from './panels/nav-history.js';
 
 // ---------------------------------------------------------------------------
 // DOM references (same element ids as the previous prototype iteration, so
@@ -76,6 +77,8 @@ const els = {
   riskBoardEl: document.getElementById('riskBoard'),
   scopeBar: document.getElementById('scopeBar'),
   scopeExplorer: document.getElementById('scopeExplorer'),
+  navHistoryRail: document.getElementById('navHistoryRail'),
+  nodeTooltip: document.getElementById('nodeTooltip'),
 };
 
 // ---------------------------------------------------------------------------
@@ -151,6 +154,21 @@ async function main() {
     store.selectObject(id);
   }
 
+  // --- Navigation History rail (V5 Phase 2.6 item E) ------------------------
+  //
+  // focusTrail is a plain stack (Phase 1) with no "redo" data once an entry
+  // is popped, so "jump to step N" is implemented as however many popFocus()
+  // calls it takes to shrink the trail down to that index - popFocus()
+  // already restores selectedObjectId/cameraTarget/leftPanelMode per entry
+  // (see engine/state.js), so no new state plumbing is needed here.
+  function jumpToTrailIndex(index) {
+    const trail = store.getState().focusTrail;
+    const popsNeeded = trail.length - index;
+    for (let i = 0; i < popsNeeded; i += 1) {
+      store.popFocus();
+    }
+  }
+
   // --- Lens mounting -------------------------------------------------------
 
   const universeLens = mountUniverseLens(els.universeCanvas, {
@@ -174,7 +192,7 @@ async function main() {
       const next = clampZoom(store.getState().zoomLevel + delta);
       store.setZoom(next);
     },
-  });
+  }, els.nodeTooltip);
 
   const riskBoardLens = mountRiskBoardLens(els.riskBoardEl, {
     getBundle: () => timeline.getDerivedBundle(),
@@ -230,6 +248,17 @@ async function main() {
     getBundle: () => timeline.getDerivedBundle(),
     getScope: () => store.getState().scopeContext,
     onSetScope: (scope) => store.setScope(scope),
+  });
+
+  // V5 Phase 2.6 item E: the Navigation History rail - independent of the
+  // zoom slider and of timeSliceId (jumpToTrailIndex only ever calls
+  // popFocus(), which never touches timeSliceId/zoomLevel - see
+  // engine/state.js).
+  const navHistoryPanel = mountNavHistoryRail(els.navHistoryRail, {
+    getBundle: () => timeline.getDerivedBundle(),
+    getFocusTrail: () => store.getState().focusTrail,
+    getSelectedId: () => store.getState().selectedObjectId,
+    onJumpToIndex: (index) => jumpToTrailIndex(index),
   });
 
   // --- Toolbar wiring --------------------------------------------------------
@@ -312,6 +341,7 @@ async function main() {
     renderLeftPanel(state);
     jarvisPanel.render();
     scopePanel.render();
+    navHistoryPanel.render();
 
     universeLens.render();
     riskBoardLens.render();

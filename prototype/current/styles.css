@@ -546,6 +546,38 @@ body {
   opacity: 0.9;
 }
 
+/* Inline "drill into sub-detail" drawer, shown only on the selected card
+   (V5 Phase 2.6 item F - see lenses/risk-board.js's buildExpandedDetail()). */
+.risk-card-expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  padding-top: 8px;
+  margin-top: 2px;
+  border-top: 1px solid var(--cyan-accent);
+}
+
+.risk-card-expanded-row {
+  display: flex;
+  gap: 6px;
+  line-height: 1.4;
+}
+
+.risk-card-expanded-label {
+  flex-shrink: 0;
+  min-width: 84px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 9px;
+  color: var(--cyan-accent);
+}
+
+.risk-card-expanded-evidence span:last-child {
+  color: var(--text-primary);
+}
+
 /* ---------------------------------------------------------------------
    Scrollbars (subtle, matches the glassmorphic dark aesthetic)
    --------------------------------------------------------------------- */
@@ -1641,6 +1673,36 @@ body {
   margin-bottom: 10px;
 }
 
+.scope-explorer-search {
+  width: 100%;
+  box-sizing: border-box;
+  appearance: none;
+  padding: 7px 10px;
+  margin-bottom: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.scope-explorer-search:focus {
+  outline: none;
+  border-color: var(--cyan-accent);
+}
+
+.scope-explorer-search::placeholder {
+  color: var(--text-secondary);
+}
+
+.scope-explorer-no-results {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 8px 0 0;
+}
+
 .scope-tree,
 .scope-tree-children {
   list-style: none;
@@ -1662,9 +1724,17 @@ body {
   flex-direction: column;
 }
 
+.scope-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .scope-tree-node {
   appearance: none;
   width: 100%;
+  min-width: 0;
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1690,6 +1760,17 @@ body {
   color: var(--cyan-accent);
 }
 
+.scope-tree-node.is-in-collection {
+  border-color: var(--jarvis-accent);
+  color: var(--jarvis-accent);
+}
+
+.scope-tree-node.is-pending {
+  border-style: dashed;
+  border-color: var(--jarvis-accent);
+  box-shadow: 0 0 0 1px var(--jarvis-accent);
+}
+
 .scope-tree-icon {
   color: var(--text-secondary);
   font-size: 11px;
@@ -1713,4 +1794,221 @@ body {
   letter-spacing: 0.06em;
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+.scope-tree-add {
+  appearance: none;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.scope-tree-add:hover {
+  background: var(--card-bg-hover);
+  border-color: var(--jarvis-accent);
+  color: var(--jarvis-accent);
+}
+
+.scope-collection-bar {
+  position: sticky;
+  bottom: -22px;
+  margin: 14px -20px -22px;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--jarvis-accent);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+}
+
+.scope-collection-count {
+  font-size: 11.5px;
+  color: var(--jarvis-accent);
+  font-weight: 600;
+  flex: 1;
+}
+
+.scope-collection-build,
+.scope-collection-clear {
+  appearance: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.scope-collection-build {
+  background: rgba(179, 157, 255, 0.18);
+  color: var(--jarvis-accent);
+}
+
+.scope-collection-build:hover {
+  background: rgba(179, 157, 255, 0.28);
+}
+
+.scope-collection-clear {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.scope-collection-clear:hover {
+  color: var(--text-primary);
+}
+
+/* ---------------------------------------------------------------------
+   Navigation History rail (V5 Phase 2.6 item E) - a vertical control in
+   the toolbar, deliberately separate from the Depth (zoom) slider next to
+   it: dots are investigation STEPS (focusTrail entries + the current
+   selection), not zoom levels. Kept visually quiet (small dots, no
+   labels) so it doesn't compete with the toolbar's primary controls -
+   the step identity surfaces only on hover, via each dot's native
+   title="" tooltip.
+   --------------------------------------------------------------------- */
+
+.nav-history-rail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
+.nav-history-rail.is-empty {
+  display: none;
+}
+
+.nav-history-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.nav-history-dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.nav-history-dot {
+  appearance: none;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.nav-history-dot:hover:not(:disabled) {
+  border-color: var(--cyan-accent);
+  transform: scale(1.25);
+}
+
+.nav-history-dot.is-current {
+  background: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+  cursor: default;
+}
+
+.nav-history-dot:disabled {
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------------
+   Node tooltip (V5 Phase 2.6 item D) - click-for-detail surface anchored
+   to the selected node's on-screen position. A lightweight peek; the
+   full record lives in the Passport panel (see the tooltip's own
+   "Full detail in Passport" hint line, produced by
+   lenses/universe.js's updateTooltip()).
+   --------------------------------------------------------------------- */
+
+.node-tooltip {
+  position: absolute;
+  z-index: 20;
+  max-width: 240px;
+  padding: 10px 12px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.node-tooltip-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.node-tooltip-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.node-tooltip-risk {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.node-tooltip-risk--critical {
+  background: rgba(239, 83, 80, 0.18);
+  color: var(--red);
+}
+
+.node-tooltip-risk--elevated {
+  background: rgba(240, 144, 74, 0.18);
+  color: var(--orange);
+}
+
+.node-tooltip-risk--watch {
+  background: rgba(232, 195, 74, 0.18);
+  color: var(--yellow);
+}
+
+.node-tooltip-risk--neutral {
+  background: rgba(124, 136, 150, 0.18);
+  color: var(--gray);
+}
+
+.node-tooltip-type {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.node-tooltip-line {
+  margin: 3px 0;
+}
+
+.node-tooltip-hint {
+  margin-top: 6px;
+  font-style: italic;
+  opacity: 0.7;
+  font-size: 10.5px;
 }

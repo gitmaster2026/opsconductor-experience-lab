@@ -477,3 +477,50 @@ test('setScope notifies subscribers exactly once per call, same as other transit
   setScope(null);
   assert.equal(callCount, 2);
 });
+
+// ---------------------------------------------------------------------------
+// V5 Phase 2.6 item E: Navigation History rail invariants
+// (docs/V5_HANDOVER.md §10.2 item E). panels/nav-history.js's
+// jumpToTrailIndex (app.js) is implemented purely as a loop of popFocus()
+// calls, so the rail's two hard-constraint invariants - "never mutates
+// timeSliceId unless the restored state explicitly stored one" and "fully
+// independent of zoom level" - reduce to properties of popFocus() itself,
+// exercised here across a MULTI-STEP traversal (3 pops), not just one.
+// ---------------------------------------------------------------------------
+
+test('Nav History invariant: traversing history via repeated popFocus() never mutates timeSliceId, across a multi-step (3-pop) traversal', () => {
+  initState({ initialTimeSliceId: 't1' });
+  selectObject('A');
+  selectObject('B');
+  selectObject('C');
+  selectObject('D'); // focusTrail: ['A', 'B', 'C'], selected: 'D'
+
+  assert.equal(getState().timeSliceId, 't1');
+
+  popFocus(); // -> C
+  assert.equal(getState().timeSliceId, 't1', 'timeSliceId must be unchanged after 1st pop');
+  popFocus(); // -> B
+  assert.equal(getState().timeSliceId, 't1', 'timeSliceId must be unchanged after 2nd pop');
+  popFocus(); // -> A
+  assert.equal(getState().timeSliceId, 't1', 'timeSliceId must be unchanged after 3rd pop');
+
+  assert.equal(getState().selectedObjectId, 'A', 'sanity check: traversal actually happened');
+});
+
+test('Nav History invariant: traversing history via repeated popFocus() never mutates zoomLevel, and changing zoom never mutates focusTrail (rail is independent of the Depth slider)', () => {
+  initState({ initialZoomLevel: 4 });
+  selectObject('A');
+  selectObject('B');
+  selectObject('C');
+
+  assert.equal(getState().zoomLevel, 4);
+  popFocus();
+  assert.equal(getState().zoomLevel, 4, 'zoomLevel must be unchanged after popFocus');
+  popFocus();
+  assert.equal(getState().zoomLevel, 4, 'zoomLevel must be unchanged after a 2nd popFocus');
+
+  const trailBeforeZoom = getState().focusTrail;
+  setZoom(7);
+  assert.deepEqual(getState().focusTrail, trailBeforeZoom, 'setZoom must not touch focusTrail');
+  assert.equal(getState().selectedObjectId, 'A', 'setZoom must not touch selectedObjectId either');
+});
