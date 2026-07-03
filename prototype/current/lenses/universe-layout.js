@@ -413,10 +413,18 @@ const EMPTY_ORBIT_LAYOUT = Object.freeze({ orbitIds: [], ring1: [], ring2: [] })
  * Within a sector, members are ordered by id (deterministic tie-break) and
  * spaced evenly across the sector's angular span.
  *
+ * Exported (V5 Phase 2.7) so lenses/universe-layout.js's own
+ * computeCollectionStreamAngles() below can reuse the exact same
+ * sector-assignment rule for a Collection focus target's baseline angles
+ * (grouped by `domain` instead of `relationshipType` - the two are
+ * interchangeable inputs to this function, it only ever reads
+ * `relationshipType` as a generic grouping key), rather than re-deriving a
+ * second "evenly divide the circle by group" implementation.
+ *
  * @param {Array<{ id: string, relationshipType: string }>} members
  * @returns {Array<{ id: string, relationshipType: string, angle: number, sectorIndex: number }>}
  */
-function assignSectorAngles(members) {
+export function assignSectorAngles(members) {
   if (members.length === 0) return [];
   const types = [...new Set(members.map((m) => m.relationshipType))].sort();
   const sectorWidth = (Math.PI * 2) / types.length;
@@ -522,4 +530,525 @@ export function computeOrbitLayout(selectedObjectId, relationships, nodes) {
     ring1,
     ring2,
   };
+}
+
+// ---------------------------------------------------------------------------
+// V5 Phase 2.7 (docs/V5_HANDOVER.md §13/§15): edge de-crossing / relationship
+// -stream resolution. This is the phase's core new algorithm - see this
+// module's own docs for the design rationale; the short version is:
+//
+//   computeOrbitLayout() above (Phase 2, reused as-is) already gives every
+//   ring member a stable angle, but ring 2's angle is assigned purely by
+//   ITS OWN relationship_type sector - it has no idea which ring-1 parent
+//   it actually connects to. Two ring-2 children of the same ring-1 parent
+//   can land in totally different sectors, and two children of DIFFERENT
+//   parents can land right next to each other in the same sector. Drawn as
+//   straight parent -> child spokes, that is exactly what tangles: lines
+//   crossing each other at odd angles rather than reading as clean,
+//   organized paths radiating out from the selection.
+//
+//   The fix is a genuine (bounded, deterministic) iterative position-
+//   adjustment pass: a greedy pairwise-swap local search, the standard
+//   practical heuristic for the graph-drawing "minimize edge crossings"
+//   problem (which is NP-hard to solve exactly in general - real layout
+//   tools use exactly this kind of bounded local search, not an exact
+//   solver). Two candidate approaches were tried and measured against the
+//   real dataset before landing here (see this phase's PR description for
+//   the numbers): a "barycenter" reordering (sort each ring-2 member by its
+//   real parent's angle, independent of the OTHER sectors around it) was
+//   tried first and REJECTED - because ring-1's parents and ring-2's
+//   sectors are two independently-fixed structures, locally reordering
+//   within one fixed sector can just as easily increase crossings against a
+//   DIFFERENT sector as reduce them against its own, and measured worse in
+//   aggregate on the real dataset (176 vs. a 170 baseline). The greedy
+//   swap-repair below fixes this by construction: it starts from the exact
+//   baseline layout (so it inherits 0 risk of regressing) and only ever
+//   keeps a swap when it provably lowers the GLOBAL crossing count computed
+//   by countStreamCrossings() - never a local proxy - which is what makes
+//   "crossingCount <= baselineCrossingCount, always" a provable invariant
+//   (tested against every real selection in the dataset, not spot-checked)
+//   rather than a heuristic hope. Swaps are restricted to members of the
+//   SAME sector (ring-2's relationship_type / a Collection's domain), since
+//   swapping across sectors would break the "distinct relationship streams"
+//   grouping the sectors exist to preserve.
+//
+//   Ring 1 itself is re-packed too (same members/order/sector, unchanged
+//   semantics) purely to add breathing room BETWEEN sectors (the "distinct
+//   relationship streams" spacing the phase brief calls for) - this does
+//   not change the "computeOrbitLayout is reused as-is" contract for ring-1
+//   MEMBERSHIP or ORDER, only adds a gap Phase 2 never allocated. Ring-1
+//   spokes all share one endpoint (the selected object, at the origin), so
+//   they can never "properly" cross each other regardless of order/gap -
+//   swap-repair only ever runs on ring 2 (and, for a Collection, its one
+//   peer-edge ring), where actual crossings are possible.
+//
+//   Every function below is a pure function of its arguments (no
+//   Date.now(), no randomness, no DOM) - the exact same "deterministic,
+//   independently testable" contract this module's other exports already
+//   hold, and the phase's own explicit invariant: "same inputs -> same
+//   resolved layout, testable as a pure function independent of animation
+//   timing." Animation itself (how a renderer blends from the tangled
+//   baseline angle to this resolved angle as focus deepens, and reverses
+//   the blend on the way back out) is lenses/universe.js's job, not this
+//   module's - exactly the same separation of concerns as
+//   computeClusterLayout/computeOrbitLayout above.
+// ---------------------------------------------------------------------------
+
+const TWO_PI = Math.PI * 2;
+
+/**
+ * Fraction of each sector's angular width reserved as a gap to its
+ * neighboring sectors in the RESOLVED (fully-focused) layout only - the
+ * baseline/exploration angle from assignSectorAngles() above is left
+ * untouched (no gap), which is exactly what makes "spacing between distinct
+ * relationship streams increases as focus deepens" (docs/V5_HANDOVER.md
+ * §13) an observable difference between the two layouts rather than a
+ * constant.
+ */
+const STREAM_SECTOR_GAP_FRACTION = 0.22;
+
+/** Normalize an angle (radians) into [0, 2*PI). */
+function normalizeAngle(angle) {
+  let result = angle % TWO_PI;
+  if (result < 0) result += TWO_PI;
+  return result;
+}
+
+/**
+ * Pack one or more sector groups around the full circle, each sector given
+ * an equal, gap-padded angular span (STREAM_SECTOR_GAP_FRACTION), members
+ * WITHIN a sector ordered by their `targetAngle` (ascending, measured as an
+ * offset from that sector's own start so the 0/2*PI wraparound never
+ * corrupts the sort - see normalizeAngle()), tie-broken by id for total
+ * determinism. This is the "sort-by-target-then-place-evenly" half of the
+ * barycenter heuristic: once members are sorted to match their neighbors'
+ * order, evenly redistributing them within the (now narrower, gapped)
+ * sector span is what turns "same relative order" into "no overlaps and a
+ * visible gap between sectors."
+ *
+ * @param {Array<{ members: Array<{ id: string, targetAngle: number }> }>} sectorGroups
+ *   - one entry per sector, in the exact stable order sectors should be
+ *   laid out around the circle (already sorted/deduplicated by the caller -
+ *   this function does not re-sort the sector list itself, only members
+ *   within each sector).
+ * @returns {Map<string, number>} id -> resolved angle (radians)
+ */
+function packSectorGroups(sectorGroups) {
+  const result = new Map();
+  const sectorCount = sectorGroups.length;
+  if (sectorCount === 0) return result;
+  const sectorWidth = TWO_PI / sectorCount;
+  const usableWidth = sectorWidth * (1 - STREAM_SECTOR_GAP_FRACTION);
+  const margin = (sectorWidth - usableWidth) / 2;
+
+  sectorGroups.forEach((group, sectorIndex) => {
+    const sectorStart = sectorIndex * sectorWidth;
+    const ordered = group.members
+      .map((m) => ({ id: m.id, delta: normalizeAngle(m.targetAngle - sectorStart) }))
+      .sort((a, b) => (a.delta - b.delta) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    ordered.forEach((m, i) => {
+      const angle = sectorStart + margin + ((i + 0.5) / ordered.length) * usableWidth;
+      result.set(m.id, angle);
+    });
+  });
+
+  return result;
+}
+
+/**
+ * Proper 2D line-segment intersection test (orientation/cross-product
+ * method), used by countStreamCrossings() below to count how many
+ * relationship "spokes" cross each other. Segments that merely share an
+ * endpoint (e.g. two ring-1 spokes both starting at the selected object's
+ * position, or two ring-2 children of the same ring-1 parent) do NOT count
+ * as a crossing - that is an expected, harmless convergence, not the
+ * tangled-line problem this algorithm targets.
+ *
+ * Exported for unit testing in isolation from the layout functions that use
+ * it.
+ *
+ * @param {{x:number,y:number}} a1
+ * @param {{x:number,y:number}} a2
+ * @param {{x:number,y:number}} b1
+ * @param {{x:number,y:number}} b2
+ * @returns {boolean}
+ */
+export function segmentsProperlyIntersect(a1, a2, b1, b2) {
+  const EPS = 1e-6;
+  const same = (p, q) => Math.abs(p.x - q.x) < EPS && Math.abs(p.y - q.y) < EPS;
+  if (same(a1, b1) || same(a1, b2) || same(a2, b1) || same(a2, b2)) return false;
+
+  const cross = (o, p, q) => (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+  const d1 = cross(b1, b2, a1);
+  const d2 = cross(b1, b2, a2);
+  const d3 = cross(a1, a2, b1);
+  const d4 = cross(a1, a2, b2);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+/**
+ * Count how many pairs of segments in `segments` properly cross. O(n^2) -
+ * fine at this dataset's scale (a selected object's orbit is a handful to a
+ * few dozen members, never remotely close to where an O(n^2) pairwise scan
+ * would matter).
+ *
+ * @param {Array<{ a: {x:number,y:number}, b: {x:number,y:number} }>} segments
+ * @returns {number}
+ */
+export function countStreamCrossings(segments) {
+  let count = 0;
+  for (let i = 0; i < segments.length; i += 1) {
+    for (let j = i + 1; j < segments.length; j += 1) {
+      if (segmentsProperlyIntersect(segments[i].a, segments[i].b, segments[j].a, segments[j].b)) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+/** Bounded pass count for repairCrossingsBySwapping() below - fixed, so the result is deterministic rather than a data-dependent "until convergence" loop (same contract as computeClusterLayout's RELAXATION_ITERATIONS). */
+const SWAP_REPAIR_MAX_PASSES = 6;
+
+/**
+ * Greedy pairwise-swap local search: the phase's actual crossing-reduction
+ * mechanism (see this section's header comment for why this replaced an
+ * earlier barycenter-reordering attempt). Starts from `initialAngleById`
+ * (expected to already be the safe, order-preserving baseline packing - see
+ * both call sites below) and repeatedly tries swapping the angle assigned
+ * to every pair of members that share a `sectorOf` group, keeping a swap
+ * ONLY when it strictly lowers `countStreamCrossings(buildSegments(...))`
+ * computed over the FULL segment set (never a local/per-sector proxy) -
+ * which is what makes "never worse than the starting point" a guarantee by
+ * construction rather than a hope. Runs until a full pass makes no
+ * improving swap, or SWAP_REPAIR_MAX_PASSES is reached, whichever comes
+ * first - both deterministic (fixed input -> fixed number of passes, fixed
+ * swap order via a stable id-sorted iteration), so two calls with identical
+ * arguments always produce identical output and an identical pass count.
+ *
+ * @param {{ sectorOf: Map<string,string>, initialAngleById: Map<string,number>, buildSegments: (angleById: Map<string,number>) => Array<{a:{x:number,y:number},b:{x:number,y:number}}> }} params
+ * @returns {{ angleById: Map<string,number>, crossingCount: number }}
+ */
+function repairCrossingsBySwapping({ sectorOf, initialAngleById, buildSegments }) {
+  const current = new Map(initialAngleById);
+  let currentCrossings = countStreamCrossings(buildSegments(current));
+
+  /** @type {Map<string,string[]>} sector key -> member ids, id-sorted for a deterministic swap-check order */
+  const bySector = new Map();
+  for (const [id, sector] of sectorOf) {
+    const list = bySector.get(sector) ?? [];
+    list.push(id);
+    bySector.set(sector, list);
+  }
+  for (const list of bySector.values()) list.sort();
+  const sectorKeysInOrder = [...bySector.keys()].sort();
+
+  for (let pass = 0; pass < SWAP_REPAIR_MAX_PASSES; pass += 1) {
+    let improvedThisPass = false;
+    for (const sectorKey of sectorKeysInOrder) {
+      const ids = bySector.get(sectorKey);
+      for (let i = 0; i < ids.length; i += 1) {
+        for (let j = i + 1; j < ids.length; j += 1) {
+          const idA = ids[i];
+          const idB = ids[j];
+          const angleA = current.get(idA);
+          const angleB = current.get(idB);
+          current.set(idA, angleB);
+          current.set(idB, angleA);
+          const candidateCrossings = countStreamCrossings(buildSegments(current));
+          if (candidateCrossings < currentCrossings) {
+            currentCrossings = candidateCrossings;
+            improvedThisPass = true;
+          } else {
+            current.set(idA, angleA);
+            current.set(idB, angleB);
+          }
+        }
+      }
+    }
+    if (!improvedThisPass) break;
+  }
+
+  return { angleById: current, crossingCount: currentCrossings };
+}
+
+/**
+ * Resolve a fully de-crossed/straightened angle for every member of
+ * `orbit.ring1`/`orbit.ring2` (computeOrbitLayout()'s output), per this
+ * section's header comment. Ring 1 keeps its existing membership/order
+ * (only re-packed with sector gaps, which can never change its own crossing
+ * count - see the header comment). Ring 2 starts from that same
+ * order-preserving baseline packing, then repairCrossingsBySwapping() above
+ * greedily swaps same-sector members' angle assignments wherever doing so
+ * lowers the total spoke-crossing count.
+ *
+ * Pure and deterministic: same `orbit` + same `relationships` always
+ * produces the exact same result, independent of any animation/timing
+ * state - per the phase's explicit invariant, this is directly testable
+ * with no rendering involved.
+ *
+ * @param {{ ring1: Array<{id:string, relationshipType:string, angle:number}>, ring2: Array<{id:string, relationshipType:string, angle:number}> }} orbit -
+ *   computeOrbitLayout()'s output for the current selection.
+ * @param {Array<{ from_id: string, to_id: string }>} relationships - the
+ *   same edge list computeOrbitLayout() was called with (used here only to
+ *   find which ring-1 member each ring-2 member actually connects to - the
+ *   ring/angle assignment step earlier does not retain that, since a ring-2
+ *   member can be discovered via more than one ring-1 parent and
+ *   computeOrbitLayout deliberately only tracks relationship_type, not
+ *   parent identity).
+ * @param {{ ring1Radius?: number, ring2Radius?: number }} [options] - the
+ *   radii lenses/universe.js actually renders ring 1/ring 2 at (RING1_
+ *   RADIUS_PX/RING2_RADIUS_PX), used only for the before/after crossing
+ *   count below (angle resolution itself is radius-independent).
+ * @returns {{ ring1AngleById: Map<string,number>, ring2AngleById: Map<string,number>, crossingCount: number, baselineCrossingCount: number }}
+ */
+export function computeDecrossedOrbitAngles(orbit, relationships, options = {}) {
+  const ring1Radius = Number.isFinite(options.ring1Radius) ? options.ring1Radius : 92;
+  const ring2Radius = Number.isFinite(options.ring2Radius) ? options.ring2Radius : 168;
+  const ring1 = Array.isArray(orbit?.ring1) ? orbit.ring1 : [];
+  const ring2 = Array.isArray(orbit?.ring2) ? orbit.ring2 : [];
+
+  if (ring1.length === 0 && ring2.length === 0) {
+    return { ring1AngleById: new Map(), ring2AngleById: new Map(), crossingCount: 0, baselineCrossingCount: 0 };
+  }
+
+  // --- Ring 1: unchanged membership/order, re-packed with sector gaps. ---
+  const ring1Types = [...new Set(ring1.map((m) => m.relationshipType))].sort();
+  const ring1Groups = ring1Types.map((type) => ({
+    members: ring1
+      .filter((m) => m.relationshipType === type)
+      .map((m) => ({ id: m.id, targetAngle: m.angle })),
+  }));
+  const ring1AngleById = packSectorGroups(ring1Groups);
+
+  // --- Ring 2: find each member's real ring-1 parent from `relationships` ---
+  // (deterministic tie-break: smallest parent id wins if more than one
+  // ring-1 member connects to the same ring-2 child) - this is what a
+  // ring-2 spoke is actually drawn between (parent's ring-1 position -> this
+  // member's ring-2 position), so it is what countStreamCrossings() needs
+  // to build the real segment set, independent of how each member's angle
+  // gets resolved.
+  const ring1Ids = new Set(ring1.map((m) => m.id));
+  const ring2Ids = new Set(ring2.map((m) => m.id));
+  const edgeList = Array.isArray(relationships) ? relationships : [];
+  /** @type {Map<string,string>} ring2 member id -> ring1 parent id */
+  const parentOf = new Map();
+  for (const edge of edgeList) {
+    let child = null;
+    let parent = null;
+    if (ring2Ids.has(edge.from_id) && ring1Ids.has(edge.to_id)) {
+      child = edge.from_id;
+      parent = edge.to_id;
+    } else if (ring2Ids.has(edge.to_id) && ring1Ids.has(edge.from_id)) {
+      child = edge.to_id;
+      parent = edge.from_id;
+    }
+    if (child === null) continue;
+    const existing = parentOf.get(child);
+    if (!existing || parent < existing) parentOf.set(child, parent);
+  }
+
+  const origin = { x: 0, y: 0 };
+  const toXY = (angle, radius) => ({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+
+  function buildSpokeSegments(ring1Angles, ring2Angles) {
+    const segments = [];
+    for (const m of ring1) {
+      segments.push({ a: origin, b: toXY(ring1Angles.get(m.id) ?? m.angle, ring1Radius) });
+    }
+    for (const m of ring2) {
+      const parentId = parentOf.get(m.id);
+      const parentPoint = parentId ? toXY(ring1Angles.get(parentId) ?? m.angle, ring1Radius) : origin;
+      segments.push({ a: parentPoint, b: toXY(ring2Angles.get(m.id) ?? m.angle, ring2Radius) });
+    }
+    return segments;
+  }
+
+  // Ring 2's own SAFE starting point: the exact baseline order (assignSectorAngles'
+  // id-sorted membership), re-packed with sector gaps - re-parameterizing
+  // within a fixed monotonic order can never change which pairs cross, so
+  // this inherits baselineCrossingCount exactly (verified below) before
+  // repairCrossingsBySwapping() below ever runs, which is what guarantees
+  // "never worse than baseline."
+  const ring2Types = [...new Set(ring2.map((m) => m.relationshipType))].sort();
+  const ring2BaselineGroups = ring2Types.map((type) => ({
+    members: ring2.filter((m) => m.relationshipType === type).map((m) => ({ id: m.id, targetAngle: m.angle })),
+  }));
+  const ring2BaselinePacked = packSectorGroups(ring2BaselineGroups);
+
+  const sectorOf = new Map(ring2.map((m) => [m.id, m.relationshipType]));
+  const repaired = repairCrossingsBySwapping({
+    sectorOf,
+    initialAngleById: ring2BaselinePacked,
+    buildSegments: (ring2Angles) => buildSpokeSegments(ring1AngleById, ring2Angles),
+  });
+
+  // "baseline" for comparison is the plain id-ordered packing BEFORE any
+  // swap runs (i.e. exactly repairCrossingsBySwapping()'s own starting
+  // point, in the SAME ring1AngleById/gap coordinate system the repair
+  // operates in) - NOT the raw pre-gap Phase 2 angles. This matters: gap-
+  // compressing a sector changes its members' exact coordinates (even
+  // though it preserves their relative ORDER), and two different
+  // coordinate systems are not a fair apples-to-apples crossing-count
+  // comparison even when the underlying order is identical - measuring
+  // both "before" and "after" in the identical coordinate system is what
+  // makes crossingCount <= baselineCrossingCount a guarantee rather than an
+  // artifact of comparing two different geometries.
+  const baselineCrossingCount = countStreamCrossings(buildSpokeSegments(ring1AngleById, ring2BaselinePacked));
+
+  return {
+    ring1AngleById,
+    ring2AngleById: repaired.angleById,
+    crossingCount: repaired.crossingCount,
+    baselineCrossingCount,
+  };
+}
+
+/**
+ * Collection-focus equivalent of computeDecrossedOrbitAngles() above (docs/
+ * V5_HANDOVER.md §15.1: "Focus target: single object OR Collection"). A
+ * Collection (panels/scope.js's Scope Explorer multi-select, engine/
+ * derive.js's buildScopeFilter() `type: 'collection'` branch) has no single
+ * hop-distance source to orbit around, so there is no ring1/ring2 - instead
+ * every member sits on ONE ring around the collection's own centroid, and
+ * what needs de-crossing is the real relationship edges BETWEEN members of
+ * the collection itself (peer edges), not parent/child spokes.
+ *
+ * Same greedy swap-repair mechanism as computeDecrossedOrbitAngles() above,
+ * generalized to mutual/peer edges instead of parent/child spokes: starts
+ * from the exact baseline (domain-sector, id-ordered) packing, then swaps
+ * same-domain-sector members' angle assignments wherever doing so lowers
+ * the total peer-edge crossing count - the same "never worse than baseline"
+ * guarantee, restricted to `edges` the caller has already filtered down to
+ * edges where BOTH endpoints are collection members (this function never
+ * has to know about the wider graph). Sectors are grouped by `domain` (the
+ * same real field lenses/universe-layout.js's computeClusterLayout() uses
+ * for domain clustering - no invented field), since a Collection has no
+ * single hop-distance source to sector by relationship_type the way
+ * computeOrbitLayout's rings do.
+ *
+ * @param {Array<{ id: string, domain?: string }>} members - collection
+ *   member nodes (real buildUniverseGraph() nodes).
+ * @param {Array<{ from_id: string, to_id: string }>} edges - relationship
+ *   edges; only those with BOTH endpoints in `members` are used (others are
+ *   ignored rather than throwing, consistent with this module's existing
+ *   "layout is a rendering concern, not a referential-integrity checker"
+ *   posture).
+ * @param {{ radius?: number }} [options]
+ * @returns {{ angleById: Map<string,number>, crossingCount: number, baselineCrossingCount: number }}
+ */
+export function computeCollectionStreamAngles(members, edges, options = {}) {
+  const radius = Number.isFinite(options.radius) ? options.radius : 120;
+
+  if (!Array.isArray(members) || members.length === 0) {
+    return { angleById: new Map(), crossingCount: 0, baselineCrossingCount: 0 };
+  }
+
+  const baseline = assignSectorAngles(members.map((m) => ({ id: m.id, relationshipType: m.domain ?? 'platform' })));
+  const baselineAngleById = new Map(baseline.map((m) => [m.id, m.angle]));
+
+  const memberIds = new Set(members.map((m) => m.id));
+  const validEdges = (Array.isArray(edges) ? edges : []).filter(
+    (e) => memberIds.has(e.from_id) && memberIds.has(e.to_id) && e.from_id !== e.to_id
+  );
+
+  const toXY = (angle) => ({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+  const buildPeerSegments = (angleById) =>
+    validEdges.map((e) => ({ a: toXY(angleById.get(e.from_id)), b: toXY(angleById.get(e.to_id)) }));
+
+  // Safe starting point: baseline order re-packed with sector gaps.
+  const sectorTypes = [...new Set(members.map((m) => m.domain ?? 'platform'))].sort();
+  const baselineGroups = sectorTypes.map((type) => ({
+    members: members
+      .filter((m) => (m.domain ?? 'platform') === type)
+      .map((m) => ({ id: m.id, targetAngle: baselineAngleById.get(m.id) })),
+  }));
+  const baselinePacked = packSectorGroups(baselineGroups);
+
+  const sectorOf = new Map(members.map((m) => [m.id, m.domain ?? 'platform']));
+  const repaired = repairCrossingsBySwapping({
+    sectorOf,
+    initialAngleById: baselinePacked,
+    buildSegments: buildPeerSegments,
+  });
+
+  // Compare against `baselinePacked` (repairCrossingsBySwapping()'s own
+  // starting point), not the raw pre-gap angles - see the matching comment
+  // in computeDecrossedOrbitAngles() above for why comparing across two
+  // different coordinate systems (gapped vs. ungapped) would make "never
+  // worse than baseline" an artifact rather than a guarantee.
+  const baselineCrossingCount = countStreamCrossings(buildPeerSegments(baselinePacked));
+
+  return { angleById: repaired.angleById, crossingCount: repaired.crossingCount, baselineCrossingCount };
+}
+
+/**
+ * Resolve which object id the Universe's focus transition should currently
+ * treat as its "anchor" (whose orbit/stream-resolution to render), and how
+ * far along (0..1) that resolution should be - as a PURE function, per
+ * docs/V5_HANDOVER.md §13's "reverse... not an instant snap; same
+ * transition quality in reverse" requirement.
+ *
+ * Deliberately decoupled from the camera's own three-phase flight timing:
+ * the camera (lenses/universe.js's `flight` state machine +
+ * engine/camera.js's computeCameraFrame(), both reused unchanged) and the
+ * orbit/edge-resolution layout this function drives are two SEPARATE
+ * animations that happen to usually run together, not one derived from the
+ * other's internal phase labels - which is why this function takes plain
+ * 0..1 progress numbers, not a phase/flightT pair, as its reverse input.
+ * Forward and reverse progress are still asymmetric on purpose (see below),
+ * but the caller (lenses/universe.js) decides how each is actually paced.
+ *
+ * Forward (a fresh selection, `selectedId` non-null): `forwardProgress` is
+ * expected to only reach 1 once the camera has actually finished arriving
+ * (the caller derives this from its own flight state) - assembly happens
+ * AFTER arrival, matching this phase's design rationale that you cannot
+ * organize a layout around a destination you have not reached yet.
+ *
+ * Reverse (`selectedId` is null - the user cleared focus - but
+ * `previousSelectedId` remembers what was last focused, and
+ * `reverseProgress` is the caller's own independent dissolve-timer output,
+ * 1 = still fully organized, 0 = fully dissolved): the organized layout
+ * simply tracks `reverseProgress` directly. The caller is expected to start
+ * that timer immediately on clearing (not gated on any camera phase) - the
+ * dissolve is intentionally the FIRST thing to happen on clearing, not the
+ * last, since the camera may already be snapping home by then and the
+ * layout should not still look fully assembled once that happens.
+ *
+ * @param {{ previousSelectedId?: string|null, selectedId?: string|null, forwardProgress?: number, reverseProgress?: number }} params
+ * @returns {{ anchorId: string|null, progress: number }}
+ */
+export function resolveFocusTransition(params = {}) {
+  const { previousSelectedId = null, selectedId = null, forwardProgress = 0, reverseProgress = 0 } = params;
+
+  if (selectedId !== null) {
+    const progress = Number.isFinite(forwardProgress) ? Math.min(Math.max(forwardProgress, 0), 1) : 0;
+    return { anchorId: selectedId, progress };
+  }
+  const clampedReverse = Number.isFinite(reverseProgress) ? Math.min(Math.max(reverseProgress, 0), 1) : 0;
+  if (previousSelectedId !== null && clampedReverse > 0) {
+    return { anchorId: previousSelectedId, progress: clampedReverse };
+  }
+  return { anchorId: null, progress: 0 };
+}
+
+/**
+ * Resolve the exact set of node ids allowed to render in Focus Mode (docs/
+ * V5_HANDOVER.md §15: "Zero background rendering... only the fully-
+ * straightened, organized relationship streams + the focal object OR
+ * Collection"). A pure Set-union so the "renders ZERO non-relevant
+ * objects" invariant is assertable without any DOM/Canvas involvement.
+ *
+ * @param {{ mode: 'object'|'collection', anchorId?: string|null, orbit?: {orbitIds: string[]}, collectionMemberIds?: string[] }} params
+ * @returns {Set<string>}
+ */
+export function focusModeVisibleNodeIds(params = {}) {
+  const { mode, anchorId = null, orbit = null, collectionMemberIds = null } = params;
+  if (mode === 'collection') {
+    return new Set(Array.isArray(collectionMemberIds) ? collectionMemberIds : []);
+  }
+  if (mode === 'object' && anchorId !== null) {
+    return new Set([anchorId, ...(Array.isArray(orbit?.orbitIds) ? orbit.orbitIds : [])]);
+  }
+  return new Set();
 }

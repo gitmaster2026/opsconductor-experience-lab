@@ -38,7 +38,16 @@
 // (see test/lenses-universe.test.mjs) since defining them doesn't require
 // a DOM - only calling mountUniverseLens() does.
 
-import { computeClusterLayout, computeOrbitLayout, mulberry32, hashSeed } from './universe-layout.js';
+import {
+  computeClusterLayout,
+  computeOrbitLayout,
+  mulberry32,
+  hashSeed,
+  computeDecrossedOrbitAngles,
+  computeCollectionStreamAngles,
+  resolveFocusTransition,
+  focusModeVisibleNodeIds,
+} from './universe-layout.js';
 import { depthFilter, assignStratum, computeCameraFrame, naturalZoomIndexForNode, DEPTH_STRATA } from '../engine/camera.js';
 import { computeLabelPlan, shortCodeForNode } from '../engine/labels.js';
 
@@ -189,6 +198,31 @@ const BACKGROUND_ROTATION_DEG_PER_SEC = 0.1;
 
 /** §2.4: how many hops the collapse-parent search walks before giving up. */
 const COLLAPSE_PARENT_MAX_HOPS = 4;
+
+// --- V5 Phase 2.7 additions (docs/V5_HANDOVER.md §13/§15) -------------------
+
+/**
+ * Not a real graph node - a synthetic id used ONLY as the camera-flight
+ * target when a Collection (panels/scope.js's Scope Explorer multi-select)
+ * is the current focus target, so Collection focus can reuse the exact
+ * same three-phase flight (`flight`/beginFlight/computeCameraFrame) as an
+ * ordinary single-object selection, per docs/V5_HANDOVER.md §15.2's
+ * "reuses existing three-phase flight, unchanged." Never passed to
+ * onSelect/hit-testing/engine/state.js - purely an internal bookkeeping key
+ * for "what is the flight currently departing from/arriving at."
+ */
+const COLLECTION_FOCUS_PSEUDO_ID = '__collection_focus__';
+
+/** Radius (world/layout px, pre camera-scale) a Collection's members are arranged at around their own centroid - same idea as RING1_RADIUS_PX for a single-object orbit. */
+const COLLECTION_RING_RADIUS_PX = 130;
+
+/** How long (ms) Focus Mode's background-stratum fade-to-zero takes once the layout has fully resolved (§15.2: "subtle transition into Focus Mode... not a pure opacity extreme"). */
+const FOCUS_MODE_FADE_MS = 420;
+/** Reduced-motion equivalent - "collapse to a fast cross-fade" per this phase's explicit invariant. */
+const FOCUS_MODE_FADE_MS_REDUCED = 90;
+
+/** Reduced-motion equivalent of FLIGHT_PHASE_DURATIONS_MS - a fast cross-fade rather than a full cinematic flight, still advancing through the same depart/travel/arrive states so every callback/derived-progress computation still fires correctly. */
+const FLIGHT_PHASE_DURATIONS_MS_REDUCED = Object.freeze({ depart: 40, travel: 80, arrive: 80 });
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -455,6 +489,19 @@ function prefersReducedMotion() {
  *   outright - see SCOPE_RECEDE_ALPHA_FACTOR/SCOPE_RECEDE_SCALE above.
  *   Purely additive: omitting this callback, or an unscoped result,
  *   preserves prior rendering behavior exactly (no dimming applied).
+ * @param {() => { type: string, memberIds?: Array<Object> }|null} [callbacks.getScopeContext] -
+ *   V5 Phase 2.7, OPTIONAL: returns engine/state.js's raw scopeContext
+ *   (NOT the resolved buildScopeFilter() output getScope() returns) - the
+ *   only way to distinguish "the user explicitly built a Collection" (docs/
+ *   V5_HANDOVER.md §15.1: "Focus target: single object OR Collection")
+ *   from an ordinary single-value scope narrowing (site/customer/program/
+ *   commitment), which should NOT trigger Focus Mode. When the returned
+ *   scope's `type === 'collection'` and carries members, this module treats
+ *   the Collection (via getScope()'s resolved scopedNodeIds) as an
+ *   ALTERNATIVE focus target to selectedObjectId, taking priority over it
+ *   for Focus Mode purposes (see COLLECTION_FOCUS_PSEUDO_ID above). Omitted
+ *   simply disables Collection-focus entirely - single-object focus is
+ *   unaffected either way.
  * @param {() => string[]} [callbacks.getHighlightIds] - OPTIONAL, added in
  *   Phase 3 for the Dashboard KPI "focus objects" flow
  *   (docs/PANEL_SPECIFICATIONS.md's Dashboard mode: "clicking updates
@@ -492,6 +539,7 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     onCameraPhaseChange,
     getHighlightIds,
     getScope,
+    getScopeContext,
   } = callbacks;
   if (typeof getBundle !== 'function') {
     throw new Error('mountUniverseLens: callbacks.getBundle is required');
@@ -524,7 +572,21 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   // --- V5 Phase 2: three-phase flight state machine (§2.3). 'idle' means
   // "no flight in progress" - the user-driven camera path owns camera.x/y/
   // scale in that state. A fresh selection change starts a new flight.
+  // Unchanged by V5 Phase 2.7: this machine still drives ONLY the CAMERA
+  // (computeCameraFrame's depart/travel/arrive), exactly as Phase 2 built
+  // it - clearing a selection still snaps the camera phase straight to
+  // 'idle' (computeCameraFrame's own null-selection = "home" framing),
+  // same as before this phase. See reverseDissolve below for what DOES get
+  // a real reverse animation this phase (the orbit/edge layout, a
+  // deliberately separate concern from camera position - see this
+  // section's own longer design note further down).
   const flight = { phase: 'idle', phaseStart: 0 };
+  /** The last selection-for-camera id (real selectedId, or COLLECTION_FOCUS_PSEUDO_ID) seen, to detect changes frame-to-frame - the same role a prior Phase 2-only `lastFocusedSelection` variable played, generalized to also cover Collection focus. */
+  let lastFocusForCamera = undefined;
+
+  function currentFlightDurations() {
+    return prefersReducedMotion() ? FLIGHT_PHASE_DURATIONS_MS_REDUCED : FLIGHT_PHASE_DURATIONS_MS;
+  }
 
   function beginFlight(hasSelection) {
     flight.phase = hasSelection ? 'depart' : 'idle';
@@ -534,7 +596,7 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
 
   function advanceFlightIfNeeded(now) {
     if (flight.phase === 'idle') return;
-    const duration = FLIGHT_PHASE_DURATIONS_MS[flight.phase];
+    const duration = currentFlightDurations()[flight.phase];
     if (now - flight.phaseStart < duration) return;
     const next = flight.phase === 'depart' ? 'travel' : flight.phase === 'travel' ? 'arrive' : 'idle';
     flight.phase = next;
@@ -544,8 +606,75 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
 
   function flightT(now) {
     if (flight.phase === 'idle') return 0;
-    const duration = FLIGHT_PHASE_DURATIONS_MS[flight.phase] ?? 1;
+    const duration = currentFlightDurations()[flight.phase] ?? 1;
     return clamp((now - flight.phaseStart) / duration, 0, 1);
+  }
+
+  // --- V5 Phase 2.7 (docs/V5_HANDOVER.md §13): the reverse "curves regain
+  // natural weave, clusters re-expand, faded objects return... not an
+  // instant snap" transition. Deliberately its OWN small timer, independent
+  // of the camera's `flight` phase machine above: the camera and the
+  // organized-layout dissolve are two different animations that happen to
+  // usually run together, not one derived from the other (see
+  // resolveFocusTransition()'s own header doc in universe-layout.js for
+  // the full rationale). Starts the instant a selection/Collection is
+  // CLEARED (not gated on any camera phase - the dissolve is the first
+  // thing to happen on clearing, since the camera may already be snapping
+  // home by the same frame) and ramps the resolved progress (see
+  // reverseDissolveDurationMs() below) from 1 (still fully organized) down
+  // to 0 (fully dissolved).
+  const reverseDissolve = { anchorId: null, startedAt: 0 };
+  /** The last real focus-target id (selectedId or COLLECTION_FOCUS_PSEUDO_ID) seen, to detect the exact frame a focus target is cleared. */
+  let lastFocusTargetId = undefined;
+
+  function reverseDissolveDurationMs() {
+    return prefersReducedMotion() ? FOCUS_MODE_FADE_MS_REDUCED : FLIGHT_PHASE_DURATIONS_MS.depart + FLIGHT_PHASE_DURATIONS_MS.travel;
+  }
+
+  /**
+   * V5 Phase 2.7: advance both the camera flight and the independent
+   * reverse-dissolve timer for this frame's focus target, and resolve the
+   * final `{ anchorId, progress }` the orbit/edge layout should render -
+   * shared by draw() and hitTestAt() so both agree on where things actually
+   * are this frame.
+   *
+   * @param {string|null} focusTargetId - real selectedId, or
+   *   COLLECTION_FOCUS_PSEUDO_ID when a Collection is the active focus
+   *   target (see resolveFocusPresentation() below), or null.
+   * @param {number} now
+   * @returns {{ anchorId: string|null, progress: number }}
+   */
+  function updateFocusTiming(focusTargetId, now) {
+    if (lastFocusForCamera !== focusTargetId) {
+      lastFocusForCamera = focusTargetId;
+      beginFlight(focusTargetId !== null);
+    }
+    if (lastFocusTargetId !== focusTargetId) {
+      if (focusTargetId === null && lastFocusTargetId) {
+        reverseDissolve.anchorId = lastFocusTargetId;
+        reverseDissolve.startedAt = now;
+      } else {
+        reverseDissolve.anchorId = null; // a fresh forward selection cancels any in-progress reverse - it takes over immediately
+      }
+      lastFocusTargetId = focusTargetId;
+    }
+    // Age-based phase progression happens AFTER the trigger check above (a
+    // brand-new flight this frame must start at 0 elapsed, not immediately
+    // jump ahead using whatever phaseStart the PREVIOUS flight left behind)
+    // but BEFORE reading flight.phase below for forwardProgress.
+    advanceFlightIfNeeded(now);
+
+    const forwardProgress = flight.phase === 'arrive' ? flightT(now) : flight.phase === 'idle' && focusTargetId !== null ? 1 : 0;
+    const reverseElapsed = reverseDissolve.anchorId ? now - reverseDissolve.startedAt : 0;
+    const reverseProgress = reverseDissolve.anchorId ? clamp(1 - reverseElapsed / reverseDissolveDurationMs(), 0, 1) : 0;
+    if (reverseDissolve.anchorId && reverseProgress <= 0) reverseDissolve.anchorId = null; // dissolve fully settled - nothing left to resolve/render
+
+    return resolveFocusTransition({
+      previousSelectedId: reverseDissolve.anchorId,
+      selectedId: focusTargetId,
+      forwardProgress,
+      reverseProgress,
+    });
   }
 
   // --- Layout + per-node animated state, rebuilt/refreshed on each bundle
@@ -734,14 +863,121 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     setCameraTarget(layoutWidth / 2, layoutHeight / 2, 1);
   }
 
-  let lastFocusedSelection = undefined;
-
   // Phase 3 addition: track the highlight-set identity so a fresh
   // getHighlightIds() result (a new Dashboard KPI click) starts a new
   // decaying pulse, while re-reading the SAME set on every animation frame
   // (as draw() naturally does) does not restart the pulse each frame.
   let lastHighlightKey = '';
   let highlightPulseStart = 0;
+
+  // V5 Phase 2.7: the most recently resolved set of real Collection member
+  // ids (getScope()'s scopedNodeIds while a Collection scope is active) -
+  // remembered so the reverse-dissolve timer (reverseDissolve above) still
+  // has a concrete member set to animate AWAY FROM once the Collection
+  // scope is cleared, the same reason it remembers a cleared single
+  // selection's id instead of just dropping straight to null.
+  let lastCollectionMemberIds = [];
+
+  // V5 Phase 2.7 (docs/V5_HANDOVER.md §15): Focus Mode - a DISTINCT render
+  // state (background stratum not drawn at all once settled, not just
+  // faded near-zero), entered/exited with its own short cross-fade rather
+  // than an instant cut. `since` marks when `active` last changed, so the
+  // fade progress (see draw()) is a simple elapsed-time ramp independent of
+  // both the camera flight and the reverse-dissolve timer above - all
+  // three run concurrently but answer different questions.
+  const focusModeState = { active: false, since: 0 };
+
+  /**
+   * V5 Phase 2.7 (docs/V5_HANDOVER.md §13/§15): resolve everything about
+   * the current focus/orbit/Focus-Mode state for THIS frame, shared by
+   * BOTH draw() and hitTestAt() so clicks land where things are actually
+   * drawn (same reason the Phase 2 per-frame position resolution below is
+   * shared, just widened to cover the focus target itself now that it can
+   * be a real object OR a Collection OR mid-reversal).
+   *
+   * @param {number} now
+   * @returns {{
+   *   selectedId: string|null,
+   *   focusTargetId: string|null,
+   *   anchorId: string|null,
+   *   progress: number,
+   *   isCollectionFocus: boolean,
+   *   orbitCenter: {x:number,y:number}|null,
+   *   orbitMemberById: Map<string,{angle:number,radius:number}>,
+   *   orbitIdsForStratum: string[],
+   * }}
+   */
+  function resolveFocusPresentation(now) {
+    const selectedId = typeof getSelectedId === 'function' ? getSelectedId() : null;
+
+    const scopeContext = typeof getScopeContext === 'function' ? getScopeContext() : null;
+    const isCollectionScopeActive =
+      Boolean(scopeContext && scopeContext.type === 'collection' && Array.isArray(scopeContext.memberIds) && scopeContext.memberIds.length > 0);
+    if (isCollectionScopeActive) {
+      const scope = typeof getScope === 'function' ? getScope() : null;
+      const resolvedIds = Array.isArray(scope?.scopedNodeIds) ? scope.scopedNodeIds : [];
+      lastCollectionMemberIds = resolvedIds.filter((id) => layoutById.has(id));
+    }
+
+    // A Collection (an explicit, deliberate multi-select) takes priority
+    // over an ambient single selectedObjectId as the flight/orbit target -
+    // §15.1 frames these as alternatives ("single object OR Collection"),
+    // not a simultaneous pair.
+    const focusTargetId = isCollectionScopeActive ? COLLECTION_FOCUS_PSEUDO_ID : selectedId;
+    const { anchorId, progress } = updateFocusTiming(focusTargetId, now);
+    const isCollectionFocus = anchorId === COLLECTION_FOCUS_PSEUDO_ID;
+
+    if (isCollectionFocus) {
+      // Whether the Collection scope is currently active or this is a
+      // reverse flight dissolving away from one just cleared, the member
+      // set to render is always lastCollectionMemberIds - it was just
+      // refreshed above when isCollectionScopeActive is true, and left
+      // untouched (the last real membership) when it is not.
+      const memberIds = lastCollectionMemberIds;
+      const memberNodes = currentNodes.filter((n) => memberIds.includes(n.id));
+      const positions = memberIds.map((id) => layoutById.get(id)).filter(Boolean);
+      const orbitCenter = positions.length > 0 ? centroidOf(positions) : null;
+      const stream = computeCollectionStreamAngles(memberNodes, currentEdges, { radius: COLLECTION_RING_RADIUS_PX });
+      const orbitMemberById = new Map(
+        memberIds.map((id) => [id, { angle: stream.angleById.get(id) ?? 0, radius: COLLECTION_RING_RADIUS_PX }])
+      );
+      return { selectedId, focusTargetId, anchorId, progress, isCollectionFocus, orbitCenter, orbitMemberById, orbitIdsForStratum: memberIds };
+    }
+
+    if (anchorId !== null) {
+      const orbit = computeOrbitLayout(anchorId, currentEdges, currentNodes);
+      const decrossed = computeDecrossedOrbitAngles(orbit, currentEdges, {
+        ring1Radius: RING1_RADIUS_PX,
+        ring2Radius: RING2_RADIUS_PX,
+      });
+      const orbitCenter = layoutById.get(anchorId) ?? null;
+      const orbitMemberById = new Map([
+        ...orbit.ring1.map((m) => [m.id, { angle: decrossed.ring1AngleById.get(m.id) ?? m.angle, radius: RING1_RADIUS_PX }]),
+        ...orbit.ring2.map((m) => [m.id, { angle: decrossed.ring2AngleById.get(m.id) ?? m.angle, radius: RING2_RADIUS_PX }]),
+      ]);
+      return {
+        selectedId,
+        focusTargetId,
+        anchorId,
+        progress,
+        isCollectionFocus,
+        orbitCenter,
+        orbitMemberById,
+        orbitIdsForStratum: [anchorId, ...orbit.orbitIds],
+      };
+    }
+
+    return {
+      selectedId,
+      focusTargetId,
+      anchorId: null,
+      progress: 0,
+      isCollectionFocus: false,
+      orbitCenter: null,
+      orbitMemberById: new Map(),
+      orbitIdsForStratum: [],
+    };
+  }
 
   // --- V5 Phase 2: shared position resolution, used by BOTH draw() and
   // hitTestAt() so clicks land where things are actually drawn (orbit
@@ -751,17 +987,15 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   // while gently drifting).
 
   /**
-   * @param {string|null} selectedId
-   * @param {ReturnType<typeof computeOrbitLayout>} orbit
+   * @param {{x:number,y:number}|null} orbitCenter
+   * @param {Map<string,{angle:number,radius:number}>} orbitMemberById
    * @param {Map<string, string>} stratumById
    * @param {number} currentZoomIndex
-   * @param {number} now
+   * @param {number} progress - 0..1, how far assembled toward the orbit slot (V5 Phase 2.7: replaces the old internal flight-phase-driven orbitT so both forward AND reverse transitions share one code path - see resolveFocusTransition()).
    * @returns {{ positions: Map<string, {x:number,y:number}>, collapsedInto: Map<string,string>, collapseCounts: Map<string, number> }}
    */
-  function computeEffectivePositions(selectedId, orbit, stratumById, currentZoomIndex, now) {
+  function computeEffectivePositions(orbitCenter, orbitMemberById, stratumById, currentZoomIndex, progress) {
     const positions = new Map();
-    const selectedPos = selectedId ? layoutById.get(selectedId) : null;
-    const orbitMemberById = new Map([...orbit.ring1, ...orbit.ring2].map((m) => [m.id, m]));
 
     // §2.4 collapse-below: background-tier nodes whose natural depth is
     // BELOW (deeper than) the current zoom collapse toward the nearest
@@ -769,7 +1003,7 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     const collapsedInto = new Map();
     const collapseCounts = new Map();
     const collapseCandidateIds = currentNodes
-      .filter((n) => stratumById.get(n.id) === 'background' && naturalZoomIndexForNode(n) > currentZoomIndex && n.id !== selectedId && !orbitMemberById.has(n.id))
+      .filter((n) => stratumById.get(n.id) === 'background' && naturalZoomIndexForNode(n) > currentZoomIndex && !orbitMemberById.has(n.id))
       .map((n) => n.id);
     if (collapseCandidateIds.length > 0) {
       const adjacency = buildAdjacency(currentEdges);
@@ -798,15 +1032,11 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
         y = parentPos.y;
       } else {
         const orbitMember = orbitMemberById.get(node.id);
-        if (orbitMember && selectedPos) {
-          const radius = orbitMember.ring === 1 ? RING1_RADIUS_PX : RING2_RADIUS_PX;
-          const orbitX = selectedPos.x + Math.cos(orbitMember.angle) * radius;
-          const orbitY = selectedPos.y + Math.sin(orbitMember.angle) * radius;
-          let orbitT = 0;
-          if (flight.phase === 'arrive') orbitT = flightT(now);
-          else if (flight.phase === 'idle' && selectedId) orbitT = 1;
-          x = lerp(x, orbitX, orbitT);
-          y = lerp(y, orbitY, orbitT);
+        if (orbitMember && orbitCenter) {
+          const orbitX = orbitCenter.x + Math.cos(orbitMember.angle) * orbitMember.radius;
+          const orbitY = orbitCenter.y + Math.sin(orbitMember.angle) * orbitMember.radius;
+          x = lerp(x, orbitX, progress);
+          y = lerp(y, orbitY, progress);
         }
       }
       positions.set(node.id, { x, y });
@@ -828,14 +1058,13 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   function hitTestAt(screenX, screenY) {
     const world = screenToWorld(screenX, screenY);
     const zoomLevel = typeof getZoomLevel === 'function' ? getZoomLevel() : 0;
-    const selectedId = typeof getSelectedId === 'function' ? getSelectedId() : null;
     const focusTrail = typeof getFocusTrail === 'function' ? getFocusTrail() : [];
-    const orbit = selectedId ? computeOrbitLayout(selectedId, currentEdges, currentNodes) : { orbitIds: [], ring1: [], ring2: [] };
+    const { selectedId, orbitCenter, orbitMemberById, orbitIdsForStratum, progress } = resolveFocusPresentation(performance.now());
     const stratumById = new Map(
-      currentNodes.map((n) => [n.id, assignStratum(n, { selectedObjectId: selectedId, focusTrail, zoomLevel, orbitIds: orbit.orbitIds })])
+      currentNodes.map((n) => [n.id, assignStratum(n, { selectedObjectId: selectedId, focusTrail, zoomLevel, orbitIds: orbitIdsForStratum })])
     );
     const currentZoomIndex = zoomLevel;
-    const { positions, collapsedInto } = computeEffectivePositions(selectedId, orbit, stratumById, currentZoomIndex, performance.now());
+    const { positions, collapsedInto } = computeEffectivePositions(orbitCenter, orbitMemberById, stratumById, currentZoomIndex, progress);
 
     // Iterate in reverse draw order so the topmost-drawn (last-drawn) node
     // wins on overlap, matching natural pointer expectations. Collapsed
@@ -870,38 +1099,45 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     }
 
     const zoomLevel = typeof getZoomLevel === 'function' ? getZoomLevel() : 0;
-    const selectedId = typeof getSelectedId === 'function' ? getSelectedId() : null;
     const focusTrail = typeof getFocusTrail === 'function' ? getFocusTrail() : [];
     const hoveredFromState = typeof getHoveredId === 'function' ? getHoveredId() : null;
     const reducedMotion = prefersReducedMotion();
 
-    // --- Flight state machine (§2.3) ---
-    if (lastFocusedSelection !== selectedId) {
-      lastFocusedSelection = selectedId;
-      beginFlight(selectedId !== null);
-    }
-    advanceFlightIfNeeded(now);
+    // --- V5 Phase 2.7 (docs/V5_HANDOVER.md §13/§15): resolve this frame's
+    // focus target (real selection, Collection, mid-reverse-dissolve, or
+    // none), advancing both the camera flight and the independent reverse-
+    // dissolve timer as a side effect - see resolveFocusPresentation()'s
+    // own header doc. ---
+    const { selectedId, focusTargetId, orbitCenter, orbitMemberById, orbitIdsForStratum, progress: orbitProgress } =
+      resolveFocusPresentation(now);
 
-    // --- Orbit layout (§2.3) + depth strata (§2.2), computed once per frame ---
-    const orbit = selectedId ? computeOrbitLayout(selectedId, currentEdges, currentNodes) : { orbitIds: [], ring1: [], ring2: [] };
     const stratumById = new Map(
-      currentNodes.map((n) => [n.id, assignStratum(n, { selectedObjectId: selectedId, focusTrail, zoomLevel, orbitIds: orbit.orbitIds })])
+      currentNodes.map((n) => [n.id, assignStratum(n, { selectedObjectId: selectedId, focusTrail, zoomLevel, orbitIds: orbitIdsForStratum })])
     );
 
     // --- Camera frame: either a flight-in-progress (computeCameraFrame
-    // drives camera.x/y/scale) or the plain user-driven pan/zoom path. ---
+    // drives camera.x/y/scale) or the plain user-driven pan/zoom path.
+    // `focusTargetId` (not the possibly-stale orbit `anchorId`) drives the
+    // camera - see resolveFocusPresentation()'s header doc for why these
+    // are deliberately two different ids during a reverse dissolve. When
+    // focusTargetId is the Collection pseudo-id, a synthetic node at the
+    // Collection's own centroid (`orbitCenter`) is injected so
+    // computeCameraFrame can find it exactly like any real selection. ---
     const positionsForCamera = currentNodes
       .map((n) => {
         const p = layoutById.get(n.id);
         return p ? { id: n.id, x: p.x, y: p.y } : null;
       })
       .filter(Boolean);
+    if (focusTargetId === COLLECTION_FOCUS_PSEUDO_ID && orbitCenter) {
+      positionsForCamera.push({ id: COLLECTION_FOCUS_PSEUDO_ID, x: orbitCenter.x, y: orbitCenter.y });
+    }
 
     let frame;
     if (flight.phase !== 'idle') {
       frame = computeCameraFrame({
         nodes: positionsForCamera,
-        selectedObjectId: selectedId,
+        selectedObjectId: focusTargetId,
         zoomLevel,
         cameraPhase: flight.phase,
         t: flightT(now),
@@ -916,18 +1152,18 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       camera.transitionStart = now;
     } else {
       updateCameraAnimation(now);
-      frame = computeCameraFrame({ nodes: positionsForCamera, selectedObjectId: selectedId, zoomLevel, cameraPhase: 'idle', t: 0 });
+      frame = computeCameraFrame({ nodes: positionsForCamera, selectedObjectId: focusTargetId, zoomLevel, cameraPhase: 'idle', t: 0 });
     }
 
     // Per-stratum effective camera center, for parallax separation (§2.2):
     // each stratum's rendered position is offset relative to a center that
     // lags the true camera by (1 - parallaxFactor) during a flight.
     const home = centroidOf(positionsForCamera);
-    const target = positionsForCamera.find((p) => p.id === selectedId) ?? home;
+    const target = positionsForCamera.find((p) => p.id === focusTargetId) ?? home;
     const effectiveCenterByStratum = {};
     DEPTH_STRATA.forEach((stratum, i) => {
-      const progress = frame.strataOffsets[i] ?? 0; // travelProgress * parallaxFactor, in [0, parallaxFactor]
-      effectiveCenterByStratum[stratum.key] = { x: lerp(home.x, target.x, progress), y: lerp(home.y, target.y, progress) };
+      const parallaxProgress = frame.strataOffsets[i] ?? 0; // travelProgress * parallaxFactor, in [0, parallaxFactor]
+      effectiveCenterByStratum[stratum.key] = { x: lerp(home.x, target.x, parallaxProgress), y: lerp(home.y, target.y, parallaxProgress) };
     });
     const blurByStratum = {};
     DEPTH_STRATA.forEach((stratum, i) => {
@@ -936,11 +1172,11 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
 
     // --- Effective (orbit/collapse-adjusted) node positions ---
     const { positions: effectivePositions, collapsedInto, collapseCounts } = computeEffectivePositions(
-      selectedId,
-      orbit,
+      orbitCenter,
+      orbitMemberById,
       stratumById,
       zoomLevel,
-      now
+      orbitProgress
     );
 
     // Phase 3 addition: resolve the optional multi-object highlight set.
@@ -958,6 +1194,33 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // V5 Phase 3.5 addition: resolve the optional Operational Scope filter.
     const scope = typeof getScope === 'function' ? getScope() : null;
     const scopedNodeIdSet = scope && !scope.isUnscoped ? new Set(scope.scopedNodeIds) : null;
+
+    // --- V5 Phase 2.7 (docs/V5_HANDOVER.md §15): Focus Mode gating. ---
+    // Deliberately gated on `focusTargetId` (the REAL current focus target),
+    // NOT the orbit's `anchorId` - during a reverse dissolve, `anchorId`
+    // stays non-null (with a decaying orbitProgress) purely so the
+    // orbit/edge layout has something to dissolve FROM, but Focus Mode
+    // itself must exit the instant a selection/Collection is actually
+    // cleared (focusTargetId -> null), not linger for the extra frames the
+    // dissolve animation still has left to run.
+    const wantsFocusMode = focusTargetId !== null && orbitProgress >= 1 && flight.phase === 'idle';
+    if (wantsFocusMode !== focusModeState.active) {
+      focusModeState.active = wantsFocusMode;
+      focusModeState.since = now;
+    }
+    const focusModeFadeDuration = reducedMotion ? FOCUS_MODE_FADE_MS_REDUCED : FOCUS_MODE_FADE_MS;
+    const focusModeT = clamp((now - focusModeState.since) / focusModeFadeDuration, 0, 1);
+    // While entering: 1 (background fully present) -> 0 (background gone).
+    // While NOT active (including mid-exit): ramps 0 -> 1 (background back
+    // to full presence) - a plain 1 once well past the fade window either
+    // way, so this is a no-op multiplier outside a transition.
+    const focusModeBackgroundAlpha = focusModeState.active ? 1 - focusModeT : Math.min(focusModeT, 1);
+    // Only literally skip drawing non-focal nodes/edges once FULLY settled
+    // into Focus Mode (focusModeT===1) - "zero background rendering... not
+    // just an opacity extreme" (§15) describes the RESTING state; the
+    // entry/exit itself is still an animated cross-fade (focusModeBackgroundAlpha above).
+    const focusModeFullyResolved = focusModeState.active && focusModeT >= 1;
+    const focusModeVisibleIds = new Set(orbitIdsForStratum);
 
     ctx.save();
     ctx.translate(layoutWidth / 2, layoutHeight / 2);
@@ -1012,6 +1275,11 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // no longer represents that node's own place in the graph. ---
     for (const edge of currentEdges) {
       if (collapsedInto.has(edge.from_id) || collapsedInto.has(edge.to_id)) continue;
+      // V5 Phase 2.7 (§15): once Focus Mode is fully settled, an edge with
+      // either endpoint outside the resolved focus set is not drawn at
+      // all - "zero background rendering," not an opacity extreme.
+      const isEdgeInFocusSet = focusModeVisibleIds.has(edge.from_id) && focusModeVisibleIds.has(edge.to_id);
+      if (focusModeFullyResolved && !isEdgeInFocusSet) continue;
       const fromLocal = localFor(edge.from_id);
       const toLocal = localFor(edge.to_id);
       if (!fromLocal || !toLocal) continue;
@@ -1024,7 +1292,10 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       const isIncidentToSelection = selectedId && (edge.from_id === selectedId || edge.to_id === selectedId);
       const isIncidentToHover = hoveredId && (edge.from_id === hoveredId || edge.to_id === hoveredId);
 
-      const edgeOpacity = clamp(baseOpacity * depthOpacity, 0.03, 1) * (isIncidentToSelection || isIncidentToHover ? 1.6 : 1);
+      const edgeOpacity =
+        clamp(baseOpacity * depthOpacity, 0.03, 1) *
+        (isIncidentToSelection || isIncidentToHover ? 1.6 : 1) *
+        (isEdgeInFocusSet ? 1 : focusModeBackgroundAlpha);
 
       ctx.beginPath();
       const mx = (fromLocal.x + toLocal.x) / 2 + (toLocal.y - fromLocal.y) * 0.06;
@@ -1071,6 +1342,10 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // --- Nodes ---
     for (const node of currentNodes) {
       if (collapsedInto.has(node.id)) continue; // drawn as part of its parent's collapse badge instead
+      // V5 Phase 2.7 (§15): once Focus Mode is fully settled, no object
+      // outside the resolved focus set renders at all.
+      const isNodeInFocusSet = focusModeVisibleIds.has(node.id);
+      if (focusModeFullyResolved && !isNodeInFocusSet) continue;
       const local = localFor(node.id);
       if (!local) continue;
       const depth = depthById.get(node.id);
@@ -1110,6 +1385,13 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       // highlight dimming above rather than replacing it.
       if (isOutOfScope) {
         finalAlpha *= SCOPE_RECEDE_ALPHA_FACTOR;
+      }
+      // V5 Phase 2.7 (§15): while entering/exiting Focus Mode, everything
+      // outside the resolved focus set cross-fades rather than cutting
+      // instantly - composes with the dimming above the same way scope-
+      // recede already does.
+      if (!isNodeInFocusSet) {
+        finalAlpha *= focusModeBackgroundAlpha;
       }
 
       // §2.2's background "Desaturated" treatment, via RGB math instead of

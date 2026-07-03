@@ -191,6 +191,12 @@ async function main() {
     // V5 Phase 3.5: the current Operational Scope filter, so out-of-scope
     // nodes recede (see lenses/universe.js's SCOPE_RECEDE_* treatment).
     getScope: () => timeline.getDerivedBundle().scope,
+    // V5 Phase 2.7: the RAW scope descriptor (not the resolved
+    // buildScopeFilter() output above) - the only way lenses/universe.js
+    // can tell "the user built a Collection" (type: 'collection') apart
+    // from an ordinary single-value scope narrowing, which should NOT
+    // trigger Focus Mode (docs/V5_HANDOVER.md §15.1).
+    getScopeContext: () => store.getState().scopeContext,
     onSelect: (nodeId) => selectAndClearHighlight(nodeId),
     onHover: (nodeId) => store.setHovered(nodeId),
     onWheelZoom: (delta) => {
