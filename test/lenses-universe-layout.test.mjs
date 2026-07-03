@@ -14,7 +14,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTestSnapshot } from './fixtures/load-snapshot.mjs';
 import { buildUniverseGraph } from '../prototype/current/engine/derive.js';
-import { computeClusterLayout, mulberry32, computeOrbitLayout } from '../prototype/current/lenses/universe-layout.js';
+import {
+  computeClusterLayout,
+  mulberry32,
+  computeOrbitLayout,
+  assignSectorAngles,
+  segmentsProperlyIntersect,
+  countStreamCrossings,
+  computeDecrossedOrbitAngles,
+  computeCollectionStreamAngles,
+  resolveFocusTransition,
+  focusModeVisibleNodeIds,
+} from '../prototype/current/lenses/universe-layout.js';
 
 const snapshot = loadTestSnapshot();
 const realGraph = buildUniverseGraph(snapshot);
@@ -322,4 +333,275 @@ test('computeOrbitLayout: no angular overlap within a sector, checked across eve
       }
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// V5 Phase 2.7 (docs/V5_HANDOVER.md §13/§15): edge de-crossing / stream
+// resolution.
+// ---------------------------------------------------------------------------
+
+test('assignSectorAngles: exported and usable as a generic grouping key (not just relationship_type)', () => {
+  const members = [
+    { id: 'a', relationshipType: 'supply' },
+    { id: 'b', relationshipType: 'supply' },
+    { id: 'c', relationshipType: 'quality' },
+  ];
+  const result = assignSectorAngles(members);
+  assert.equal(result.length, 3);
+  assert.deepEqual(new Set(result.map((m) => m.id)), new Set(['a', 'b', 'c']));
+});
+
+// --- segmentsProperlyIntersect / countStreamCrossings -----------------------
+
+test('segmentsProperlyIntersect: detects a genuine X crossing', () => {
+  const crosses = segmentsProperlyIntersect({ x: -1, y: -1 }, { x: 1, y: 1 }, { x: -1, y: 1 }, { x: 1, y: -1 });
+  assert.equal(crosses, true);
+});
+
+test('segmentsProperlyIntersect: parallel non-overlapping segments do not cross', () => {
+  const crosses = segmentsProperlyIntersect({ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 });
+  assert.equal(crosses, false);
+});
+
+test('segmentsProperlyIntersect: segments sharing an endpoint are never a crossing (convergence, not tangling)', () => {
+  const shared = { x: 0, y: 0 };
+  const crosses = segmentsProperlyIntersect(shared, { x: 1, y: 1 }, shared, { x: -1, y: 1 });
+  assert.equal(crosses, false);
+});
+
+test('countStreamCrossings: counts exactly the crossing pairs in a small hand-built segment set', () => {
+  const segments = [
+    { a: { x: -1, y: -1 }, b: { x: 1, y: 1 } }, // crosses the next one
+    { a: { x: -1, y: 1 }, b: { x: 1, y: -1 } },
+    { a: { x: 5, y: 5 }, b: { x: 6, y: 6 } }, // isolated, crosses nothing
+  ];
+  assert.equal(countStreamCrossings(segments), 1);
+});
+
+// --- computeDecrossedOrbitAngles --------------------------------------------
+
+test('computeDecrossedOrbitAngles: returns empty maps and zero counts for an empty orbit', () => {
+  const result = computeDecrossedOrbitAngles({ ring1: [], ring2: [] }, []);
+  assert.deepEqual(result, {
+    ring1AngleById: new Map(),
+    ring2AngleById: new Map(),
+    crossingCount: 0,
+    baselineCrossingCount: 0,
+  });
+});
+
+test('computeDecrossedOrbitAngles: deterministic - identical inputs always produce an identical result', () => {
+  const orbit = computeOrbitLayout('customer:Horizon LNG Partners', realGraph.edges, realGraph.nodes);
+  const first = computeDecrossedOrbitAngles(orbit, realGraph.edges);
+  const second = computeDecrossedOrbitAngles(orbit, realGraph.edges);
+  assert.deepEqual(first, second);
+});
+
+test('computeDecrossedOrbitAngles: strictly reduces crossings on a hand-built interleaved-parent scenario', () => {
+  // A selects P1/P2 (ring 1). P1 and P2 each have two ring-2 children, but
+  // the ring-2 ids alphabetically INTERLEAVE the two parents (C1->P1,
+  // C2->P2, C3->P1, C4->P2) - exactly the "arbitrary ID order, unrelated to
+  // parent" tangling this algorithm targets.
+  const nodes = [{ id: 'A' }, { id: 'P1' }, { id: 'P2' }, { id: 'C1' }, { id: 'C2' }, { id: 'C3' }, { id: 'C4' }];
+  const edges = [
+    { from_id: 'A', to_id: 'P1', relationship_type: 'r' },
+    { from_id: 'A', to_id: 'P2', relationship_type: 'r' },
+    { from_id: 'P1', to_id: 'C1', relationship_type: 's' },
+    { from_id: 'P2', to_id: 'C2', relationship_type: 's' },
+    { from_id: 'P1', to_id: 'C3', relationship_type: 's' },
+    { from_id: 'P2', to_id: 'C4', relationship_type: 's' },
+  ];
+  const orbit = computeOrbitLayout('A', edges, nodes);
+  const result = computeDecrossedOrbitAngles(orbit, edges);
+  assert.equal(result.baselineCrossingCount, 1, 'sanity: this scenario must actually have a baseline crossing to resolve');
+  assert.equal(result.crossingCount, 0, 'the algorithm must resolve the one crossing in this scenario');
+});
+
+test('computeDecrossedOrbitAngles: never produces MORE crossings than the baseline, for every selection in the real dataset', () => {
+  for (const node of realGraph.nodes) {
+    const orbit = computeOrbitLayout(node.id, realGraph.edges, realGraph.nodes);
+    const result = computeDecrossedOrbitAngles(orbit, realGraph.edges);
+    assert.ok(
+      result.crossingCount <= result.baselineCrossingCount,
+      `node "${node.id}": resolved crossings (${result.crossingCount}) exceeded baseline (${result.baselineCrossingCount})`
+    );
+  }
+});
+
+test('computeDecrossedOrbitAngles: measurably reduces total crossings summed across the whole real dataset', () => {
+  let totalBaseline = 0;
+  let totalResolved = 0;
+  for (const node of realGraph.nodes) {
+    const orbit = computeOrbitLayout(node.id, realGraph.edges, realGraph.nodes);
+    const result = computeDecrossedOrbitAngles(orbit, realGraph.edges);
+    totalBaseline += result.baselineCrossingCount;
+    totalResolved += result.crossingCount;
+  }
+  assert.ok(totalBaseline > 0, 'fixture sanity: the real dataset must have at least some baseline tangling to measure');
+  assert.ok(
+    totalResolved < totalBaseline,
+    `expected a measurable aggregate improvement: resolved (${totalResolved}) should be < baseline (${totalBaseline})`
+  );
+});
+
+test('computeDecrossedOrbitAngles: ring1 members remain a stable-order superset of their baseline sector membership', () => {
+  const orbit = computeOrbitLayout('customer:Horizon LNG Partners', realGraph.edges, realGraph.nodes);
+  const result = computeDecrossedOrbitAngles(orbit, realGraph.edges);
+  assert.deepEqual([...result.ring1AngleById.keys()].sort(), orbit.ring1.map((m) => m.id).sort());
+  assert.deepEqual([...result.ring2AngleById.keys()].sort(), orbit.ring2.map((m) => m.id).sort());
+});
+
+test('computeDecrossedOrbitAngles: is a pure function (does not mutate the orbit/relationships inputs)', () => {
+  const orbit = computeOrbitLayout('customer:Horizon LNG Partners', realGraph.edges, realGraph.nodes);
+  const orbitCopy = JSON.parse(JSON.stringify(orbit));
+  const edgesCopy = JSON.parse(JSON.stringify(realGraph.edges));
+  computeDecrossedOrbitAngles(orbit, realGraph.edges);
+  assert.deepEqual(orbit, orbitCopy);
+  assert.deepEqual(realGraph.edges, edgesCopy);
+});
+
+// --- computeCollectionStreamAngles -------------------------------------------
+
+test('computeCollectionStreamAngles: returns empty result for an empty member list', () => {
+  assert.deepEqual(computeCollectionStreamAngles([], []), { angleById: new Map(), crossingCount: 0, baselineCrossingCount: 0 });
+});
+
+test('computeCollectionStreamAngles: deterministic - identical inputs always produce an identical result', () => {
+  const members = realGraph.nodes.slice(0, 12);
+  const first = computeCollectionStreamAngles(members, realGraph.edges);
+  const second = computeCollectionStreamAngles(members, realGraph.edges);
+  assert.deepEqual(first, second);
+});
+
+test('computeCollectionStreamAngles: strictly reduces crossings on a hand-built "diagonal chords" scenario', () => {
+  // Four same-domain members whose peer edges connect opposite pairs
+  // (M1-M3, M2-M4) - in naive alphabetical-order placement around a circle
+  // these are literally the two diagonals of a quadrilateral, which always
+  // cross; a better placement (grouping so the two edges become adjacent
+  // chords instead of diagonals) removes the crossing entirely.
+  const members = [
+    { id: 'M1', domain: 'supply' },
+    { id: 'M2', domain: 'supply' },
+    { id: 'M3', domain: 'supply' },
+    { id: 'M4', domain: 'supply' },
+  ];
+  const edges = [
+    { from_id: 'M1', to_id: 'M3' },
+    { from_id: 'M2', to_id: 'M4' },
+  ];
+  const result = computeCollectionStreamAngles(members, edges);
+  assert.equal(result.baselineCrossingCount, 1, 'sanity: this scenario must actually have a baseline crossing to resolve');
+  assert.equal(result.crossingCount, 0, 'the algorithm must resolve the one crossing in this scenario');
+});
+
+test('computeCollectionStreamAngles: never produces more crossings than the baseline, across randomized real-dataset subsets', () => {
+  // mulberry32 (already imported above) gives a deterministic shuffle, so
+  // this test's "random" subsets are exactly reproducible run-to-run.
+  for (let trial = 0; trial < 25; trial += 1) {
+    const rng = mulberry32(trial + 1);
+    const shuffled = [...realGraph.nodes].sort(() => rng() - 0.5);
+    const size = 4 + Math.floor(rng() * 10);
+    const members = shuffled.slice(0, size);
+    const result = computeCollectionStreamAngles(members, realGraph.edges);
+    assert.ok(
+      result.crossingCount <= result.baselineCrossingCount,
+      `trial ${trial}: resolved crossings (${result.crossingCount}) exceeded baseline (${result.baselineCrossingCount})`
+    );
+  }
+});
+
+test('computeCollectionStreamAngles: ignores edges with an endpoint outside the member set', () => {
+  const members = [{ id: 'M1', domain: 'supply' }, { id: 'M2', domain: 'supply' }];
+  const edges = [
+    { from_id: 'M1', to_id: 'M2' },
+    { from_id: 'M1', to_id: 'not-a-member' },
+  ];
+  const result = computeCollectionStreamAngles(members, edges);
+  assert.equal(result.angleById.size, 2);
+  // Only the M1-M2 edge counts toward crossings; a single edge can never cross anything.
+  assert.equal(result.baselineCrossingCount, 0);
+  assert.equal(result.crossingCount, 0);
+});
+
+// --- resolveFocusTransition ---------------------------------------------------
+
+test('resolveFocusTransition: no selection and no previous selection -> null anchor, zero progress', () => {
+  assert.deepEqual(resolveFocusTransition({}), { anchorId: null, progress: 0 });
+  assert.deepEqual(resolveFocusTransition(), { anchorId: null, progress: 0 });
+});
+
+test('resolveFocusTransition: forward selection - anchor is the selection, progress passes through forwardProgress (clamped)', () => {
+  assert.deepEqual(resolveFocusTransition({ selectedId: 'x', forwardProgress: 0 }), { anchorId: 'x', progress: 0 });
+  assert.deepEqual(resolveFocusTransition({ selectedId: 'x', forwardProgress: 0.3 }), { anchorId: 'x', progress: 0.3 });
+  assert.deepEqual(resolveFocusTransition({ selectedId: 'x', forwardProgress: 1 }), { anchorId: 'x', progress: 1 });
+  assert.deepEqual(resolveFocusTransition({ selectedId: 'x', forwardProgress: 1.5 }), { anchorId: 'x', progress: 1 }, 'out-of-range progress clamps to 1');
+  assert.deepEqual(resolveFocusTransition({ selectedId: 'x', forwardProgress: -0.5 }), { anchorId: 'x', progress: 0 }, 'out-of-range progress clamps to 0');
+});
+
+test('resolveFocusTransition: reverse (clearing selection) - anchor is the previous selection, progress passes through reverseProgress (clamped)', () => {
+  assert.deepEqual(
+    resolveFocusTransition({ previousSelectedId: 'x', selectedId: null, reverseProgress: 1 }),
+    { anchorId: 'x', progress: 1 }
+  );
+  assert.deepEqual(
+    resolveFocusTransition({ previousSelectedId: 'x', selectedId: null, reverseProgress: 0.6 }),
+    { anchorId: 'x', progress: 0.6 }
+  );
+  assert.deepEqual(
+    resolveFocusTransition({ previousSelectedId: 'x', selectedId: null, reverseProgress: 1.4 }),
+    { anchorId: 'x', progress: 1 },
+    'out-of-range progress clamps to 1'
+  );
+});
+
+test('resolveFocusTransition: reverse dissolve fully complete (reverseProgress 0) drops the anchor entirely', () => {
+  assert.deepEqual(
+    resolveFocusTransition({ previousSelectedId: 'x', selectedId: null, reverseProgress: 0 }),
+    { anchorId: null, progress: 0 }
+  );
+});
+
+test('resolveFocusTransition: a fresh selection always wins over a lingering previousSelectedId', () => {
+  assert.deepEqual(
+    resolveFocusTransition({ previousSelectedId: 'old', selectedId: 'new', forwardProgress: 0.4, reverseProgress: 1 }),
+    { anchorId: 'new', progress: 0.4 }
+  );
+});
+
+test('resolveFocusTransition: is pure - identical arguments always produce an identical result, independent of any external timing', () => {
+  const params = { previousSelectedId: 'a', selectedId: null, reverseProgress: 0.55 };
+  const first = resolveFocusTransition(params);
+  const second = resolveFocusTransition({ ...params });
+  assert.deepEqual(first, second);
+});
+
+// --- focusModeVisibleNodeIds --------------------------------------------------
+
+test('focusModeVisibleNodeIds: collection mode returns exactly the given member ids', () => {
+  const result = focusModeVisibleNodeIds({ mode: 'collection', collectionMemberIds: ['a', 'b', 'c'] });
+  assert.deepEqual(result, new Set(['a', 'b', 'c']));
+});
+
+test('focusModeVisibleNodeIds: object mode returns exactly the anchor plus its orbit ids', () => {
+  const result = focusModeVisibleNodeIds({ mode: 'object', anchorId: 'sel', orbit: { orbitIds: ['r1', 'r2'] } });
+  assert.deepEqual(result, new Set(['sel', 'r1', 'r2']));
+});
+
+test('focusModeVisibleNodeIds: object mode with no anchor, or an unrecognized mode, returns an empty set', () => {
+  assert.deepEqual(focusModeVisibleNodeIds({ mode: 'object', anchorId: null, orbit: { orbitIds: ['r1'] } }), new Set());
+  assert.deepEqual(focusModeVisibleNodeIds({ mode: 'nonsense' }), new Set());
+  assert.deepEqual(focusModeVisibleNodeIds(), new Set());
+});
+
+test('focusModeVisibleNodeIds: real-dataset sanity - a focal customer\'s visible set includes its direct relationships but excludes an unrelated far domain node', () => {
+  const selectedId = 'customer:Horizon LNG Partners';
+  const orbit = computeOrbitLayout(selectedId, realGraph.edges, realGraph.nodes);
+  const visible = focusModeVisibleNodeIds({ mode: 'object', anchorId: selectedId, orbit });
+  assert.ok(visible.has(selectedId));
+  assert.ok(orbit.ring1.length > 0, 'fixture sanity: this selection must have at least one direct relationship');
+  for (const member of orbit.ring1) assert.ok(visible.has(member.id));
+
+  const unrelated = realGraph.nodes.find((n) => n.id !== selectedId && !visible.has(n.id));
+  assert.ok(unrelated, 'fixture sanity: the real dataset must contain at least one node unrelated to this selection');
+  assert.ok(!visible.has(unrelated.id));
 });
