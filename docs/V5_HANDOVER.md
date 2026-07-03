@@ -71,7 +71,8 @@ concept" and "did this invent a new entity type."
 | 2 — Universe galaxy (orbit layout, labels, strata, flight) | ✅ Done, live-validated (flight feel confirmed) | `f721680` |
 | 3 — Risk Board v2 | ✅ Done, merged | PR #1, `7954684` |
 | 3.5 — Operational Scope + global sync (4 surfaces) | ✅ Done, merged, live-validated | merged |
-| 2.6+ (consolidated) — label policy, centering diagnosis, contrast, click-detail, Nav History rail, Scope Explorer multi-select/collections | ✅ Done (item B diagnosed, not fixed — see §10.2 item B) | PR pending |
+| 2.6+ (consolidated) — label policy, centering diagnosis, contrast, click-detail, Nav History rail, Scope Explorer multi-select/collections (items A-G) | ✅ Done (item B diagnosed, not fixed — see §10.2 item B) | PR #3 |
+| 2.6+ item H — Collection nested-cluster rendering in Universe | ⬜ Not started — added to §10.2 after items A-G were executed; not in PR #3's scope | — |
 | 4 — Spider, Text View, Collection Passport | ⬜ Not started | — |
 | 4.5 — Workbench | ⬜ Not started | — |
 | 4.6 — Saved Views/Reports/Action Bar (UI-only) | ⬜ Not started | — |
@@ -621,6 +622,30 @@ for Universe's solar-system flight, now generalized to other lenses.
   pattern — a Collection here can follow the same "reserve the UI,
   don't build persistence" principle unless user wants it functional now).
 
+**H. Collection rendering in Universe (NEW — nested cluster model):**
+A Collection is not a filter-only concept — it must have a visual
+representation in Universe:
+- **Collapsed state:** the Collection renders as a single aggregate
+  point (one node), positioned/sized like any other node. Size encodes
+  member count (reuse existing §4.2 Rule 2 magnitude-encoding). Suggested
+  glyph: overlapping/clustered circles or a ring, distinct from single-
+  object shapes — implementer's judgment, per Design Freedom.
+- **Expanded state:** clicking the Collection point triggers the SAME
+  three-phase flight already built for object selection (reuse
+  computeCameraFrame, do not build a new camera path). On arrival, the
+  Collection's member objects + their actual relationships (from
+  relationships.json, same as any orbit) render as a local sub-scene —
+  effectively `computeOrbitLayout()` reused with the Collection's member
+  set as the seed instead of a single selected object's 1-hop neighbors.
+- **Collapsing back:** standard `popFocus()` — returns to the parent
+  scene with the Collection re-rendered as its single aggregate point.
+- **Nesting:** if a Collection contains another Collection (not required
+  for this phase, but don't architect against it), the same pattern
+  should apply recursively — flag as future-compatible, don't build it now.
+- **Zero new state/camera machinery** — this is the existing orbit +
+  flight + stratum + focusTrail system, applied with a Collection's
+  member list as input instead of a single object's relationship graph.
+
 ### 10.3 Decision log
 
 - **Rejected:** repurposing zoom slider for back-navigation (would overload
@@ -684,11 +709,20 @@ regardless of what's found, per explicit user instruction.
   **Open gap not fixed by this audit:** the Phase 2.6+ prompt's actual
   outcome (files/tests/PR/item-B diagnosis) is not yet in this document
   — flagged explicitly in §1, must be added once Claude Code reports back.
-| +7 | Phase 2.6 (consolidated, §10.2 items A-G) executed and reported.
+| +7 | Added §10.2 item H: Collection nested-cluster rendering model.
+  Collapsed = single aggregate point (size = member count, reuses §4.2
+  magnitude rule). Expanded = existing flight/orbit/stratum system
+  reused with Collection members as the seed instead of a single
+  object's relationships. Zero new state/camera machinery required —
+  architecturally free extension of Phase 2's existing primitives. |
+| +8 | Phase 2.6 (consolidated, §10.2 items A-G) executed and reported.
   §1/§2 updated with outcome: item B (camera centering) diagnosed as
   correct math/wiring, not fixed (perceptual issue from clutter/contrast,
   resolved by items A/C landing in the same phase). All other items (A,
   C-G) implemented and Playwright-verified. Two in-flight bugs found in
   this phase's own new code and fixed (not deferred): a Risk Board
   coverage-percentage double-scaling bug, and a node-tooltip (item D)
-  leaking across lens switches. Full outcome in the PR description.
+  leaking across lens switches. Full outcome in the PR description. Item
+  H (Collection rendering in Universe, added to §10.2 concurrently on
+  `main`) remains unimplemented — not part of this PR's scope, still
+  pending for a future phase.
