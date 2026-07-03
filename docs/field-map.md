@@ -65,6 +65,15 @@ The Risk Board is a commitment-level lens over the same operational dataset.
 | Risk State | risk/shortage/recommendation state by time slice | derived_supported |
 | Required Date | commitment / demand signal date | supported |
 | Root Cause Summary | related purchase order, inventory, allocation, engineering change, quality event, or evidence summary | derived_supported |
+| Risk Board Sparkline | per-commitment risk_state sequence across all time_slices, derived from `risk-board.json` risk_state at each `time-slices.json` slice | derived_supported |
+
+## Spider fields
+
+The Spider lens is a radar view over the same operational dataset: axes are the `domain` values already assigned to every Universe node (docs/V5_DESIGN_SPEC.md §4).
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Spider Axis Score | weighted count of ≤2-hop related objects per domain whose risk_state is critical (w=3) / elevated (w=2) / watch (w=1), normalized [0,1] per axis; derived from `relationships.json`, node `domain` fields, and `risk-board.json` per-slice risk states | derived_supported |
 
 ## Passport fields
 

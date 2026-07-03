@@ -42,6 +42,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(REPO_ROOT, 'src', 'data');
 const DERIVE_FILE = path.join(REPO_ROOT, 'prototype', 'current', 'engine', 'derive.js');
+const FIELD_MAP_FILE = path.join(REPO_ROOT, 'docs', 'field-map.md');
+
+// V5 Phase 1 governance gate (docs/V5_DESIGN_SPEC.md §4.2/§3.2): these two
+// derive.js output keys do not exist yet (Spider lens / Risk Board
+// sparkline are Phase 3/4 work), but their field-map.md rows were added in
+// Phase 1, ahead of the code, per RULES.md #7 ("If a desired UI value is
+// not supported, mark it as ux_hypothesis... instead" - the inverse of
+// that rule is: once a field-map row exists licensing a value, code MAY
+// use it, but not before). This is a targeted, name-based scan (in
+// addition to the generic scanObjectLiteralKeys() scan above) so that if a
+// future phase introduces either key via a syntax the generic "identifier:"
+// object-literal heuristic would miss (e.g. shorthand property syntax
+// `{ spiderAxisScores }`), the build still fails loudly unless both (a)
+// derive.js's own KNOWN_OUTPUT_FIELDS documents it and (b) the field-map.md
+// row this phase added is still present.
+const GOVERNANCE_GATED_KEYS = Object.freeze({
+  spiderAxisScores: 'Spider Axis Score',
+  riskTrajectory: 'Risk Board Sparkline',
+});
 
 /**
  * Recursively collect every distinct object key used anywhere inside a
@@ -215,6 +234,71 @@ function scanObjectLiteralKeys(source) {
   return found;
 }
 
+/**
+ * Strip `//` line comments and `/* ... *\/` block comments from `source`,
+ * returning comment-free text (line breaks otherwise preserved). Same
+ * conservative line-by-line approach as scanObjectLiteralKeys() above, but
+ * factored out standalone (not shared) so an edit to one scan's comment
+ * handling can never accidentally change the other's.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+function stripComments(source) {
+  const lines = source.split('\n');
+  const out = [];
+  let inBlockComment = false;
+  for (const rawLine of lines) {
+    let line = rawLine;
+    if (inBlockComment) {
+      const endIdx = line.indexOf('*/');
+      if (endIdx === -1) {
+        out.push('');
+        continue;
+      }
+      line = line.slice(endIdx + 2);
+      inBlockComment = false;
+    }
+    line = line.replace(/\/\*.*?\*\//g, '');
+    const startIdx = line.indexOf('/*');
+    if (startIdx !== -1) {
+      line = line.slice(0, startIdx);
+      inBlockComment = true;
+    }
+    const lineCommentIdx = line.indexOf('//');
+    if (lineCommentIdx !== -1) {
+      line = line.slice(0, lineCommentIdx);
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+/**
+ * Targeted V5 governance-gate scan (docs/V5_DESIGN_SPEC.md §10 Phase 1):
+ * find whole-word occurrences of any GOVERNANCE_GATED_KEYS name anywhere in
+ * comment-stripped derive.js source, regardless of surrounding syntax
+ * (object-literal key, shorthand property, destructure, return value,
+ * etc.). This is deliberately a broader net than scanObjectLiteralKeys()'s
+ * "identifier:" heuristic, since a future implementer could introduce
+ * either key via a syntax that heuristic would not catch (e.g. shorthand
+ * property syntax `{ spiderAxisScores }`).
+ *
+ * @param {string} source
+ * @returns {Set<string>} which of GOVERNANCE_GATED_KEYS' names are present
+ */
+function scanForGovernanceGatedKeys(source) {
+  const stripped = stripComments(source);
+  const present = new Set();
+  for (const key of Object.keys(GOVERNANCE_GATED_KEYS)) {
+    const wordBoundaryPattern = new RegExp(`\\b${key}\\b`);
+    if (wordBoundaryPattern.test(stripped)) {
+      present.add(key);
+    }
+  }
+  return present;
+}
+
 async function main() {
   const rawFieldNames = loadRawFieldNames();
   const documentedFieldNames = await loadDocumentedDerivedFieldNames();
@@ -244,10 +328,44 @@ async function main() {
     undocumented.push(key);
   }
 
+  // V5 Phase 1 governance gate (docs/V5_DESIGN_SPEC.md §10): spiderAxisScores
+  // and riskTrajectory are reserved output keys for the not-yet-built
+  // Spider lens (§4.2) and Risk Board sparkline (§3.2). Their field-map.md
+  // rows were added ahead of the code in Phase 1 specifically so this gate
+  // can enforce, from Phase 3/4 onward, that the code never ships without
+  // both the field-map row and a KNOWN_OUTPUT_FIELDS citation.
+  const gatedKeysPresent = scanForGovernanceGatedKeys(deriveSource);
+  const fieldMapSource = fs.readFileSync(FIELD_MAP_FILE, 'utf8');
+  const governanceFailures = [];
+  for (const key of gatedKeysPresent) {
+    const fieldMapRowTitle = GOVERNANCE_GATED_KEYS[key];
+    if (!documentedFieldNames.has(key)) {
+      governanceFailures.push(
+        `derive.js uses "${key}" but it is not documented in KNOWN_OUTPUT_FIELDS`
+      );
+    }
+    if (!fieldMapSource.includes(fieldMapRowTitle)) {
+      governanceFailures.push(
+        `derive.js uses "${key}" but docs/field-map.md has no "${fieldMapRowTitle}" row`
+      );
+    }
+  }
+
   console.log(`verify-field-map: ${rawFieldNames.size} distinct raw field name(s) found in src/data/*.json.`);
   console.log(`verify-field-map: ${documentedFieldNames.size} field name(s) documented in derive.js KNOWN_OUTPUT_FIELDS.`);
   console.log(`verify-field-map: ${scannedKeys.size} distinct object-literal key(s) scanned in engine/derive.js.`);
+  console.log(
+    `verify-field-map: governance-gated key(s) present in derive.js: ${gatedKeysPresent.size === 0 ? 'none' : [...gatedKeysPresent].join(', ')}.`
+  );
   console.log('');
+
+  if (governanceFailures.length > 0) {
+    console.error('verify-field-map: FAILED - V5 governance gate violation(s):');
+    for (const msg of governanceFailures) {
+      console.error(`  - ${msg}`);
+    }
+    process.exit(1);
+  }
 
   if (undocumented.length > 0) {
     console.error('verify-field-map: FAILED - undocumented field(s) found in engine/derive.js:');

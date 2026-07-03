@@ -13,27 +13,43 @@
 // plain function, so state.js never imports derive.js or fetches data
 // itself. This keeps the store reusable even if the data layer changes.
 //
-// Canonical state (docs/STATE_MODEL.md):
-//   workspaceLens: 'universe' | 'risk_board'
+// Canonical state (docs/STATE_MODEL.md, extended by docs/V5_DESIGN_SPEC.md
+// §1.2 for the fields marked NEW below):
+//   workspaceLens: 'universe' | 'risk_board' | 'spider' | 'text'
 //   leftPanelMode: 'dashboard' | 'passport'
 //   selectedObjectId: string | null
 //   focusedCommitmentId: string | null
 //   timeSliceId: string
 //   zoomLevel: number
 //   hoveredObjectId: string | null
+//   focusTrail: string[]         NEW - selection history for back-navigation
+//   cameraTarget: string | null  NEW - object id the camera is flying toward
+//   cameraPhase: 'idle'|'depart'|'travel'|'arrive'  NEW - motion choreography state
+//
+// Per V5_DESIGN_SPEC.md §1.2: focusTrail/cameraTarget/cameraPhase are all
+// derived/transient UI state, never persisted, never source data (docs/
+// RULES.md #11). They are progressive enhancement - a renderer that ignores
+// them entirely still gets a correct selectedObjectId/timeSliceId/zoomLevel,
+// which is why they get their own dedicated mutators (pushFocus/popFocus)
+// layered on top of, not mixed into, the existing selectObject/setTimeSlice/
+// setZoom semantics (which this phase leaves untouched).
 
-const WORKSPACE_LENSES = Object.freeze(['universe', 'risk_board']);
+const WORKSPACE_LENSES = Object.freeze(['universe', 'risk_board', 'spider', 'text']);
 const LEFT_PANEL_MODES = Object.freeze(['dashboard', 'passport']);
+const CAMERA_PHASES = Object.freeze(['idle', 'depart', 'travel', 'arrive']);
 
 /**
  * @typedef {Object} AppState
- * @property {'universe'|'risk_board'} workspaceLens
+ * @property {'universe'|'risk_board'|'spider'|'text'} workspaceLens
  * @property {'dashboard'|'passport'} leftPanelMode
  * @property {string|null} selectedObjectId
  * @property {string|null} focusedCommitmentId
  * @property {string} timeSliceId
  * @property {number} zoomLevel
  * @property {string|null} hoveredObjectId
+ * @property {string[]} focusTrail
+ * @property {string|null} cameraTarget
+ * @property {'idle'|'depart'|'travel'|'arrive'} cameraPhase
  */
 
 /**
@@ -60,7 +76,7 @@ let store = null;
  *   If omitted, focusedCommitmentId is never auto-derived from selection
  *   (callers may still set it directly via setState).
  * @param {number} [options.initialZoomLevel=0] - starting zoom level.
- * @param {'universe'|'risk_board'} [options.initialLens='universe']
+ * @param {'universe'|'risk_board'|'spider'|'text'} [options.initialLens='universe']
  * @param {'dashboard'|'passport'} [options.initialLeftPanel='dashboard']
  * @returns {AppState} the freshly-initialized state (a copy)
  */
@@ -97,6 +113,9 @@ export function initState(options = {}) {
     timeSliceId: initialTimeSliceId,
     zoomLevel: initialZoomLevel,
     hoveredObjectId: null,
+    focusTrail: [],
+    cameraTarget: null,
+    cameraPhase: 'idle',
   };
 
   const listeners = new Set();
@@ -217,6 +236,20 @@ function notify() {
  *   Dashboard, they can call setState({ leftPanelMode: 'dashboard' })
  *   immediately after, but the default and expected UX is the auto-switch.
  *
+ * Camera/focus-trail note (docs/V5_DESIGN_SPEC.md §1.2, NEW this phase):
+ *   selectObject() also (a) pushes the object being replaced onto
+ *   focusTrail before the selection changes (the same push pushFocus()
+ *   performs standalone - inlined here into the single setState call below
+ *   rather than calling pushFocus() as a separate step, so selectObject()
+ *   keeps notifying subscribers exactly once per call, matching its
+ *   pre-existing atomic-setState contract), and (b) sets cameraTarget to
+ *   the new selection and cameraPhase to 'depart' (or back to 'idle' when
+ *   clearing selection), since "selecting an object may move the camera
+ *   toward that object" (docs/CAMERA_MODEL.md's Focus behavior). Renderers
+ *   that ignore cameraTarget/cameraPhase still get a fully correct
+ *   selectedObjectId - this is progressive enhancement, not a change to
+ *   selectedObjectId's own semantics.
+ *
  * @param {string|null} id - object id to select, or null to clear selection.
  */
 export function selectObject(id) {
@@ -224,6 +257,15 @@ export function selectObject(id) {
   if (id !== null && typeof id !== 'string') {
     throw new Error('selectObject: id must be a string or null');
   }
+
+  // Remember where we were before changing selection (see pushFocus() doc;
+  // same push semantics, inlined for a single atomic setState call - see
+  // the design note above).
+  const previouslySelected = store.state.selectedObjectId;
+  const nextFocusTrail =
+    previouslySelected === null
+      ? store.state.focusTrail
+      : [...store.state.focusTrail, previouslySelected];
 
   let focusedCommitmentId = null;
   if (id !== null && typeof store.resolveCommitmentForObject === 'function') {
@@ -237,7 +279,82 @@ export function selectObject(id) {
     // See design note above: selection always surfaces the Passport, per
     // the existing shipped app.js behavior and PANEL_SPECIFICATIONS.md.
     leftPanelMode: id === null ? store.state.leftPanelMode : 'passport',
+    focusTrail: nextFocusTrail,
+    cameraTarget: id,
+    cameraPhase: id === null ? 'idle' : 'depart',
   });
+}
+
+/**
+ * Push the CURRENT selectedObjectId onto focusTrail, before it changes.
+ * Per docs/V5_DESIGN_SPEC.md §1.2: "focusTrail push on every selectObject()"
+ * - selectObject() performs this exact same push (inlined into its own
+ * single setState call, for one notification per call - see selectObject's
+ * design note). This standalone export exists so the push behavior is
+ * independently testable in isolation, and so any future caller that needs
+ * to record a breadcrumb without going through selectObject() can still
+ * participate in the same focusTrail contract.
+ *
+ * No-op (does not push, does not notify) when there is currently no
+ * selection (selectedObjectId === null) - there is nothing meaningful to
+ * remember, and focusTrail's declared type is string[] (V5_DESIGN_SPEC.md
+ * §1.2), not (string|null)[], so null is never a valid trail entry.
+ */
+export function pushFocus() {
+  assertInitialized();
+  const current = store.state.selectedObjectId;
+  if (current === null) {
+    return;
+  }
+  setState({ focusTrail: [...store.state.focusTrail, current] });
+}
+
+/**
+ * Pop the most recent entry off focusTrail and restore it as both
+ * selectedObjectId and cameraTarget - "pop restores prior selectedObjectId
+ * AND cameraTarget exactly" (docs/V5_DESIGN_SPEC.md §10 Phase 1 brief).
+ * cameraPhase is set to 'depart' (a fresh flight back toward the restored
+ * object begins; a renderer is free to skip straight to 'arrive' if it
+ * wants an instant snap-back instead of a flight - this module has no
+ * opinion on rendering, only on what state a "back" gesture restores).
+ * focusedCommitmentId is recomputed via the same injected resolver
+ * selectObject() uses, so a pop is indistinguishable from having selected
+ * that object directly. leftPanelMode is set to 'passport', mirroring
+ * selectObject(id !== null)'s own behavior, since popping always restores a
+ * real (non-null) prior selection.
+ *
+ * No-op (returns null, does not notify) when focusTrail is empty - there is
+ * nothing to go back to.
+ *
+ * @returns {string|null} the restored object id, or null if focusTrail was
+ *   empty and nothing changed.
+ */
+export function popFocus() {
+  assertInitialized();
+  const trail = store.state.focusTrail;
+  if (trail.length === 0) {
+    return null;
+  }
+
+  const restoredId = trail[trail.length - 1];
+  const newTrail = trail.slice(0, -1);
+
+  let focusedCommitmentId = null;
+  if (typeof store.resolveCommitmentForObject === 'function') {
+    const resolved = store.resolveCommitmentForObject(restoredId);
+    focusedCommitmentId = typeof resolved === 'string' ? resolved : null;
+  }
+
+  setState({
+    focusTrail: newTrail,
+    selectedObjectId: restoredId,
+    focusedCommitmentId,
+    cameraTarget: restoredId,
+    cameraPhase: 'depart',
+    leftPanelMode: 'passport',
+  });
+
+  return restoredId;
 }
 
 /**
@@ -246,9 +363,13 @@ export function selectObject(id) {
  * Effects: update workspaceLens; preserve selected object; preserve focused
  * commitment; preserve time slice; preserve zoom level unless a
  * lens-specific default is needed (V4 does not define any lens-specific
- * zoom default, so zoom is always preserved here).
+ * zoom default, so zoom is always preserved here). Also preserves
+ * focusTrail/cameraTarget/cameraPhase (docs/V5_DESIGN_SPEC.md §1.3: "Lens
+ * switch preserves selection, focus, time, zoom") - this function's patch
+ * touches only workspaceLens, so setState's merge leaves everything else,
+ * including the new camera/focus fields, untouched.
  *
- * @param {'universe'|'risk_board'} lens
+ * @param {'universe'|'risk_board'|'spider'|'text'} lens
  */
 export function setLens(lens) {
   assertInitialized();
@@ -294,6 +415,8 @@ export function setLeftPanel(mode) {
  * It also intentionally leaves selectedObjectId/focusedCommitmentId alone:
  * Risk Board's "preserve selected commitment across time" requirement
  * (docs/TIMELINE_ENGINE.md) depends on selection surviving a time change.
+ * For the same reason it never touches cameraTarget/cameraPhase either
+ * (docs/V5_DESIGN_SPEC.md §1.3: "Time change never moves camera or zoom").
  *
  * @param {string} id - time slice id (e.g. 't0', 't1', 't2').
  */
@@ -348,3 +471,4 @@ export function setHovered(id) {
 // enum values without hardcoding them a second time.
 export const WORKSPACE_LENS_VALUES = WORKSPACE_LENSES;
 export const LEFT_PANEL_MODE_VALUES = LEFT_PANEL_MODES;
+export const CAMERA_PHASE_VALUES = CAMERA_PHASES;

@@ -27,8 +27,12 @@ Current allowed primary workspace lenses:
 
 - `universe`: living operational graph
 - `risk_board`: commitment-level operational heatmap / board
+- `spider`: radar/axis view of a selected object's risk exposure across operational domains
+- `text`: structured, keyboard-navigable outline view of the same investigation
 
 Future lenses may be added only if they are views of the same operational dataset.
+
+`spider` and `text` are added under this future-lens clause (docs/V5_DESIGN_SPEC.md §1.2/§4/§5): both are views of the same operational dataset already licensed by this file, introduce no new object types (rule #8) and no new source fields (rule #7).
 
 ## 4. Supported left panel modes
 

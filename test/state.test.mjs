@@ -17,6 +17,9 @@ import {
   setTimeSlice,
   setZoom,
   setHovered,
+  pushFocus,
+  popFocus,
+  WORKSPACE_LENS_VALUES,
 } from '../prototype/current/engine/state.js';
 
 test('initState returns the documented canonical AppState shape with defaults', () => {
@@ -29,6 +32,9 @@ test('initState returns the documented canonical AppState shape with defaults', 
     timeSliceId: 't0',
     zoomLevel: 0,
     hoveredObjectId: null,
+    focusTrail: [],
+    cameraTarget: null,
+    cameraPhase: 'idle',
   });
 });
 
@@ -237,4 +243,136 @@ test('calling store functions before initState throws a clear error', () => {
   // via the explicit initState() call at the top of every test above.
   initState();
   assert.doesNotThrow(() => getState());
+});
+
+// ---------------------------------------------------------------------------
+// V5 Phase 1: lens extension (docs/RULES.md #3 / docs/V5_DESIGN_SPEC.md
+// §1.2) and focusTrail/cameraTarget/cameraPhase (docs/V5_DESIGN_SPEC.md
+// §1.2-§1.3 invariants).
+// ---------------------------------------------------------------------------
+
+test('WORKSPACE_LENS_VALUES includes all 4 lenses added by docs/RULES.md #3', () => {
+  assert.deepEqual(WORKSPACE_LENS_VALUES, ['universe', 'risk_board', 'spider', 'text']);
+});
+
+test('setLens: switching between all 4 lens values preserves selectedObjectId, focusTrail, timeSliceId, zoomLevel', () => {
+  initState({
+    resolveCommitmentForObject: (id) => (id === 'obj-1' ? 'commitment-1' : null),
+    initialTimeSliceId: 't1',
+    initialZoomLevel: 3,
+  });
+  selectObject('obj-0');
+  selectObject('obj-1'); // pushes 'obj-0' onto focusTrail
+
+  const before = getState();
+  assert.equal(before.selectedObjectId, 'obj-1');
+  assert.deepEqual(before.focusTrail, ['obj-0']);
+  assert.equal(before.timeSliceId, 't1');
+  assert.equal(before.zoomLevel, 3);
+
+  for (const lens of WORKSPACE_LENS_VALUES) {
+    setLens(lens);
+    const after = getState();
+    assert.equal(after.workspaceLens, lens);
+    assert.equal(after.selectedObjectId, before.selectedObjectId, `setLens('${lens}') must preserve selectedObjectId`);
+    assert.deepEqual(after.focusTrail, before.focusTrail, `setLens('${lens}') must preserve focusTrail`);
+    assert.equal(after.timeSliceId, before.timeSliceId, `setLens('${lens}') must preserve timeSliceId`);
+    assert.equal(after.zoomLevel, before.zoomLevel, `setLens('${lens}') must preserve zoomLevel`);
+  }
+});
+
+test('selectObject pushes the previously-selected object onto focusTrail, and sets cameraTarget/cameraPhase', () => {
+  initState();
+  assert.deepEqual(getState().focusTrail, []);
+
+  selectObject('A');
+  assert.deepEqual(getState().focusTrail, [], 'first selection has nothing prior to push');
+  assert.equal(getState().cameraTarget, 'A');
+  assert.equal(getState().cameraPhase, 'depart');
+
+  selectObject('B');
+  assert.deepEqual(getState().focusTrail, ['A']);
+  assert.equal(getState().cameraTarget, 'B');
+
+  selectObject(null);
+  assert.deepEqual(getState().focusTrail, ['A', 'B'], 'clearing selection still pushes the object being cleared');
+  assert.equal(getState().cameraTarget, null);
+  assert.equal(getState().cameraPhase, 'idle');
+});
+
+test('popFocus() after 3 pushes (via 4 selections) restores exact prior selectedObjectId and cameraTarget, in LIFO order', () => {
+  initState({
+    resolveCommitmentForObject: (id) => `commitment-for-${id}`,
+  });
+
+  selectObject('A'); // focusTrail: []            (nothing to push yet)
+  selectObject('B'); // focusTrail: ['A']          (push #1)
+  selectObject('C'); // focusTrail: ['A', 'B']     (push #2)
+  selectObject('D'); // focusTrail: ['A', 'B', 'C'] (push #3)
+
+  assert.deepEqual(getState().focusTrail, ['A', 'B', 'C']);
+  assert.equal(getState().selectedObjectId, 'D');
+  assert.equal(getState().cameraTarget, 'D');
+
+  const restored1 = popFocus();
+  assert.equal(restored1, 'C');
+  let state = getState();
+  assert.equal(state.selectedObjectId, 'C', 'popFocus must restore selectedObjectId exactly');
+  assert.equal(state.cameraTarget, 'C', 'popFocus must restore cameraTarget exactly');
+  assert.equal(state.focusedCommitmentId, 'commitment-for-C');
+  assert.deepEqual(state.focusTrail, ['A', 'B']);
+
+  const restored2 = popFocus();
+  assert.equal(restored2, 'B');
+  state = getState();
+  assert.equal(state.selectedObjectId, 'B');
+  assert.equal(state.cameraTarget, 'B');
+  assert.deepEqual(state.focusTrail, ['A']);
+
+  const restored3 = popFocus();
+  assert.equal(restored3, 'A');
+  state = getState();
+  assert.equal(state.selectedObjectId, 'A');
+  assert.equal(state.cameraTarget, 'A');
+  assert.deepEqual(state.focusTrail, []);
+});
+
+test('popFocus() on an empty focusTrail is a no-op: returns null and does not change state', () => {
+  initState();
+  selectObject('only-one');
+  const before = getState();
+
+  const result = popFocus();
+
+  assert.equal(result, null);
+  assert.deepEqual(getState(), before, 'popFocus on an empty trail must not change any state field');
+});
+
+test('pushFocus() is a no-op when there is currently no selection', () => {
+  initState();
+  const before = getState();
+  assert.equal(before.selectedObjectId, null);
+
+  pushFocus();
+
+  assert.deepEqual(getState(), before, 'pushFocus with no current selection must not change state');
+});
+
+test('setTimeSlice never mutates cameraTarget or cameraPhase', () => {
+  initState();
+  selectObject('obj-1'); // cameraTarget: 'obj-1', cameraPhase: 'depart'
+  const before = getState();
+
+  setTimeSlice('t2');
+  const after = getState();
+
+  assert.equal(after.timeSliceId, 't2');
+  assert.equal(after.cameraTarget, before.cameraTarget, 'setTimeSlice must not touch cameraTarget');
+  assert.equal(after.cameraPhase, before.cameraPhase, 'setTimeSlice must not touch cameraPhase');
+});
+
+test('setZoom never mutates timeSliceId (mirrors the existing setTimeSlice/zoomLevel isolation test)', () => {
+  initState({ initialTimeSliceId: 't1' });
+  setZoom(7);
+  assert.equal(getState().timeSliceId, 't1', 'setZoom must not touch timeSliceId');
 });
