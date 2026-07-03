@@ -135,8 +135,15 @@ const FLIGHT_PHASE_DURATIONS_MS = Object.freeze({ depart: 200, travel: 600, arri
 const RING1_RADIUS_PX = 92;
 const RING2_RADIUS_PX = 168;
 
-/** §2.2's per-stratum alpha treatment ("30-50% / dimmed 70% / full alpha"). */
-const STRATUM_ALPHA = Object.freeze({ background: 0.4, midground: 0.7, foreground: 1.0 });
+/**
+ * §2.2's per-stratum alpha treatment. V5 Phase 2.6+ item C (docs/
+ * V5_HANDOVER.md §10.2/§4.3 item 2): background dropped from Phase 2's
+ * 0.4 to "real faint" 0.12 - the live-validated user complaint was that
+ * background objects still competed too much for attention against the
+ * selected/foreground focus. Foreground/midground unchanged (this item is
+ * scoped to background contrast only).
+ */
+const STRATUM_ALPHA = Object.freeze({ background: 0.12, midground: 0.7, foreground: 1.0 });
 /**
  * §2.2's "Desaturated" background treatment, as a 0-100 blend-toward-gray
  * percentage. Implemented via plain RGB math (see desaturateColor() below),
@@ -145,8 +152,13 @@ const STRATUM_ALPHA = Object.freeze({ background: 0.4, midground: 0.7, foregroun
  * rendered test environment (Canvas 2D filters are not cheap, especially
  * toggled per-shape ~60 times/sec for ~60 nodes). A per-node RGB blend is
  * a few arithmetic ops and has no such cost.
+ *
+ * V5 Phase 2.6+ item C: bumped from 55 to 72 alongside the alpha cut above
+ * - a "real faint" background reads as faint in COLOR too, not just alpha,
+ * so it doesn't compete with the foreground/selected node's saturated
+ * risk-color signal.
  */
-const STRATUM_GRAYSCALE_PCT = Object.freeze({ background: 55, midground: 0, foreground: 0 });
+const STRATUM_GRAYSCALE_PCT = Object.freeze({ background: 72, midground: 0, foreground: 0 });
 /**
  * §6.1.4's "background blurs +1px during travel" is approximated as EXTRA
  * dimming rather than an actual Gaussian blur, for the same ctx.filter
@@ -157,9 +169,16 @@ const STRATUM_GRAYSCALE_PCT = Object.freeze({ background: 55, midground: 0, fore
  */
 const BLUR_TO_DIM_FACTOR = 0.12;
 
-/** §2.2 "Atmospheric fading": how much alpha is lost at the viewport edge vs. center. */
+/**
+ * §2.2 "Atmospheric fading": how much alpha is lost at the viewport edge
+ * vs. center. V5 Phase 2.6+ item C: floor lowered from 0.35 to 0.22
+ * alongside the background-stratum cut above, so background objects near
+ * the viewport edge can fade further than before - still bounded (never
+ * fully invisible, "recede" not "vanish," matching the same principle
+ * Phase 3.5's scope-recede treatment already established).
+ */
 const ATMOSPHERE_STRENGTH = 0.35;
-const ATMOSPHERE_MIN_ALPHA = 0.35;
+const ATMOSPHERE_MIN_ALPHA = 0.22;
 
 /** §2.2 "Idle life": foreground drift amplitude/period bounds. */
 const IDLE_DRIFT_AMPLITUDE_PX = 2;
@@ -196,6 +215,16 @@ function resolveCssVar(canvasEl, varName, fallback) {
   } catch {
     return fallback;
   }
+}
+
+/** Same escaping convention as panels/scope.js and lenses/risk-board.js's own local helper - kept per-module rather than shared, consistent with this codebase's existing pattern. */
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
@@ -439,9 +468,15 @@ function prefersReducedMotion() {
  *   selection. Purely additive: omitting this callback preserves prior
  *   rendering behavior, since every highlight-related code path below is
  *   gated behind `typeof getHighlightIds === 'function'`.
+ * @param {HTMLElement} [tooltipEl] - V5 Phase 2.6+ item D, OPTIONAL: a DOM
+ *   element this module positions/fills as the click-for-detail tooltip
+ *   (see updateTooltip()) whenever there is a selection, hidden (via the
+ *   'hidden' class, same convention the rest of this app uses) otherwise.
+ *   Omitted simply skips the tooltip entirely - purely additive, no other
+ *   behavior depends on it.
  * @returns {{ render: () => void, resize: () => void, destroy: () => void, recenter: () => void }}
  */
-export function mountUniverseLens(canvasEl, callbacks) {
+export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   if (!canvasEl || typeof canvasEl.getContext !== 'function') {
     throw new Error('mountUniverseLens: canvasEl must be a <canvas> element');
   }
@@ -830,6 +865,7 @@ export function mountUniverseLens(canvasEl, callbacks) {
 
     ctx.clearRect(0, 0, layoutWidth, layoutHeight);
     if (currentNodes.length === 0) {
+      updateTooltip(null);
       return;
     }
 
@@ -1019,27 +1055,18 @@ export function mountUniverseLens(canvasEl, callbacks) {
       ctx.globalAlpha = 1;
     }
 
-    // --- Label plan (§8), computed once per frame in SCREEN space ---
-    const screenPositionByNodeId = new Map();
-    for (const node of currentNodes) {
-      if (collapsedInto.has(node.id)) continue;
-      const local = localFor(node.id);
-      if (!local) continue;
-      screenPositionByNodeId.set(node.id, {
-        x: layoutWidth / 2 + local.x * camera.scale,
-        y: layoutHeight / 2 + local.y * camera.scale,
-      });
-    }
-    const labelPlanInput = currentNodes
-      .filter((n) => screenPositionByNodeId.has(n.id))
-      .map((n) => ({ ...n, ...screenPositionByNodeId.get(n.id) }));
+    // --- Label plan (V5 Phase 2.6+ item A / docs/V5_HANDOVER.md §4.1):
+    // text ONLY on the selected node, no exceptions - no more priority
+    // score, no more viewport/collision math (see engine/labels.js's
+    // header for the full rework rationale). ---
     const labelTierById = new Map(
-      computeLabelPlan(
-        labelPlanInput,
-        { selectedObjectId: selectedId, focusTrail, hoveredObjectId: hoveredFromState ?? hoveredId, zoomLevel },
-        { width: layoutWidth, height: layoutHeight }
-      ).map((entry) => [entry.id, entry.tier])
+      computeLabelPlan(currentNodes, { selectedObjectId: selectedId }).map((entry) => [entry.id, entry.tier])
     );
+
+    // V5 Phase 2.6+ item D (docs/V5_HANDOVER.md §10.2): captured during the
+    // node loop below when the selected node is drawn, then used after the
+    // loop to position the click-for-detail tooltip (see updateTooltip()).
+    let selectedScreenInfo = null;
 
     // --- Nodes ---
     for (const node of currentNodes) {
@@ -1110,54 +1137,116 @@ export function mountUniverseLens(canvasEl, callbacks) {
       }
       ctx.shadowBlur = 0;
 
-      // §8: label tier drives what (if anything) gets drawn under the node.
-      // V5 Phase 3.5: a label recedes alongside its node's dot when scope
-      // narrows, same SCOPE_RECEDE_ALPHA_FACTOR, so a receded node doesn't
-      // read as "full brightness text on a dim dot."
+      // V5 Phase 2.6+ item A (docs/V5_HANDOVER.md §4.1, "no exceptions"):
+      // text ONLY on the selected node. A label recedes alongside its
+      // node's dot when scope narrows, same SCOPE_RECEDE_ALPHA_FACTOR, so
+      // a receded selection doesn't read as "full brightness text on a dim
+      // dot" (selecting an out-of-scope node is still possible via
+      // Passport click-through even while scope is narrowed elsewhere).
       const labelScopeFactor = isOutOfScope ? SCOPE_RECEDE_ALPHA_FACTOR : 1;
       const tier = labelTierById.get(node.id) ?? 'dot';
       if (tier === 'full') {
         ctx.globalAlpha = clamp(opacity, 0.15, 1) * labelScopeFactor;
         ctx.fillStyle = resolveCssVar(canvasEl, '--label-color', 'rgba(230,240,250,0.92)');
-        ctx.font = isSelected || isHovered ? '600 12px system-ui, sans-serif' : '500 11px system-ui, sans-serif';
+        ctx.font = '600 12px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillText(truncateLabel(String(node.label ?? node.id)), local.x, local.y + radius + 4);
-      } else if (tier === 'short') {
-        ctx.globalAlpha = clamp(opacity, 0.12, 0.9) * labelScopeFactor;
-        ctx.fillStyle = resolveCssVar(canvasEl, '--label-color', 'rgba(230,240,250,0.92)');
-        ctx.font = '500 10px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(shortCodeForNode(node), local.x, local.y + radius + 3);
       }
-      // tier === 'dot': node circle only, already drawn above, no label.
+      // tier === 'dot': node circle only, already drawn above, no label -
+      // this is now every node except the selected one, with no exception
+      // for critical-risk (color/pulse already carries that signal - see
+      // §4.2 discussion in docs/V5_HANDOVER.md, out of THIS phase's scope).
 
-      // §2.4 collapse badge: "+N" near any node acting as a collapse
-      // parent this frame.
+      // §2.4 collapse indicator: a small marker circle (no numeral text -
+      // item A's "no exceptions" applies to this too) near any node acting
+      // as a collapse parent this frame, so a dense cluster still reads as
+      // "there is more here" without adding text outside the selection.
       const collapsedCount = collapseCounts.get(node.id);
       if (collapsedCount) {
         ctx.globalAlpha = clamp(opacity, 0.3, 1);
-        ctx.fillStyle = resolveCssVar(canvasEl, '--text-secondary', '#9aa9b8');
-        ctx.font = '600 9px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
         ctx.beginPath();
-        ctx.arc(local.x + radius * 0.8, local.y - radius * 0.8, 7, 0, Math.PI * 2);
-        ctx.fillStyle = resolveCssVar(canvasEl, '--card-bg', 'rgba(255,255,255,0.08)');
-        ctx.fill();
+        ctx.arc(local.x + radius * 0.8, local.y - radius * 0.8, 4, 0, Math.PI * 2);
         ctx.fillStyle = resolveCssVar(canvasEl, '--text-secondary', '#9aa9b8');
-        ctx.fillText(`+${collapsedCount}`, local.x + radius * 0.8, local.y - radius * 0.8 + 0.5);
+        ctx.fill();
+      }
+
+      if (isSelected) {
+        // Screen-space position (post canvas-center-translate + scale), for
+        // the click-for-detail tooltip below - local.x/y are relative to
+        // this node's stratum-adjusted center, exactly what the shared
+        // ctx transform (translate+scale, no separate camera translate -
+        // see this function's top comment) maps to screen pixels via this
+        // formula.
+        selectedScreenInfo = {
+          node,
+          screenX: layoutWidth / 2 + local.x * camera.scale,
+          screenY: layoutHeight / 2 + local.y * camera.scale,
+          radius: radius * camera.scale,
+        };
       }
 
       ctx.globalAlpha = 1;
     }
 
     ctx.restore();
+
+    updateTooltip(selectedScreenInfo);
   }
 
   function truncateLabel(label, max = 26) {
     return label.length > max ? `${label.slice(0, max - 1)}…` : label;
+  }
+
+  /**
+   * V5 Phase 2.6+ item D (docs/V5_HANDOVER.md §10.2): "clicking a selected
+   * node should surface additional detail via tooltip and/or Jarvis and/or
+   * Passport ... something richer/more immediate" than the existing
+   * select→Passport-opens behavior alone. This renders a compact DOM
+   * tooltip (not drawn on the canvas - real HTML so it can use normal
+   * typography/line-wrapping) anchored to the selected node's current
+   * screen position, updated every frame so it tracks the node through the
+   * flight/orbit/idle-drift animation exactly like the Canvas rendering
+   * does. Purely additive to the existing select→Passport flow (Passport
+   * still opens exactly as before) - this is the "more immediate, don't
+   * have to look at the side panel" surface, not a replacement.
+   *
+   * @param {{ node: Object, screenX: number, screenY: number, radius: number }|null} info
+   */
+  function updateTooltip(info) {
+    if (!tooltipEl) return;
+    // app.js keeps this lens mounted (and its rAF loop running) even while
+    // Risk Board is the active workspace lens - only toggling #universeCanvas's
+    // own 'hidden' class (see applyLensVisibility()). Without this check the
+    // tooltip - a DOM element outside the canvas - would keep tracking the
+    // last selection and stay visible, floating on top of Risk Board.
+    if (!info || canvasEl.classList.contains('hidden')) {
+      tooltipEl.classList.add('hidden');
+      return;
+    }
+    const { node, screenX, screenY, radius } = info;
+    const bucket = riskBucket(node);
+    const relationshipCount = currentEdges.filter((e) => e.from_id === node.id || e.to_id === node.id).length;
+    const hasRevenue = Number.isFinite(node.revenue_at_risk);
+
+    tooltipEl.classList.remove('hidden');
+    // Anchor below-right of the node by default; flip above if too close to
+    // the bottom edge so the tooltip never renders off-canvas.
+    const flipAbove = screenY > layoutHeight - 140;
+    tooltipEl.classList.toggle('node-tooltip--above', flipAbove);
+    tooltipEl.style.left = `${clamp(screenX + radius + 10, 8, layoutWidth - 8)}px`;
+    tooltipEl.style.top = `${flipAbove ? screenY - radius - 10 : screenY + radius + 10}px`;
+
+    tooltipEl.innerHTML = `
+      <div class="node-tooltip-title">${escapeHtml(node.label ?? node.id)}</div>
+      <div class="node-tooltip-meta">
+        <span class="node-tooltip-risk node-tooltip-risk--${bucket}">${escapeHtml(bucket)}</span>
+        <span class="node-tooltip-type">${escapeHtml(node.domain ?? node.type ?? '—')}</span>
+      </div>
+      ${hasRevenue ? `<div class="node-tooltip-line">$${Math.round(node.revenue_at_risk).toLocaleString()} at risk</div>` : ''}
+      <div class="node-tooltip-line">${relationshipCount} relationship${relationshipCount === 1 ? '' : 's'}</div>
+      <div class="node-tooltip-hint">Full detail in Passport →</div>
+    `;
   }
 
   function loop() {
@@ -1184,7 +1273,18 @@ export function mountUniverseLens(canvasEl, callbacks) {
     if (drag.active) {
       const dx = ev.clientX - drag.lastX;
       const dy = ev.clientY - drag.lastY;
-      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
+      // V5 Phase 2.6+ item B diagnosis: widened from 2px to 5px (a
+      // conventional click-tolerance/touch-slop value). 2px was tight
+      // enough that ordinary real-mouse/trackpad jitter during an intended
+      // click could occasionally register as a pan, silently swallowing
+      // the click (onSelect never fires - see onPointerUp's `if (wasDrag)
+      // return`) with no visible error. Found as a plausible secondary
+      // contributor while diagnosing the reported "camera doesn't center"
+      // complaint - see docs/V5_HANDOVER.md item B diagnosis for the full
+      // writeup; this alone is not confirmed as the root cause (rigorous
+      // testing found the centering MATH itself correct), but it is a
+      // trivial, low-risk improvement regardless.
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) drag.moved = true;
       flight.phase = 'idle'; // manual pan cancels any in-progress flight
       camera.x -= dx / camera.scale;
       camera.y -= dy / camera.scale;
@@ -1287,6 +1387,7 @@ export function mountUniverseLens(canvasEl, callbacks) {
     canvasEl.removeEventListener('pointerleave', onPointerLeave);
     canvasEl.removeEventListener('wheel', onWheel);
     canvasEl.removeEventListener('dblclick', onDoubleClick);
+    if (tooltipEl) tooltipEl.classList.add('hidden');
   }
 
   return { render, resize, destroy, recenter };

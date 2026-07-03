@@ -586,6 +586,82 @@ test('buildScopeFilter: an unknown scope id matches nothing (never throws, degra
   assert.deepEqual(filter.scopedCommitmentCellIds, []);
 });
 
+// ---------------------------------------------------------------------------
+// V5 Phase 2.6 item G: Scope Explorer multi-select -> Collection scope. A
+// Collection is a UNION of the same site/customer/program/commitment scope
+// types the tree already produces - these tests verify that union is
+// exactly right (not a superset/subset), and that a Collection is a valid
+// scope descriptor usable by the SAME buildScopeFilter()/
+// buildRiskBoardViewModel() pipeline every other scope type already goes
+// through (docs' explicit invariant: "Scope Explorer multi-select produces
+// a valid Collection scope usable by the existing scope-filtering
+// pipeline").
+// ---------------------------------------------------------------------------
+
+test('buildScopeFilter: a collection scope unions its members - two customers -> both customers\' cells, nothing else', () => {
+  const filter = buildScopeFilter(snapshot, {
+    type: 'collection',
+    id: 'collection:test-1',
+    label: 'Test Collection',
+    memberIds: [
+      { type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' },
+      { type: 'customer', id: 'customer:AquaGrid Utilities', label: 'AquaGrid Utilities' },
+    ],
+  });
+  assert.equal(filter.isUnscoped, false);
+  assert.deepEqual([...filter.scopedCommitmentCellIds].sort(), ['RB-CPP-HORIZON', 'RB-PPS-AQUAGRID']);
+  assert.ok(filter.scopedNodeIds.includes(HORIZON_COMMITMENT_ID));
+  assert.ok(filter.scopedNodeIds.includes(AQUAGRID_COMMITMENT_ID));
+});
+
+test('buildScopeFilter: a collection scope is equivalent to a single-member scope of the same type when it has exactly one member', () => {
+  const single = buildScopeFilter(snapshot, {
+    type: 'customer',
+    id: 'customer:Horizon LNG Partners',
+    label: 'Horizon LNG Partners',
+  });
+  const collection = buildScopeFilter(snapshot, {
+    type: 'collection',
+    id: 'collection:test-2',
+    label: '1 item',
+    memberIds: [{ type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' }],
+  });
+  assert.deepEqual(collection.scopedCommitmentCellIds, single.scopedCommitmentCellIds);
+  assert.deepEqual([...collection.scopedNodeIds].sort(), [...single.scopedNodeIds].sort());
+});
+
+test('buildScopeFilter: a collection scope can mix member types (site + commitment) and unions them correctly', () => {
+  const filter = buildScopeFilter(snapshot, {
+    type: 'collection',
+    id: 'collection:test-3',
+    label: 'Mixed',
+    memberIds: [
+      { type: 'site', id: 'plant:PLT-300', label: 'Grand Junction' },
+      { type: 'commitment', id: HORIZON_COMMITMENT_ID, label: 'CPP-1000' },
+    ],
+  });
+  const siteOnly = buildScopeFilter(snapshot, { type: 'site', id: 'plant:PLT-300', label: 'Grand Junction' });
+  const expectedCells = new Set([...siteOnly.scopedCommitmentCellIds, 'RB-CPP-HORIZON']);
+  assert.deepEqual(new Set(filter.scopedCommitmentCellIds), expectedCells);
+});
+
+test('buildScopeFilter: an empty-member collection scope degrades to unscoped (never throws)', () => {
+  const filter = buildScopeFilter(snapshot, { type: 'collection', id: 'collection:empty', label: 'Empty', memberIds: [] });
+  assert.equal(filter.isUnscoped, true);
+});
+
+test('buildScopeFilter: a collection scope with no explicit label falls back to an "N items" label', () => {
+  const filter = buildScopeFilter(snapshot, {
+    type: 'collection',
+    id: 'collection:test-4',
+    memberIds: [
+      { type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' },
+      { type: 'customer', id: 'customer:AquaGrid Utilities', label: 'AquaGrid Utilities' },
+    ],
+  });
+  assert.equal(filter.label, '2 items');
+});
+
 test('buildRiskBoardViewModel: whole-org scope filter is equivalent to omitting scope entirely (regression, all 5 cells present)', () => {
   const unscopedFilter = buildScopeFilter(snapshot, null);
   const withFilter = buildRiskBoardViewModel(snapshot, 2, unscopedFilter);

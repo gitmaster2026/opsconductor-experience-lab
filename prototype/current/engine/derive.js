@@ -819,6 +819,33 @@ export function buildScopeHierarchy(snapshot) {
 const SCOPE_ALWAYS_VISIBLE_NODE_TYPES = new Set(['organization', 'plant']);
 
 /**
+ * Match commitmentScopeDescriptors() rows against ONE non-collection scope
+ * descriptor (site/customer/program/commitment). Factored out of
+ * buildScopeFilter() so a `collection` scope (V5 Phase 2.6 item G) can call
+ * this once per member and union the results, instead of buildScopeFilter
+ * needing a second, parallel matching scheme for multi-select.
+ *
+ * @param {Array<Object>} descriptors - commitmentScopeDescriptors() output.
+ * @param {{ type: string, id: string }} singleScope
+ * @returns {Array<Object>} the matching descriptor rows (possibly empty).
+ */
+function matchDescriptorsForSingleScope(descriptors, singleScope) {
+  if (singleScope.type === 'site') {
+    return descriptors.filter((d) => `plant:${d.site}` === singleScope.id);
+  }
+  if (singleScope.type === 'customer') {
+    return descriptors.filter((d) => `customer:${d.customer}` === singleScope.id);
+  }
+  if (singleScope.type === 'program') {
+    return descriptors.filter((d) => d.program === singleScope.id);
+  }
+  if (singleScope.type === 'commitment') {
+    return descriptors.filter((d) => d.commitmentId === singleScope.id || d.cellId === singleScope.id);
+  }
+  return [];
+}
+
+/**
  * Resolve an Operational Scope descriptor (whatever plain
  * `{ type, id, label }` shape engine/state.js's scopeContext currently
  * holds, or null) into the concrete Universe node ids / risk-board cell ids
@@ -843,7 +870,13 @@ const SCOPE_ALWAYS_VISIBLE_NODE_TYPES = new Set(['organization', 'plant']);
  * fields instead (the same fields commitmentScopeDescriptors() reads).
  *
  * @param {any} snapshot
- * @param {{ type: string, id: string|null, label?: string }|null} scope
+ * @param {{ type: string, id: string|null, label?: string, memberIds?: Array<{type: string, id: string, label?: string}> }|null} scope
+ *   `scope.type === 'collection'` (V5 Phase 2.6 item G) is a Scope Explorer
+ *   multi-select bundle - NOT a new backend entity, just a UI-side union of
+ *   the same site/customer/program/commitment descriptors every other
+ *   branch already resolves (see matchDescriptorsForSingleScope() below,
+ *   reused once per member instead of introducing a second matching
+ *   scheme).
  * @returns {{ isUnscoped: boolean, label: string, scopedNodeIds: string[], scopedCommitmentCellIds: string[] }}
  */
 export function buildScopeFilter(snapshot, scope) {
@@ -852,8 +885,13 @@ export function buildScopeFilter(snapshot, scope) {
   const allNodeIds = graph.nodes.map((n) => n.id);
   const allCellIds = recordsOf(snapshot.riskBoard).map((c) => c.id);
 
+  const isCollectionWithMembers =
+    scope && scope.type === 'collection' && Array.isArray(scope.memberIds) && scope.memberIds.length > 0;
   const isRealScope = Boolean(
-    scope && typeof scope === 'object' && scope.type !== 'organization' && scope.id != null
+    scope &&
+      typeof scope === 'object' &&
+      scope.type !== 'organization' &&
+      (scope.type === 'collection' ? isCollectionWithMembers : scope.id != null)
   );
   if (!isRealScope) {
     return {
@@ -864,34 +902,31 @@ export function buildScopeFilter(snapshot, scope) {
     };
   }
 
-  // scope.id is expected to be whichever id buildScopeHierarchy() assigned
-  // that tree node (the Scope Explorer passes a tree node's own id/type/
-  // label straight through to onSetScope() - see panels/scope.js) - `site`
-  // and `customer` ids carry the same `plant:`/`customer:` prefix
-  // buildUniverseGraph()'s own node ids use (by design: same id space,
-  // easy to cross-reference), while `program`/`commitment` ids are the raw
-  // program string / commitment id, unprefixed, matching
-  // buildScopeHierarchy()'s own id assignment for those two levels exactly.
+  // scope.id (for every non-collection type) is expected to be whichever id
+  // buildScopeHierarchy() assigned that tree node (the Scope Explorer
+  // passes a tree node's own id/type/label straight through to
+  // onSetScope() - see panels/scope.js) - `site` and `customer` ids carry
+  // the same `plant:`/`customer:` prefix buildUniverseGraph()'s own node
+  // ids use (by design: same id space, easy to cross-reference), while
+  // `program`/`commitment` ids are the raw program string / commitment id,
+  // unprefixed, matching buildScopeHierarchy()'s own id assignment for
+  // those two levels exactly.
   const descriptors = commitmentScopeDescriptors(snapshot);
+
   let matched;
-  if (scope.type === 'site') {
-    matched = descriptors.filter((d) => `plant:${d.site}` === scope.id);
-  } else if (scope.type === 'customer') {
-    matched = descriptors.filter((d) => `customer:${d.customer}` === scope.id);
-  } else if (scope.type === 'program') {
-    matched = descriptors.filter((d) => d.program === scope.id);
-  } else if (scope.type === 'commitment') {
-    matched = descriptors.filter((d) => d.commitmentId === scope.id || d.cellId === scope.id);
+  let explicitPrograms;
+  if (scope.type === 'collection') {
+    matched = scope.memberIds.flatMap((member) => matchDescriptorsForSingleScope(descriptors, member));
+    explicitPrograms = scope.memberIds.filter((m) => m.type === 'program').map((m) => m.id);
   } else {
-    matched = [];
+    matched = matchDescriptorsForSingleScope(descriptors, scope);
+    explicitPrograms = scope.type === 'program' ? [scope.id] : [];
   }
 
   const scopedCommitmentIds = new Set(matched.map((d) => d.commitmentId));
-  const scopedCellIds = matched.map((d) => d.cellId).filter(Boolean);
+  const scopedCellIds = [...new Set(matched.map((d) => d.cellId).filter(Boolean))];
   const scopedCustomerNames = new Set(matched.map((d) => d.customer).filter(Boolean));
-  const scopedPrograms = new Set(
-    scope.type === 'program' ? [scope.id] : matched.map((d) => d.program).filter(Boolean)
-  );
+  const scopedPrograms = new Set([...explicitPrograms, ...matched.map((d) => d.program).filter(Boolean)]);
 
   const scopedNodeIds = graph.nodes
     .filter((node) => {
@@ -907,7 +942,7 @@ export function buildScopeFilter(snapshot, scope) {
 
   return {
     isUnscoped: false,
-    label: scope.label ?? String(scope.id),
+    label: scope.label ?? (scope.type === 'collection' ? `${scope.memberIds.length} items` : String(scope.id)),
     scopedNodeIds,
     scopedCommitmentCellIds: scopedCellIds,
   };

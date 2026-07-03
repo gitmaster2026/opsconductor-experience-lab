@@ -417,6 +417,51 @@ export function mountRiskBoardLens(containerEl, callbacks) {
         ${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'}
       </div>
       <div class="risk-card-rootcause">${escapeHtml(rootCause)}</div>
+      ${flags.isSelected ? buildExpandedDetail(cell) : ''}
+    `;
+  }
+
+  /**
+   * The selected card's inline "sub-detail" drawer (V5 Phase 2.6 item F:
+   * "clicking cards in Risk Board should support drilling into sub-detail
+   * without leaving the workspace, same principle as Universe's existing
+   * solar-system flight, generalized"). Universe's flight reveals more
+   * detail about the selected node WITHOUT navigating to a different
+   * screen; this is the Risk Board equivalent - selecting a card expands
+   * it, in place, to show fields the collapsed card doesn't have room for
+   * (full evidence summary, recommendation status, the qty/coverage
+   * breakdown behind coverage_pct). All fields already exist on the cell
+   * view-model (buildRiskBoardViewModel(), engine/derive.js) - this adds
+   * no new data, only a fuller inline rendering of it.
+   *
+   * @param {Object} cell
+   * @returns {string}
+   */
+  function buildExpandedDetail(cell) {
+    // risk-board.json's coverage_pct is already a whole-number percentage
+    // (e.g. 66.67, not 0.6667) - see field-map.md/derive.js, which passes
+    // it through unchanged.
+    const coveragePct = Number.isFinite(cell.coverage_pct) ? `${Math.round(cell.coverage_pct)}%` : '—';
+    const recStatusLabel = cell.recommendationStatus ? escapeHtml(cell.recommendationStatus) : 'No recommendation yet';
+    return `
+      <div class="risk-card-expanded">
+        <div class="risk-card-expanded-row">
+          <span class="risk-card-expanded-label">Coverage</span>
+          <span>${coveragePct} (${cell.allocated_qty ?? '—'} of ${cell.required_qty ?? '—'} allocated, ${cell.short_qty ?? '—'} short)</span>
+        </div>
+        <div class="risk-card-expanded-row">
+          <span class="risk-card-expanded-label">Recommendation</span>
+          <span>${recStatusLabel}</span>
+        </div>
+        ${
+          cell.evidenceSummary
+            ? `<div class="risk-card-expanded-row risk-card-expanded-evidence">
+                <span class="risk-card-expanded-label">Evidence</span>
+                <span>${escapeHtml(cell.evidenceSummary)}</span>
+              </div>`
+            : ''
+        }
+      </div>
     `;
   }
 
