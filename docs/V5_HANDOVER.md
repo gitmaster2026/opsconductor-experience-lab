@@ -51,32 +51,44 @@ concept" and "did this invent a new entity type."
 ## 0. How to use this document
 
 1. Read §1 (status) first — tells you exactly where the build is.
-2. Read §4 (open decisions) before writing any code — unresolved items will
-   cause rework if guessed wrong.
-3. §5 is the actual task list for the next phase.
+2. **§10 is the current live backlog** — supersedes §4 for anything it
+   overlaps with. §4 is kept for history/rationale, not as the task list.
+3. §9 is the Scope/Workbench/Saved-Views architecture — read before
+   touching Phase 4/4.5/4.6.
 4. §6 is scope explicitly excluded — do not pull it in without a new decision.
+5. If a section conflicts with a later one, the higher section number
+   wins unless explicitly marked historical — this doc is append-heavy,
+   not rewritten top-down each time.
 
 ---
 
 ## 1. Status
 
-| Phase | Status | Commit |
+| Phase | Status | Commit/PR |
 |---|---|---|
 | 0 — Browser truth pass | ✅ Done | `7293a59` |
 | 1 — State/camera engine, field-map governance | ✅ Done | `8f0f768` |
-| 2 — Universe galaxy (orbit layout, labels, strata, flight) | ✅ Done, functionally validated | `f721680` |
-| 2.6 — Visual language refinement | 🟢 **Decisions resolved, ready to implement** — see §4, prompt in §7a | — |
-| 3 — Risk Board v2 | ✅ Done — severity-banded editorial cards, sparklines, FLIP band migration | `7954684` |
-| 3.5 — Operational Scope + global sync | ✅ Done — Scope Bar, Scope Explorer, scope-aware Universe/Risk Board/Dashboard/Jarvis | (this branch) |
-| 4 — Text View + Spider | ⬜ Not started | — |
+| 2 — Universe galaxy (orbit layout, labels, strata, flight) | ✅ Done, live-validated (flight feel confirmed) | `f721680` |
+| 3 — Risk Board v2 | ✅ Done, merged | PR #1, `7954684` |
+| 3.5 — Operational Scope + global sync (4 surfaces) | ✅ Done, merged, live-validated | merged |
+| 2.6+ (consolidated) — label policy, centering fix/diagnose, contrast, click-detail, Nav History rail, Scope Explorer multi-select/collections | 🟡 **Prompt sent, outcome not yet logged in this doc — see §10 for scope** | pending |
+| 4 — Spider, Text View, Collection Passport | ⬜ Not started | — |
+| 4.5 — Workbench | ⬜ Not started | — |
+| 4.6 — Saved Views/Reports/Action Bar (UI-only) | ⬜ Not started | — |
 | 5 — Motion grammar + doc reconciliation | ⬜ Not started | — |
-| Mobile/responsive/touch | 🔶 **Backlogged, out of scope** — see §6 | — |
+| Mobile/responsive/touch | 🔶 Backlogged, out of scope — see §6 | — |
 
-**Authoritative spec:** `docs/V5_DESIGN_SPEC.md` (committed in Phase 1, commit `8f0f768`).
-Note: this spec was written before user validation of Phase 2 output. §4 below
-contains changes to it that are approved-in-principle but not yet written back
-into the spec file itself. **Whoever implements Phase 2.6 should update
-`V5_DESIGN_SPEC.md` §2 and §8 to match, not just patch code against stale docs.**
+**Authoritative specs:** `docs/V5_DESIGN_SPEC.md` (Phase 1, `8f0f768`) for
+Universe/Risk Board/Spider/Text/motion foundations. This document (§9
+onward) for Scope/Workbench/Saved-Views/Nav-History additions — those were
+never folded back into `V5_DESIGN_SPEC.md`; treat both files as jointly
+authoritative, this one taking precedence where they overlap (more recent).
+
+**⚠️ Known gap:** the Phase 2.6+ consolidated prompt (§10) was sent to
+Claude Code but this document has not yet been updated with its outcome
+(files changed, PR link, item B's diagnosis). Whoever picks this up next
+should get that status from the user/chat history before assuming §10's
+items are still pending — check for an open PR first.
 
 ---
 
@@ -84,15 +96,20 @@ into the spec file itself. **Whoever implements Phase 2.6 should update
 
 | Item | Result |
 |---|---|
-| Flight/travel motion (camera moving to a peripheral node) | ✅ "Flight feel is good" — user confirmed live |
-| Overview first impression | Not explicitly re-confirmed after Phase 2.6 concerns raised |
-| Reduced-motion path | ✅ Confirmed via pixel-hash diff in Phase 2 report (byte-identical frames) |
-| Label overlap frequency (2 critical-risk labels observed overlapping) | Not independently re-checked by user; Phase 2 report called it rare/edge-case |
-| Risk Board v2 band layout/migration/click-through (Playwright pass, this phase) | ✅ Band assignment correct at t0/t1/t2; FLIP migration observed mid-flight and settles correctly; all 5 commitments present at every slice; card click opens Passport; Universe lens files untouched |
+| Flight/travel motion (Phase 2) | ✅ "Flight feel is good" — user confirmed live |
+| Reduced-motion path (Phase 2) | ✅ Pixel-hash diff, byte-identical frames |
+| Band migration + sparkline (Phase 3) | ✅ User confirmed 3 required checks before authorizing 3.5 |
+| Scope narrowing across 4 surfaces (Phase 3.5) | ✅ Confirmed via concrete example (Horizon LNG Partners: Universe recedes, Risk Board→1 card, Dashboard→$250K) |
+| Label overlap frequency (2 critical labels, Phase 2) | ⚠️ Not independently re-checked; superseded by §10 item A (label policy changing entirely) |
+| Camera centering | ❌ **User reports NOT working** despite Phase 1/2 tests — see §10 item B, diagnosis pending |
+| Phase 2.6+ consolidated items (§10 A-G) | 🟡 Prompt sent, live validation not yet performed — required before Phase 4 per standing rule below |
 
 **Standing rule for this project:** test-suite-green is necessary but not
 sufficient for any phase touching rendering/motion/visual language. A human
-must look at it before the next phase builds on top.
+must look at it before the next phase builds on top. This has held for
+Phases 2 and 3; **do not skip it for the 2.6+ consolidated phase** — it's
+the most visually load-bearing phase yet (label policy + centering +
+contrast + new Nav History control simultaneously).
 
 ---
 
@@ -112,44 +129,26 @@ must look at it before the next phase builds on top.
 - `lenses/universe.js` — three-strata rendering, atmospheric falloff (RGB-math,
   NOT `ctx.filter` — that tanked FPS to 2.5, fixed, do not reintroduce),
   three-phase flight, seeded idle drift/pulse, reduced-motion gating.
-- `lenses/risk-board-layout.js` (V5 Phase 3 rewrite) — `assignSeverityBand()`,
-  `buildBandLayout()` (band assignment + within-band revenue-descending sort,
-  all 5 commitments always placed, never filtered), `computeFlipDelta()` (pure
-  FLIP "Invert" arithmetic given before/after measured positions).
-- `lenses/risk-board.js` (V5 Phase 3 rewrite) — editorial severity-band card
-  rendering (id/customer/revenue/item/required date/sparkline/recommendation
-  + evidence counts/root-cause line), real DOM-measurement FLIP animation
-  (500ms, `cubic-bezier(0.65,0,0.35,1)`) on band migration, same
-  `mountRiskBoardLens()` external contract as before (no app.js changes
-  needed).
-- `engine/derive.js` — `riskTrajectory(snapshot, commitmentId)` (per-cell
-  risk_state sequence across every time-slices.json entry, dormant before
-  reveal per resolveVisibilityForSlice), wired into
-  `buildRiskBoardViewModel()`'s per-cell output as `cell.riskTrajectory` so
-  the lens never needs snapshot access of its own.
 - `scripts/verify-field-map.mjs` — governance gate live: fails build if
   `spiderAxisScores`/`riskTrajectory` appear in `derive.js` undocumented.
-  `riskTrajectory` is now used and documented (KNOWN_OUTPUT_FIELDS +
-  field-map.md's pre-authorized row) - gate passes.
 - `docs/field-map.md` — pre-authorized rows for Risk Board Sparkline and
-  Spider Axis Score (both `derived_supported`) — Risk Board Sparkline now
-  consumed by Phase 3; Spider Axis Score still ready for Phase 4.
-- Test count: 215 passing as of this branch (203 at `f721680` + 12 new
-  Risk Board v2 + riskTrajectory tests).
+  Spider Axis Score (both `derived_supported`) — ready for Phase 3/4 to consume.
+- Test count: 203 passing as of `f721680`.
 
 **Known bugs fixed in-flight (don't reintroduce):**
 - `scripts/serve.mjs` — bare `/` used to 404 both assets; now a real redirect.
 - Same file — a Phase 0 rename (`urlPath`→`requestUrl`) left one stale
   reference that crashed the server on any 404 (e.g. favicon). Fixed in Phase 2.
-- The app has no `favicon.ico` anywhere in the repo, so the browser's automatic
-  favicon request always 404s in the console during any Playwright pass -
-  this is cosmetic, pre-existing, and unrelated to any lens's own code; it
-  showed up again during Phase 3's visual verification and is not a
-  regression.
 
 ---
 
-## 4. Design decisions for §2.6 (RESOLVED — ready to implement)
+## 4. Design decisions for §2.6 (RESOLVED — historical record; execution tracked in §10)
+
+**⚠️ Superseded as a task list by §10.** These decisions were correct and
+remain the source of truth for *what was decided*, but were never executed
+until the §10 consolidated prompt. Read this section for rationale; read
+§10 for current status and expanded scope (items D-G are new, not in this
+section).
 
 Raised by user after live Phase 2 validation. Items 3+4 were blocking;
 **both resolved below.** Items 1/2/5/6 remain open-judgment (non-blocking).
@@ -230,21 +229,19 @@ validate together first. Only then assess §4.3 items against the result.
 
 ---
 
-## 5. Recommended next phase (Phase 3 — Risk Board v2) — ✅ done this branch
+## 5. Recommended next phase (Phase 3 — Risk Board v2)
 
 Per `docs/V5_DESIGN_SPEC.md` §3 and §10. **Independent of the Universe visual
 language rework in §4** — Risk Board is a structurally different lens
 (editorial cards, not spatial/orbital), so it is not blocked by §4's open
-decisions.
+decisions. Safe to run now or in parallel with a future Phase 2.6.
 
-Delivered: severity-banded commitment cards (Critical→Dormant), sorted by
+Scope: severity-banded commitment cards (Critical→Dormant), sorted by
 revenue_at_risk within band, sparkline per card (consumes the pre-authorized
 `Risk Board Sparkline` field-map row from Phase 1), FLIP animation on
-time-slider band migration. See §7 for the prompt this phase executed
-against, and the branch's own PR description for the structured deliverable
-report (files changed / tests added / visual verification / build status).
+time-slider band migration.
 
-Phase 2.6 (§7a) remains separately ready to run - independent of this phase.
+See §7 for the ready-to-send prompt.
 
 ---
 
@@ -268,9 +265,9 @@ side effect of unrelated work.
 
 ## 7a. Ready-to-send prompt — Phase 2.6 (Universe visual language rework)
 
-**Run this before or in parallel with Phase 4** — Phase 3 (Risk Board) is
-now done; Phase 2.6 is still the higher-priority next step since it resolves
-live user feedback on already-shipped Universe work.
+**Run this before or in parallel with Phase 3** — they're independent
+(Risk Board is a structurally separate lens, per §5), but Phase 2.6 is
+higher priority since it resolves live user feedback on already-shipped work.
 
 ```
 Execute V5 Phase 2.6 for gitmaster2026/opsconductor-experience-lab.
@@ -369,7 +366,7 @@ Deliverable — structured block, not narrative:
 
 ---
 
-## 7. Ready-to-send prompt — Phase 3 (Risk Board v2) — ✅ executed this branch
+## 7. Ready-to-send prompt — Phase 3 (Risk Board v2)
 
 ```
 Execute V5 Phase 3 for gitmaster2026/opsconductor-experience-lab.
@@ -511,7 +508,7 @@ do not treat the earlier typed shape as a requirement.
 
 | Phase | Scope | Depends on |
 |---|---|---|
-| **3** | Risk Board v2 (§7 prompt above) — ✅ done this branch | Phase 2 only |
+| **3** | Risk Board v2 (§7 prompt below) — **proceed now** | Phase 2 only |
 | 3.5 | Operational Scope + global synchronization, UI-first per §9.1 (no typed domain model) | Phase 2 |
 | 4 | Spider, Text View, Collection Passport | 3.5 |
 | 4.5 | Workbench (field selection, relationship-aware dataset building, columns, charts, layout save placeholder) | 3.5, ideally 4 |
@@ -541,26 +538,106 @@ and route to a no-op/placeholder handler.
 
 ---
 
-## 10. Change log for this document
+## 10. Consolidated backlog — post-Phase-3.5 feedback (CURRENT — start here for next phase)
+
+**Status:** Phase 2.6 (label/shape/color rework) was **decided in §4 but never
+executed** — user proceeded straight to Phase 3 per explicit instruction.
+Items below resurface those undone decisions plus new requirements
+surfaced during live Phase 3.5 validation. All items target Universe
+primarily, with cross-cutting requirements for Risk Board/Spider/Text.
+
+### 10.1 Four-control mental model (governs all navigation — log verbatim)
+
+| Control | Governs | Independent of |
+|---|---|---|
+| Time slider | Operational history | Everything else |
+| Zoom slider | Semantic depth (Org→...→Source Record) | Everything else |
+| **Navigation History rail (NEW)** | Investigation history — traversal through `focusTrail` | Time, zoom |
+| Scope Bar | Active operational area | Time, zoom, investigation position |
+
+**Explicit rule:** Zoom stays semantic-depth-only, never repurposed for
+back-navigation (this was considered and explicitly rejected — see
+decision log below). All four controls remain mutually orthogonal,
+consistent with every invariant table since Phase 1.
+
+### 10.2 Items to execute (Phase 2.6+, consolidated)
+
+**A. Label policy (was Phase 2.6 §4.1 — never executed):**
+Text only on selected node. Muted/no text on everything else. No exceptions
+(supersedes the earlier critical-risk-gets-shape-only exception — verify
+this is still the exact rule wanted or if that exception still holds;
+not changed since original decision, just re-confirming since it was
+never implemented).
+
+**B. Camera centering (bug, not a new decision):**
+`computeCameraFrame` was tested in Phase 1/2 for centering-on-selection
+behavior. User reports no centering occurs in practice. **Diagnose before
+assuming re-design is needed** — likely a wiring gap between tested logic
+and actual renderer call, not a logic defect.
+
+**C. Background contrast (was Phase 2.6 §4.3 item 2 — never executed):**
+Background-stratum dots need much lower opacity — "real faint" — so focus
+unambiguously stays on selected/foreground objects.
+
+**D. Click-for-detail surface (NEW):**
+Clicking a selected node should surface additional detail via tooltip
+and/or Jarvis and/or Passport (implementer's judgment on which surface(s),
+per Design Freedom principle) — not just the existing select→Passport-opens
+behavior, something richer/more immediate.
+
+**E. Navigation History rail (NEW, replaces zoom-as-back consideration):**
+- Vertical rail near the zoom slider.
+- Dots = investigation steps (from `focusTrail`); up/down or click-any-dot
+  to traverse; active-position indicator; hover labels showing what each
+  step was.
+- "Return from solar system to previous scope" — restores selected object,
+  scope, camera target, panel state.
+- Built on existing `focusTrail`/`pushFocus()`/`popFocus()` (Phase 1) —
+  do not build new state plumbing, this already exists and is tested.
+- **Hard constraint:** must NOT change `timeSliceId` unless the restored
+  investigation state explicitly stored a time slice as part of a saved
+  snapshot (most won't — default behavior is time-slice-agnostic restore).
+
+**F. Progressive deep-dive within workspace (NEW, cross-cutting):**
+Clicking nodes/cards (Universe, Risk Board, eventually Spider) should
+support drilling into sub-detail without leaving the workspace — same
+"continuous workspace, no page transition" principle already established
+for Universe's solar-system flight, now generalized to other lenses.
+
+**G. Scope Explorer multi-select + collections (NEW, extends Phase 3.5):**
+- Add a search bar to the existing Scope Explorer.
+- "Add to current selection" action.
+- Ctrl+click to multi-select objects.
+- Build a temporary OR saved "Collection" from the multi-selection —
+  reuses the Collection concept already defined in §9.1 (Operational
+  Scope may represent a Collection) and §9.4 (Saved Views placeholder
+  pattern — a Collection here can follow the same "reserve the UI,
+  don't build persistence" principle unless user wants it functional now).
+
+### 10.3 Decision log
+
+- **Rejected:** repurposing zoom slider for back-navigation (would overload
+  a control 3 phases of tests already assume is depth-only — high
+  regression risk for no functional gain).
+- **Adopted:** separate Navigation History rail, built on existing
+  Phase 1 `focusTrail` plumbing — zero new state model required, only
+  a UI affordance exposing already-tested logic.
+
+### 10.4 Explicit instruction for this phase
+
+**Document failures, do not fix them in this phase.** If item B (camera
+centering) or any other item turns out to be a deeper defect than
+expected, log it precisely (what's broken, suspected cause, effort
+estimate) in the phase report and move on — do not scope-creep into an
+unplanned fix-everything pass. Next phase after this one proceeds
+regardless of what's found, per explicit user instruction.
+
+---
+
+## 11. Change log for this document
 
 | Date/Session | Change |
 |---|---|
-| +6 | Phase 3.5 (Operational Scope + global synchronization) executed:
-  `engine/state.js` gained `scopeContext`/`setScope()` (orthogonal to
-  selection/time/zoom/focusTrail, per §9.3); `engine/derive.js` gained
-  `buildScopeHierarchy()` (org -> site -> customer -> program -> commitment
-  tree, reusing existing joins) and `buildScopeFilter()` (resolves a scope
-  descriptor to scoped Universe node ids / risk-board cell ids; "whole org"
-  is a pure no-op filter, satisfying the regression requirement);
-  `buildRiskBoardViewModel`/`buildDashboardViewModel`/`buildJarvisViewModel`
-  now accept an optional scope filter and narrow their output accordingly.
-  New `panels/scope.js` (Scope Bar + Scope Explorer modal, one cohesive
-  module). `lenses/universe.js` gained scope-based recede (dim + shrink,
-  reusing the existing per-node opacity pipeline) via an optional
-  `getScope` callback - no changes to orbit-layout/camera/label internals
-  beyond that. `engine/timeline.js` threads `scope`/`scopeHierarchy` into
-  the bundle so all 4 existing surfaces derive from one computed scope per
-  recompute. 26 new tests (state/derive/timeline), 241 total passing. |
 | Initial | Created post-Phase 2, consolidating Phases 0-2 history, §4 open
   decisions from live user feedback, §6 mobile backlog, §7 Phase 3 prompt. |
 | +1 | §4 label/shape/color decisions resolved; §7a Phase 2.6 prompt added. |
@@ -581,12 +658,22 @@ and route to a no-op/placeholder handler.
   to implementer). Prior typed version flagged as self-contradicting
   the Philosophy section — logged as a caught error, not silently
   swapped. Phase 3 confirmed unblocked, proceeding now. |
-| +5 | Phase 3 (Risk Board v2) executed: `lenses/risk-board-layout.js`
-  rewritten (assignSeverityBand/buildBandLayout/computeFlipDelta, pure),
-  `lenses/risk-board.js` rewritten (editorial severity-band cards,
-  sparklines, real DOM-measurement FLIP band-migration animation),
-  `derive.js` gained `riskTrajectory()` wired into
-  `buildRiskBoardViewModel()`. §1 status table and §5/§7 updated to
-  reflect completion; §3 engineering-surface list extended; a new,
-  pre-existing (not introduced this phase) favicon-404 console note
-  added to the "known bugs" list for future phases' visual passes. |
+| +5 | Phase 3 (Risk Board) merged via PR #1. Phase 3.5 (Operational
+  Scope + sync) merged. §10 added: consolidated backlog — Phase 2.6
+  items A/C were decided but never executed (user proceeded straight
+  to Phase 3); new items B (centering bug), D (click-detail), E (Nav
+  History rail, built on existing focusTrail), F (progressive deep-dive),
+  G (Scope Explorer multi-select/collections). Four-control mental
+  model (Time/Zoom/Nav-History/Scope) formalized as orthogonal, tested
+  invariant surface. Zoom-as-back explicitly rejected in favor of a
+  separate rail control.
+| +6 (AUDIT) | Fixed stale navigation: §0 pointed readers to superseded
+  §4/§5 instead of current §10; §1 status table was frozen at Phase 2.6
+  showing Phase 3/3.5 as "not started" despite both being merged; §2
+  live-validation table missing Phase 3.5 confirmations and the
+  camera-centering failure; §4 lacked a forward-pointer marking it
+  historical vs. §10 current. Fixed numbering gap (§9→§11 with no §10
+  existed; consolidated backlog renumbered §11→§10, changelog §12→§11).
+  **Open gap not fixed by this audit:** the Phase 2.6+ prompt's actual
+  outcome (files/tests/PR/item-B diagnosis) is not yet in this document
+  — flagged explicitly in §1, must be added once Claude Code reports back.
