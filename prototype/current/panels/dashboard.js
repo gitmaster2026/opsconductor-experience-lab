@@ -278,6 +278,7 @@ export function mountDashboardPanel(el, callbacks) {
         <div class="panel-heading">
           <h2>Dashboard</h2>
           <p class="panel-subhead">${escapeHtml(dashboard.sliceLabel ?? 'Current state')}</p>
+          <p class="panel-subhead panel-subhead--scope">Scope: ${escapeHtml(dashboard.scopeLabel ?? 'Whole Organization')}</p>
         </div>
 
         ${headline ? `<div class="kpi-headline">${renderCard(headline)}</div>` : ''}

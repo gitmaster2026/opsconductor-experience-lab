@@ -69,6 +69,7 @@ function renderContextBlock(currentContext) {
     <section class="jarvis-section jarvis-context">
       <h3 class="jarvis-section-title">Context</h3>
       <dl class="jarvis-context-grid">
+        <div><dt>Scope</dt><dd>${escapeHtml(ctx.scopeLabel ?? 'Whole Organization')}</dd></div>
         <div><dt>Lens</dt><dd>${escapeHtml(lensLabel)}</dd></div>
         <div><dt>Time slice</dt><dd>${escapeHtml(ctx.timeSliceLabel ?? ctx.timeSliceId ?? '—')}</dd></div>
         <div><dt>Depth</dt><dd>${escapeHtml(zoomInfo ? zoomInfo.label : '—')}</dd></div>

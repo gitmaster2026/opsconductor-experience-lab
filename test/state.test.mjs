@@ -20,6 +20,7 @@ import {
   pushFocus,
   popFocus,
   setCameraPhase,
+  setScope,
   WORKSPACE_LENS_VALUES,
   CAMERA_PHASE_VALUES,
 } from '../prototype/current/engine/state.js';
@@ -37,6 +38,7 @@ test('initState returns the documented canonical AppState shape with defaults', 
     focusTrail: [],
     cameraTarget: null,
     cameraPhase: 'idle',
+    scopeContext: null,
   });
 });
 
@@ -404,4 +406,74 @@ test('setCameraPhase updates cameraPhase only, touching nothing else', () => {
 test('setCameraPhase rejects an invalid phase', () => {
   initState();
   assert.throws(() => setCameraPhase('flying'));
+});
+
+// ---------------------------------------------------------------------------
+// V5 Phase 3.5: setScope (docs/V5_HANDOVER.md §9.1-§9.3)
+// ---------------------------------------------------------------------------
+
+test('scopeContext defaults to null (whole organization / unscoped)', () => {
+  const state = initState();
+  assert.equal(state.scopeContext, null);
+});
+
+test('setScope stores whatever plain scope descriptor it is given', () => {
+  initState();
+  const scope = { type: 'customer', id: 'Horizon LNG Partners', label: 'Horizon LNG Partners' };
+  setScope(scope);
+  assert.deepEqual(getState().scopeContext, scope);
+});
+
+test('setScope(null) clears scope back to unscoped', () => {
+  initState();
+  setScope({ type: 'commitment', id: 'commitment-1', label: 'commitment-1' });
+  assert.notEqual(getState().scopeContext, null);
+  setScope(null);
+  assert.equal(getState().scopeContext, null);
+});
+
+test('setScope rejects a malformed scope descriptor (not null, not an object with a string type)', () => {
+  initState();
+  assert.throws(() => setScope('not-an-object'));
+  assert.throws(() => setScope(42));
+  assert.throws(() => setScope(['array']));
+  assert.throws(() => setScope({ id: 'x' })); // missing type
+  assert.throws(() => setScope({ type: 123, id: 'x' })); // type must be a string
+});
+
+test('setScope touches scopeContext ONLY - selectedObjectId/timeSliceId/zoomLevel/focusTrail are untouched (docs/V5_HANDOVER.md §9.3 invariant)', () => {
+  initState({
+    resolveCommitmentForObject: (id) => (id === 'obj-1' ? 'commitment-1' : null),
+    initialTimeSliceId: 't1',
+    initialZoomLevel: 4,
+  });
+  selectObject('obj-0');
+  selectObject('obj-1'); // pushes 'obj-0' onto focusTrail
+  const before = getState();
+
+  setScope({ type: 'customer', id: 'Horizon LNG Partners', label: 'Horizon LNG Partners' });
+  const after = getState();
+
+  assert.notEqual(after.scopeContext, before.scopeContext, 'scopeContext itself must have changed');
+  assert.equal(after.selectedObjectId, before.selectedObjectId, 'setScope must not touch selectedObjectId');
+  assert.equal(after.focusedCommitmentId, before.focusedCommitmentId, 'setScope must not touch focusedCommitmentId');
+  assert.equal(after.timeSliceId, before.timeSliceId, 'setScope must not touch timeSliceId');
+  assert.equal(after.zoomLevel, before.zoomLevel, 'setScope must not touch zoomLevel');
+  assert.deepEqual(after.focusTrail, before.focusTrail, 'setScope must not touch focusTrail');
+  assert.equal(after.cameraTarget, before.cameraTarget, 'setScope must not touch cameraTarget');
+  assert.equal(after.cameraPhase, before.cameraPhase, 'setScope must not touch cameraPhase');
+});
+
+test('setScope notifies subscribers exactly once per call, same as other transitions', () => {
+  initState();
+  let callCount = 0;
+  subscribe(() => {
+    callCount += 1;
+  });
+
+  setScope({ type: 'site', id: 'PLT-200', label: 'Pueblo Manufacturing Campus' });
+  assert.equal(callCount, 1);
+
+  setScope(null);
+  assert.equal(callCount, 2);
 });

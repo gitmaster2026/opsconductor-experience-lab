@@ -54,6 +54,7 @@ import { mountRiskBoardLens } from './lenses/risk-board.js';
 import { mountDashboardPanel } from './panels/dashboard.js';
 import { mountPassportPanel } from './panels/passport.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
+import { mountScopePanel } from './panels/scope.js';
 
 // ---------------------------------------------------------------------------
 // DOM references (same element ids as the previous prototype iteration, so
@@ -73,6 +74,8 @@ const els = {
   jarvisPanel: document.getElementById('jarvisPanel'),
   universeCanvas: document.getElementById('universeCanvas'),
   riskBoardEl: document.getElementById('riskBoard'),
+  scopeBar: document.getElementById('scopeBar'),
+  scopeExplorer: document.getElementById('scopeExplorer'),
 };
 
 // ---------------------------------------------------------------------------
@@ -162,6 +165,9 @@ async function main() {
     getHoveredId: () => store.getState().hoveredObjectId,
     onCameraPhaseChange: (phase) => store.setCameraPhase(phase),
     getHighlightIds: () => getHighlightedIds(),
+    // V5 Phase 3.5: the current Operational Scope filter, so out-of-scope
+    // nodes recede (see lenses/universe.js's SCOPE_RECEDE_* treatment).
+    getScope: () => timeline.getDerivedBundle().scope,
     onSelect: (nodeId) => selectAndClearHighlight(nodeId),
     onHover: (nodeId) => store.setHovered(nodeId),
     onWheelZoom: (delta) => {
@@ -213,6 +219,17 @@ async function main() {
     // Acting on Jarvis's Suggested Next Step navigates to that risk-board
     // cell, closing the "Jarvis... open passports" loop from the brief.
     onSelect: (id) => selectAndClearHighlight(id),
+  });
+
+  // V5 Phase 3.5 (docs/V5_HANDOVER.md §9.1-§9.3): the Scope Bar + Scope
+  // Explorer. Choosing a scope routes through store.setScope() - the same
+  // one-state-many-renderers pattern every other control here uses, so
+  // Universe/Risk Board/Dashboard/Jarvis all update on the next
+  // timeline.onUpdate() below without this module doing anything extra.
+  const scopePanel = mountScopePanel(els.scopeBar, els.scopeExplorer, {
+    getBundle: () => timeline.getDerivedBundle(),
+    getScope: () => store.getState().scopeContext,
+    onSetScope: (scope) => store.setScope(scope),
   });
 
   // --- Toolbar wiring --------------------------------------------------------
@@ -294,6 +311,7 @@ async function main() {
     updateToolbarLabels(state);
     renderLeftPanel(state);
     jarvisPanel.render();
+    scopePanel.render();
 
     universeLens.render();
     riskBoardLens.render();

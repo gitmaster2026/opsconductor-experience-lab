@@ -25,6 +25,7 @@
 //   focusTrail: string[]         NEW - selection history for back-navigation
 //   cameraTarget: string | null  NEW - object id the camera is flying toward
 //   cameraPhase: 'idle'|'depart'|'travel'|'arrive'  NEW - motion choreography state
+//   scopeContext: Object|null    NEW (V5 Phase 3.5) - current Operational Scope
 //
 // Per V5_DESIGN_SPEC.md §1.2: focusTrail/cameraTarget/cameraPhase are all
 // derived/transient UI state, never persisted, never source data (docs/
@@ -33,6 +34,19 @@
 // which is why they get their own dedicated mutators (pushFocus/popFocus)
 // layered on top of, not mixed into, the existing selectObject/setTimeSlice/
 // setZoom semantics (which this phase leaves untouched).
+//
+// scopeContext (V5 Phase 3.5, docs/V5_HANDOVER.md §9.1): "the current
+// operational context being explored by the user." §9.1 is explicit that
+// this is a UI-first concept with internal representation "intentionally
+// left to the implementer's discretion" - it deliberately supersedes an
+// earlier draft that proposed a typed `{ scopeType, scopeId }` union
+// (flagged in the handover itself as premature architecture). This module
+// stores whatever plain `{ type, id, label }`-shaped descriptor the caller
+// passes via setScope() (or null, meaning "whole organization / unscoped")
+// with zero opinion on what it means - engine/derive.js's buildScopeFilter()
+// is the only place that interprets a scope descriptor into actual node/
+// cell ids. Same "orthogonal state, isolated mutator" pattern as
+// timeSliceId/zoomLevel: setScope() touches scopeContext ONLY.
 
 const WORKSPACE_LENSES = Object.freeze(['universe', 'risk_board', 'spider', 'text']);
 const LEFT_PANEL_MODES = Object.freeze(['dashboard', 'passport']);
@@ -50,6 +64,7 @@ const CAMERA_PHASES = Object.freeze(['idle', 'depart', 'travel', 'arrive']);
  * @property {string[]} focusTrail
  * @property {string|null} cameraTarget
  * @property {'idle'|'depart'|'travel'|'arrive'} cameraPhase
+ * @property {{ type: string, id: string|null, label?: string }|null} scopeContext
  */
 
 /**
@@ -116,6 +131,7 @@ export function initState(options = {}) {
     focusTrail: [],
     cameraTarget: null,
     cameraPhase: 'idle',
+    scopeContext: null,
   };
 
   const listeners = new Set();
@@ -494,6 +510,35 @@ export function setCameraPhase(phase) {
     );
   }
   setState({ cameraPhase: phase });
+}
+
+/**
+ * "Change operational scope" transition (V5 Phase 3.5, docs/V5_HANDOVER.md
+ * §9.1-§9.3). Stores whatever plain scope descriptor the caller passes (or
+ * null, meaning "whole organization / unscoped") and notifies subscribers,
+ * exactly like every other named transition here - see this module's
+ * header comment ("scopeContext") for why the shape is intentionally not
+ * enforced beyond "null or an object with a string type."
+ *
+ * Effects: update scopeContext ONLY. Per docs/V5_HANDOVER.md §9.3's
+ * explicit invariant ("scope changes never affect selectedObjectId,
+ * timeSliceId, zoomLevel, or focusTrail"), this function's patch touches
+ * nothing else - setState's merge leaves every other field untouched, the
+ * same isolation pattern setTimeSlice/setZoom/setCameraPhase already use
+ * for their own orthogonal fields.
+ *
+ * @param {{ type: string, id: string|null, label?: string }|null} scope -
+ *   null clears scope back to "whole organization" (unscoped).
+ */
+export function setScope(scope) {
+  assertInitialized();
+  if (
+    scope !== null &&
+    (typeof scope !== 'object' || Array.isArray(scope) || typeof scope.type !== 'string')
+  ) {
+    throw new Error('setScope: scope must be null or an object with a string "type" field');
+  }
+  setState({ scopeContext: scope });
 }
 
 // Exported for tests / advanced callers that want to inspect the allowed

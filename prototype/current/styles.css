@@ -1455,3 +1455,262 @@ body {
   flex-wrap: wrap;
   gap: 5px;
 }
+
+/* ---------------------------------------------------------------------
+   Operational Scope (V5 Phase 3.5, docs/V5_HANDOVER.md §9.1-§9.3): the
+   Scope Bar (a persistent strip floating over the top of the workspace,
+   above whichever lens is active - same glass-panel material as the
+   toolbar) and the Scope Explorer (a centered modal over a dim backdrop,
+   browsing the real org -> site -> customer -> program -> commitment
+   hierarchy). Reads from the exact same --panel-bg/--cyan-accent/
+   --card-bg vocabulary every other surface in this app already uses - no
+   new color language invented for scope.
+   --------------------------------------------------------------------- */
+
+.scope-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 0;
+  pointer-events: none;
+}
+
+.scope-bar-inner {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 14px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+}
+
+.scope-bar-kicker {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+}
+
+.scope-bar-current {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.scope-bar-current:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.scope-bar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--gray);
+  flex-shrink: 0;
+}
+
+.scope-bar-dot.is-narrowed {
+  background: var(--cyan-accent);
+  box-shadow: 0 0 8px 1px rgba(90, 209, 255, 0.55);
+}
+
+.scope-bar-label {
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scope-bar-caret {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.scope-bar-reset {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 5px 10px 5px 4px;
+  border-left: 1px solid var(--panel-border);
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.scope-bar-reset:hover {
+  color: var(--cyan-accent);
+}
+
+.panel-subhead--scope {
+  color: var(--cyan-accent);
+  opacity: 1;
+}
+
+/* --- Scope Explorer modal -------------------------------------------- */
+
+.scope-explorer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scope-explorer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 7, 12, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.scope-explorer-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 92vw);
+  max-height: 82vh;
+  overflow-y: auto;
+  padding: 18px 20px 22px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+}
+
+.scope-explorer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.scope-explorer-header h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cyan-accent);
+  margin: 0;
+}
+
+.scope-explorer-close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+
+.scope-explorer-close:hover {
+  color: var(--text-primary);
+}
+
+.scope-explorer-hint {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 4px 0 14px;
+}
+
+.scope-explorer-whole-org {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.scope-tree,
+.scope-tree-children {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scope-tree-children {
+  margin: 4px 0 4px calc(14px + var(--scope-depth, 0) * 2px);
+  padding-left: 12px;
+  border-left: 1px solid var(--section-divider);
+}
+
+.scope-tree-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.scope-tree-node {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.scope-tree-node:hover {
+  background: var(--card-bg-hover);
+  border-color: var(--cyan-accent);
+}
+
+.scope-tree-node.is-current {
+  border-color: var(--cyan-accent);
+  box-shadow: 0 0 0 1px var(--cyan-accent);
+  color: var(--cyan-accent);
+}
+
+.scope-tree-icon {
+  color: var(--text-secondary);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.scope-tree-node.is-current .scope-tree-icon {
+  color: var(--cyan-accent);
+}
+
+.scope-tree-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-tree-type {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}

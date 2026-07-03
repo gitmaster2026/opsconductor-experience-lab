@@ -110,6 +110,20 @@ const HIGHLIGHT_SPOTLIGHT_HALO_AMPLITUDE = 12;
 /** How dim non-highlighted nodes get while a highlight set is active (multiplies their normal alpha). */
 const HIGHLIGHT_DIM_FACTOR = 0.32;
 
+/**
+ * V5 Phase 3.5 (docs/V5_HANDOVER.md §9.1/§9.2): how much an out-of-scope
+ * node dims (multiplies its normal alpha) once Operational Scope narrows
+ * the workspace - "recede," not vanish outright, per the handover's
+ * "nodes outside current scope recede/hide per your judgment." Distinct
+ * from HIGHLIGHT_DIM_FACTOR above (a different, transient Dashboard-KPI
+ * emphasis mechanism) - the two can compose but answer different
+ * questions ("is this in the current investigation scope" vs. "was this
+ * just called out by a KPI click").
+ */
+const SCOPE_RECEDE_ALPHA_FACTOR = 0.22;
+/** How much an out-of-scope node shrinks, multiplicatively, alongside the alpha recede above - a subtle additional cue that it sits outside the current scope. */
+const SCOPE_RECEDE_SCALE = 0.82;
+
 const MIN_USER_SCALE = 0.35;
 const MAX_USER_SCALE = 3.5;
 
@@ -404,6 +418,14 @@ function prefersReducedMotion() {
  *   simply skips that callback - the flight animation itself does not
  *   depend on it (this module tracks its own phase/timing internally
  *   regardless, since draw() needs it every frame).
+ * @param {() => { isUnscoped: boolean, scopedNodeIds: string[] }|null} [callbacks.getScope] -
+ *   V5 Phase 3.5, OPTIONAL: returns the current engine/timeline.js bundle's
+ *   `scope` field (engine/derive.js's buildScopeFilter() output). When
+ *   provided and narrowed (isUnscoped === false), nodes outside
+ *   scopedNodeIds recede (dim + shrink slightly) rather than disappear
+ *   outright - see SCOPE_RECEDE_ALPHA_FACTOR/SCOPE_RECEDE_SCALE above.
+ *   Purely additive: omitting this callback, or an unscoped result,
+ *   preserves prior rendering behavior exactly (no dimming applied).
  * @param {() => string[]} [callbacks.getHighlightIds] - OPTIONAL, added in
  *   Phase 3 for the Dashboard KPI "focus objects" flow
  *   (docs/PANEL_SPECIFICATIONS.md's Dashboard mode: "clicking updates
@@ -434,6 +456,7 @@ export function mountUniverseLens(canvasEl, callbacks) {
     onWheelZoom,
     onCameraPhaseChange,
     getHighlightIds,
+    getScope,
   } = callbacks;
   if (typeof getBundle !== 'function') {
     throw new Error('mountUniverseLens: callbacks.getBundle is required');
@@ -896,6 +919,10 @@ export function mountUniverseLens(canvasEl, callbacks) {
     const highlightPulseT = clamp((now - highlightPulseStart) / HIGHLIGHT_SPOTLIGHT_PULSE_MS, 0, 1);
     const highlightPulseDecay = 1 - easeOutCubic(highlightPulseT);
 
+    // V5 Phase 3.5 addition: resolve the optional Operational Scope filter.
+    const scope = typeof getScope === 'function' ? getScope() : null;
+    const scopedNodeIdSet = scope && !scope.isUnscoped ? new Set(scope.scopedNodeIds) : null;
+
     ctx.save();
     ctx.translate(layoutWidth / 2, layoutHeight / 2);
     ctx.scale(camera.scale, camera.scale);
@@ -1023,7 +1050,8 @@ export function mountUniverseLens(canvasEl, callbacks) {
       const opacity = opacityById.get(node.id) ?? 1;
       const bucket = riskBucket(node);
       const color = resolveCssVar(canvasEl, RISK_COLOR_VAR[bucket] ?? RISK_COLOR_VAR.neutral, '#9aa7b5');
-      const radius = nodeRadiusFor(node, depth);
+      const isOutOfScope = Boolean(scopedNodeIdSet && !scopedNodeIdSet.has(node.id));
+      const radius = nodeRadiusFor(node, depth) * (isOutOfScope ? SCOPE_RECEDE_SCALE : 1);
       const isSelected = node.id === selectedId;
       const isHovered = node.id === hoveredId;
       const isHighlighted = isHighlightActive && highlightIds.has(node.id);
@@ -1049,6 +1077,12 @@ export function mountUniverseLens(canvasEl, callbacks) {
       finalAlpha *= clamp(1 - blurPx * BLUR_TO_DIM_FACTOR, 0.5, 1);
       if (isHighlightActive) {
         finalAlpha = isHighlighted ? Math.max(finalAlpha, 0.9) : finalAlpha * HIGHLIGHT_DIM_FACTOR;
+      }
+      // V5 Phase 3.5: nodes outside the current Operational Scope recede
+      // (dim further) rather than disappear outright - composes with the
+      // highlight dimming above rather than replacing it.
+      if (isOutOfScope) {
+        finalAlpha *= SCOPE_RECEDE_ALPHA_FACTOR;
       }
 
       // §2.2's background "Desaturated" treatment, via RGB math instead of
@@ -1077,16 +1111,20 @@ export function mountUniverseLens(canvasEl, callbacks) {
       ctx.shadowBlur = 0;
 
       // §8: label tier drives what (if anything) gets drawn under the node.
+      // V5 Phase 3.5: a label recedes alongside its node's dot when scope
+      // narrows, same SCOPE_RECEDE_ALPHA_FACTOR, so a receded node doesn't
+      // read as "full brightness text on a dim dot."
+      const labelScopeFactor = isOutOfScope ? SCOPE_RECEDE_ALPHA_FACTOR : 1;
       const tier = labelTierById.get(node.id) ?? 'dot';
       if (tier === 'full') {
-        ctx.globalAlpha = clamp(opacity, 0.15, 1);
+        ctx.globalAlpha = clamp(opacity, 0.15, 1) * labelScopeFactor;
         ctx.fillStyle = resolveCssVar(canvasEl, '--label-color', 'rgba(230,240,250,0.92)');
         ctx.font = isSelected || isHovered ? '600 12px system-ui, sans-serif' : '500 11px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillText(truncateLabel(String(node.label ?? node.id)), local.x, local.y + radius + 4);
       } else if (tier === 'short') {
-        ctx.globalAlpha = clamp(opacity, 0.12, 0.9);
+        ctx.globalAlpha = clamp(opacity, 0.12, 0.9) * labelScopeFactor;
         ctx.fillStyle = resolveCssVar(canvasEl, '--label-color', 'rgba(230,240,250,0.92)');
         ctx.font = '500 10px system-ui, sans-serif';
         ctx.textAlign = 'center';

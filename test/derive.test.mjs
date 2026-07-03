@@ -20,6 +20,8 @@ import {
   buildJarvisViewModel,
   resolveCommitmentForObject,
   riskTrajectory,
+  buildScopeHierarchy,
+  buildScopeFilter,
   KNOWN_OUTPUT_FIELDS,
 } from '../prototype/current/engine/derive.js';
 
@@ -471,6 +473,182 @@ test('resolveCommitmentForObject: returns null for a non-commitment-linked objec
 
 test('resolveCommitmentForObject: returns null for an unrecognized id (never throws)', () => {
   assert.equal(resolveCommitmentForObject(snapshot, 'totally-unknown-id'), null);
+});
+
+// ---------------------------------------------------------------------------
+// V5 Phase 3.5: Operational Scope (docs/V5_HANDOVER.md §9.1-§9.3)
+// ---------------------------------------------------------------------------
+
+const HORIZON_COMMITMENT_ID = 'e6bc8583-d191-417b-9284-01303238ddfc'; // CPP-1000, PLT-200
+const AQUAGRID_COMMITMENT_ID = 'f9b2aa44-d3c8-4628-84d9-d908bc739e98'; // PPS-2000, PLT-200
+const HORIZON_PROGRAM = 'NorthRiver Customer Commitment Value Stream';
+
+test('buildScopeHierarchy: root is the organization, matching the real 2 sites + orphan customer structure', () => {
+  const hierarchy = buildScopeHierarchy(snapshot);
+  assert.equal(hierarchy.type, 'organization');
+
+  const siteChildren = hierarchy.children.filter((c) => c.type === 'site');
+  const customerChildren = hierarchy.children.filter((c) => c.type === 'customer');
+  assert.equal(siteChildren.length, 2, 'exactly PLT-200 and PLT-300 are real sites in commitments.json');
+  // Helios Hydrogen has no demand-signal-linked commitment (sourced from an
+  // operational-object warranty record instead), so it must still appear,
+  // as a direct child of the organization root.
+  assert.ok(customerChildren.some((c) => c.label === 'Helios Hydrogen'));
+});
+
+test('buildScopeHierarchy: PLT-200 nests exactly its 2 real customers (Horizon LNG Partners, AquaGrid Utilities)', () => {
+  const hierarchy = buildScopeHierarchy(snapshot);
+  const plt200 = hierarchy.children.find((c) => c.id === 'plant:PLT-200');
+  assert.ok(plt200);
+  const customerLabels = plt200.children.map((c) => c.label).sort();
+  assert.deepEqual(customerLabels, ['AquaGrid Utilities', 'Horizon LNG Partners']);
+});
+
+test('buildScopeHierarchy: PLT-300 nests exactly its 3 real customers', () => {
+  const hierarchy = buildScopeHierarchy(snapshot);
+  const plt300 = hierarchy.children.find((c) => c.id === 'plant:PLT-300');
+  assert.ok(plt300);
+  const customerLabels = plt300.children.map((c) => c.label).sort();
+  assert.deepEqual(customerLabels, ['Atlas Data Infrastructure', 'Catalyst Chemical', 'Frontier Mining']);
+});
+
+test('buildScopeHierarchy: a commitment node only ever has a program child when a real program value exists for it (no invented levels)', () => {
+  const hierarchy = buildScopeHierarchy(snapshot);
+  const plt200 = hierarchy.children.find((c) => c.id === 'plant:PLT-200');
+  const horizon = plt200.children.find((c) => c.label === 'Horizon LNG Partners');
+  const aquagrid = plt200.children.find((c) => c.label === 'AquaGrid Utilities');
+
+  assert.equal(horizon.children.length, 1, 'Horizon has exactly one commitment (CPP-1000)');
+  const horizonCommitment = horizon.children[0];
+  assert.equal(horizonCommitment.id, HORIZON_COMMITMENT_ID);
+  assert.equal(horizonCommitment.children.length, 1, 'Horizon commitment has a real program in this dataset');
+  assert.equal(horizonCommitment.children[0].type, 'program');
+  assert.equal(horizonCommitment.children[0].label, HORIZON_PROGRAM);
+
+  assert.equal(aquagrid.children.length, 1);
+  assert.deepEqual(aquagrid.children[0].children, [], 'AquaGrid commitment has no program in this dataset - not invented');
+});
+
+test('buildScopeFilter: null scope (and explicit organization scope) is unscoped - equivalent to "whole org", every node/cell included', () => {
+  const graph = buildUniverseGraph(snapshot);
+  const allCellIds = snapshot.riskBoard.records.map((c) => c.id).sort();
+
+  for (const scope of [null, { type: 'organization', id: null }]) {
+    const filter = buildScopeFilter(snapshot, scope);
+    assert.equal(filter.isUnscoped, true);
+    assert.equal(filter.scopedNodeIds.length, graph.nodes.length);
+    assert.deepEqual([...filter.scopedCommitmentCellIds].sort(), allCellIds);
+  }
+});
+
+test('buildScopeFilter: customer scope narrows to exactly that customer\'s risk-board cell', () => {
+  const filter = buildScopeFilter(snapshot, {
+    type: 'customer',
+    id: 'customer:Horizon LNG Partners',
+    label: 'Horizon LNG Partners',
+  });
+  assert.equal(filter.isUnscoped, false);
+  assert.deepEqual(filter.scopedCommitmentCellIds, ['RB-CPP-HORIZON']);
+  assert.ok(filter.scopedNodeIds.includes(HORIZON_COMMITMENT_ID));
+  assert.ok(filter.scopedNodeIds.includes('customer:Horizon LNG Partners'));
+  assert.ok(!filter.scopedNodeIds.includes(AQUAGRID_COMMITMENT_ID), 'a sibling customer\'s commitment must not be in scope');
+  assert.ok(!filter.scopedNodeIds.includes('customer:AquaGrid Utilities'));
+  // Org/plant anchors stay visible regardless of scope (implementer's
+  // "always visible" choice, see SCOPE_ALWAYS_VISIBLE_NODE_TYPES).
+  assert.ok(filter.scopedNodeIds.includes(snapshot.organization.records[0].id));
+  assert.ok(filter.scopedNodeIds.includes('plant:PLT-200'));
+});
+
+test('buildScopeFilter: site scope narrows to exactly the 2 commitments at that plant', () => {
+  const filter = buildScopeFilter(snapshot, { type: 'site', id: 'plant:PLT-200', label: 'Pueblo' });
+  assert.deepEqual([...filter.scopedCommitmentCellIds].sort(), ['RB-CPP-HORIZON', 'RB-PPS-AQUAGRID']);
+});
+
+test('buildScopeFilter: commitment scope narrows to exactly that one commitment\'s cell', () => {
+  const filter = buildScopeFilter(snapshot, {
+    type: 'commitment',
+    id: HORIZON_COMMITMENT_ID,
+    label: 'CPP-1000',
+  });
+  assert.deepEqual(filter.scopedCommitmentCellIds, ['RB-CPP-HORIZON']);
+});
+
+test('buildScopeFilter: program scope narrows to the commitment(s) whose customer shares that program', () => {
+  const filter = buildScopeFilter(snapshot, { type: 'program', id: HORIZON_PROGRAM, label: HORIZON_PROGRAM });
+  assert.deepEqual(filter.scopedCommitmentCellIds, ['RB-CPP-HORIZON']);
+  // The 7 narrative objects tagged with this program must also be in scope.
+  assert.ok(filter.scopedNodeIds.includes('9a0aeed8-d434-4da0-a88a-21e605ea0554')); // CESC customer escalation
+});
+
+test('buildScopeFilter: an unknown scope id matches nothing (never throws, degrades to empty scope)', () => {
+  const filter = buildScopeFilter(snapshot, { type: 'customer', id: 'customer:Not A Real Customer', label: 'x' });
+  assert.equal(filter.isUnscoped, false);
+  assert.deepEqual(filter.scopedCommitmentCellIds, []);
+});
+
+test('buildRiskBoardViewModel: whole-org scope filter is equivalent to omitting scope entirely (regression, all 5 cells present)', () => {
+  const unscopedFilter = buildScopeFilter(snapshot, null);
+  const withFilter = buildRiskBoardViewModel(snapshot, 2, unscopedFilter);
+  const withoutFilter = buildRiskBoardViewModel(snapshot, 2);
+  assert.equal(withFilter.cells.length, 5);
+  assert.deepEqual(withFilter, withoutFilter);
+});
+
+test('buildRiskBoardViewModel: a narrowed scope filters cells out of the board entirely (not just marks them dormant)', () => {
+  const filter = buildScopeFilter(snapshot, {
+    type: 'customer',
+    id: 'customer:Horizon LNG Partners',
+    label: 'Horizon LNG Partners',
+  });
+  const viewModel = buildRiskBoardViewModel(snapshot, 2, filter);
+  assert.equal(viewModel.cells.length, 1);
+  assert.equal(viewModel.cells[0].id, 'RB-CPP-HORIZON');
+});
+
+test('buildDashboardViewModel: whole-org scope is equivalent to the prior unscoped KPI values (regression)', () => {
+  const unscopedFilter = buildScopeFilter(snapshot, null);
+  const withFilter = buildDashboardViewModel(snapshot, 2, unscopedFilter);
+  const withoutFilter = buildDashboardViewModel(snapshot, 2);
+  const cardValue = (vm, id) => vm.cards.find((c) => c.id === id).value;
+  assert.equal(cardValue(withFilter, 'revenue-at-risk'), cardValue(withoutFilter, 'revenue-at-risk'));
+  assert.equal(cardValue(withFilter, 'commitments-at-risk'), cardValue(withoutFilter, 'commitments-at-risk'));
+});
+
+test('buildDashboardViewModel: a narrowed scope restricts Revenue at Risk / Commitments at Risk to the scoped subset', () => {
+  const filter = buildScopeFilter(snapshot, {
+    type: 'customer',
+    id: 'customer:Horizon LNG Partners',
+    label: 'Horizon LNG Partners',
+  });
+  const viewModel = buildDashboardViewModel(snapshot, 2, filter);
+  const revenue = viewModel.cards.find((c) => c.id === 'revenue-at-risk');
+  const commitments = viewModel.cards.find((c) => c.id === 'commitments-at-risk');
+  assert.equal(revenue.value, 250000, 'Horizon\'s risk-board revenue_at_risk only');
+  assert.equal(commitments.value, 1);
+  assert.equal(viewModel.scopeLabel, 'Horizon LNG Partners');
+});
+
+test('buildJarvisViewModel: currentContext.scopeLabel reflects the active scope, defaulting to "Whole Organization"', () => {
+  const state = { selectedObjectId: null, workspaceLens: 'universe', timeSliceId: 't2', zoomLevel: 0 };
+  const unscoped = buildJarvisViewModel(snapshot, state);
+  assert.equal(unscoped.currentContext.scopeLabel, 'Whole Organization');
+
+  const filter = buildScopeFilter(snapshot, { type: 'site', id: 'plant:PLT-300', label: 'Grand Junction' });
+  const scoped = buildJarvisViewModel(snapshot, state, filter);
+  assert.equal(scoped.currentContext.scopeLabel, 'Grand Junction');
+});
+
+test('buildJarvisViewModel: Suggested Next Step never points outside the current scope', () => {
+  const state = { selectedObjectId: null, workspaceLens: 'universe', timeSliceId: 't2', zoomLevel: 0 };
+  const filter = buildScopeFilter(snapshot, {
+    type: 'customer',
+    id: 'customer:AquaGrid Utilities',
+    label: 'AquaGrid Utilities',
+  });
+  const scoped = buildJarvisViewModel(snapshot, state, filter);
+  if (scoped.suggestedNextStep) {
+    assert.equal(scoped.suggestedNextStep.riskBoardId, 'RB-PPS-AQUAGRID');
+  }
 });
 
 // ---------------------------------------------------------------------------

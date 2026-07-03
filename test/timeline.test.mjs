@@ -140,6 +140,93 @@ test('initTimeline: falls back to slice index 0 if timeSliceId does not match an
   timeline.dispose();
 });
 
+// ---------------------------------------------------------------------------
+// V5 Phase 3.5: Operational Scope cross-surface synchronization
+// (docs/V5_HANDOVER.md §9.2/§9.3 - "changing scope updates Universe, Risk
+// Board, Dashboard, and Jarvis together")
+// ---------------------------------------------------------------------------
+
+test('initTimeline: bundle includes scope + scopeHierarchy, unscoped by default', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+  const bundle = timeline.getDerivedBundle();
+
+  assert.ok(bundle.scope);
+  assert.equal(bundle.scope.isUnscoped, true);
+  assert.ok(bundle.scopeHierarchy);
+  assert.equal(bundle.scopeHierarchy.type, 'organization');
+
+  timeline.dispose();
+});
+
+test('initTimeline: a single setScope() call updates Universe, Risk Board, Dashboard, and Jarvis together in one recompute', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+  stateModule.setTimeSlice('t2');
+
+  const before = timeline.getDerivedBundle();
+  assert.equal(before.riskBoard.cells.length, 5, 'unscoped: all 5 cells present');
+
+  let updateCount = 0;
+  timeline.onUpdate(() => {
+    updateCount += 1;
+  });
+
+  stateModule.setScope({ type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' });
+  assert.equal(updateCount, 1, 'exactly one recompute for one setScope() call');
+
+  const after = timeline.getDerivedBundle();
+  // Universe: node set narrows (scope.scopedNodeIds no longer includes the
+  // sibling AquaGrid commitment).
+  assert.equal(after.scope.isUnscoped, false);
+  assert.ok(!after.scope.scopedNodeIds.includes('f9b2aa44-d3c8-4628-84d9-d908bc739e98'));
+  // Risk Board: cells filtered to the scoped commitment only.
+  assert.equal(after.riskBoard.cells.length, 1);
+  assert.equal(after.riskBoard.cells[0].id, 'RB-CPP-HORIZON');
+  // Dashboard: Revenue at Risk KPI reflects the scoped subset.
+  assert.equal(after.dashboard.cards.find((c) => c.id === 'revenue-at-risk').value, 250000);
+  // Jarvis: currentContext echoes the new scope's label.
+  assert.equal(after.jarvis.currentContext.scopeLabel, 'Horizon LNG Partners');
+
+  timeline.dispose();
+});
+
+test('initTimeline: setScope never affects selectedObjectId, timeSliceId, zoomLevel, or focusTrail (orthogonal state)', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+
+  stateModule.setTimeSlice('t2');
+  stateModule.setZoom(3);
+  stateModule.selectObject('e6bc8583-d191-417b-9284-01303238ddfc');
+  const before = stateModule.getState();
+
+  stateModule.setScope({ type: 'site', id: 'plant:PLT-300', label: 'Grand Junction' });
+  const after = stateModule.getState();
+
+  assert.equal(after.selectedObjectId, before.selectedObjectId);
+  assert.equal(after.timeSliceId, before.timeSliceId);
+  assert.equal(after.zoomLevel, before.zoomLevel);
+  assert.deepEqual(after.focusTrail, before.focusTrail);
+
+  timeline.dispose();
+});
+
+test('initTimeline: setting scope back to whole organization (null) is equivalent to the prior unscoped bundle (regression)', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+  stateModule.setTimeSlice('t2');
+
+  const baseline = timeline.getDerivedBundle();
+  stateModule.setScope({ type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' });
+  stateModule.setScope(null);
+  const restored = timeline.getDerivedBundle();
+
+  assert.deepEqual(restored.riskBoard, baseline.riskBoard);
+  assert.deepEqual(restored.dashboard, baseline.dashboard);
+
+  timeline.dispose();
+});
+
 test('initTimeline: dispose() unsubscribes from the store so no further recompute/notification fires', () => {
   const store = freshStore();
   const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
