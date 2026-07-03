@@ -51,6 +51,8 @@ import { initTimeline } from './engine/timeline.js';
 import { clampZoom, zoomLevelInfo } from './engine/camera.js';
 import { mountUniverseLens } from './lenses/universe.js';
 import { mountRiskBoardLens } from './lenses/risk-board.js';
+import { mountSpiderLens } from './lenses/spider.js';
+import { mountTextViewLens } from './lenses/text-view.js';
 import { mountWorkbenchLens } from './lenses/workbench.js';
 import { mountDashboardPanel } from './panels/dashboard.js';
 import { mountPassportPanel } from './panels/passport.js';
@@ -67,6 +69,8 @@ import { mountSavedViewsManager } from './engine/saved-views.js';
 const els = {
   lensUniverseBtn: document.getElementById('lensUniverse'),
   lensRiskBtn: document.getElementById('lensRisk'),
+  lensSpiderBtn: document.getElementById('lensSpider'),
+  lensTextBtn: document.getElementById('lensText'),
   lensWorkbenchBtn: document.getElementById('lensWorkbench'),
   panelDashboardBtn: document.getElementById('panelDashboard'),
   panelPassportBtn: document.getElementById('panelPassport'),
@@ -78,6 +82,8 @@ const els = {
   jarvisPanel: document.getElementById('jarvisPanel'),
   universeCanvas: document.getElementById('universeCanvas'),
   riskBoardEl: document.getElementById('riskBoard'),
+  spiderChartEl: document.getElementById('spiderChart'),
+  textViewEl: document.getElementById('textView'),
   workbenchEl: document.getElementById('workbench'),
   scopeBar: document.getElementById('scopeBar'),
   scopeExplorer: document.getElementById('scopeExplorer'),
@@ -213,6 +219,22 @@ async function main() {
     onHover: (cellId) => store.setHovered(cellId),
   });
 
+  // V5 Phase 4 (docs/V5_DESIGN_SPEC.md §4/§5): the Spider and Text View
+  // lenses. Both read straight off the derived bundle
+  // (bundle.spider/bundle.hierarchyPath/bundle.passport) - no snapshot
+  // access of their own, same pattern as Universe/Risk Board above.
+  const spiderLens = mountSpiderLens(els.spiderChartEl, {
+    getBundle: () => timeline.getDerivedBundle(),
+    onSelect: (nodeId) => selectAndClearHighlight(nodeId),
+    onHover: (nodeId) => store.setHovered(nodeId),
+  });
+
+  const textViewLens = mountTextViewLens(els.textViewEl, {
+    getBundle: () => timeline.getDerivedBundle(),
+    getZoomLevel: () => store.getState().zoomLevel,
+    onSelect: (nodeId) => selectAndClearHighlight(nodeId),
+  });
+
   // V5 Phase 4.6 (docs/V5_HANDOVER.md §9.2/§9.4): the shared "Manage Saved
   // Views" modal - one instance, opened from either Dashboard's or
   // Workbench's own "Manage Saved Views" button (same one-state-many-
@@ -294,6 +316,8 @@ async function main() {
 
   els.lensUniverseBtn.addEventListener('click', () => store.setLens('universe'));
   els.lensRiskBtn.addEventListener('click', () => store.setLens('risk_board'));
+  els.lensSpiderBtn.addEventListener('click', () => store.setLens('spider'));
+  els.lensTextBtn.addEventListener('click', () => store.setLens('text'));
   els.lensWorkbenchBtn.addEventListener('click', () => store.setLens('workbench'));
   els.panelDashboardBtn.addEventListener('click', () => store.setLeftPanel('dashboard'));
   els.panelPassportBtn.addEventListener('click', () => store.setLeftPanel('passport'));
@@ -314,12 +338,18 @@ async function main() {
   function applyLensVisibility(state) {
     const isUniverse = state.workspaceLens === 'universe';
     const isRiskBoard = state.workspaceLens === 'risk_board';
+    const isSpider = state.workspaceLens === 'spider';
+    const isText = state.workspaceLens === 'text';
     const isWorkbench = state.workspaceLens === 'workbench';
     els.universeCanvas.classList.toggle('hidden', !isUniverse);
     els.riskBoardEl.classList.toggle('hidden', !isRiskBoard);
+    els.spiderChartEl.classList.toggle('hidden', !isSpider);
+    els.textViewEl.classList.toggle('hidden', !isText);
     els.workbenchEl.classList.toggle('hidden', !isWorkbench);
     els.lensUniverseBtn.classList.toggle('active', isUniverse);
     els.lensRiskBtn.classList.toggle('active', isRiskBoard);
+    els.lensSpiderBtn.classList.toggle('active', isSpider);
+    els.lensTextBtn.classList.toggle('active', isText);
     els.lensWorkbenchBtn.classList.toggle('active', isWorkbench);
     // Resize/re-render whichever lens just became visible - a canvas (and
     // an absolutely-positioned DOM layout) both need a fresh
@@ -329,6 +359,10 @@ async function main() {
       universeLens.resize();
     } else if (isRiskBoard) {
       riskBoardLens.resize();
+    } else if (isSpider) {
+      spiderLens.resize();
+    } else if (isText) {
+      textViewLens.resize();
     } else if (isWorkbench) {
       workbenchLens.resize();
     }
@@ -381,6 +415,8 @@ async function main() {
 
     universeLens.render();
     riskBoardLens.render();
+    spiderLens.render();
+    textViewLens.render();
     workbenchLens.render();
   }
 
@@ -392,6 +428,8 @@ async function main() {
   window.addEventListener('resize', () => {
     universeLens.resize();
     riskBoardLens.resize();
+    spiderLens.resize();
+    textViewLens.resize();
     workbenchLens.resize();
   });
 }

@@ -72,7 +72,7 @@ concept" and "did this invent a new entity type."
 | 3 — Risk Board v2 | ✅ Done, merged | PR #1, `7954684` |
 | 3.5 — Operational Scope + global sync (4 surfaces) | ✅ Done, merged, live-validated | merged |
 | 2.6+ (consolidated) — label policy, centering fix/diagnose, contrast, click-detail, Nav History rail, Scope Explorer multi-select/collections | 🟡 **Prompt sent, outcome not yet logged in this doc — see §10 for scope** | pending |
-| 4 — Spider, Text View, Collection Passport | ⬜ Not started | — |
+| 4 — Spider, Text View, Collection Passport | ✅ Done, PR opened | branch `claude/v5-phase-4-lenses-2vc9bp` |
 | 4.5 — Workbench | ⬜ Not started | — |
 | 4.6 — Saved Views/Reports/Action Bar (UI-only) | ⬜ Not started | — |
 | 5 — Motion grammar + doc reconciliation | ⬜ Not started | — |
@@ -941,3 +941,19 @@ Phase 4 and 4.5, per §13.6.
   Focus Mode render state — not opacity-only) confirmed; "context-aware
   slider" confirmed = existing Nav History rail, no new control.
   Phase 2.7 now fully spec-complete, ready to send once Phase 4 wraps.
+| +15 | Phase 4 (Spider, Text View, Collection Passport) done, PR opened
+  from `claude/v5-phase-4-lenses-2vc9bp`. `derive.js` gains
+  `buildSpiderViewModel()` (the field-map.md-authorized `spiderAxisScores`
+  formula, hand-verified against 2 real objects), `buildHierarchyPathForObject()`
+  (reuses `buildScopeHierarchy()`'s tree, appends a trailing selected leaf
+  for objects below tree granularity), and `buildCollectionPassportViewModel()`
+  (aggregates `buildPassportViewModel()` per Collection member — worst risk,
+  deduplicated relationships/recommendations/evidence/history). New lenses
+  `lenses/spider.js` (SVG radar, rAF-driven 400ms morph, vertex-click
+  drill-down) and `lenses/text-view.js` (collapsible §5.2 outline, zoom sets
+  default expansion depth) wired into `WORKSPACE_LENSES` (already present
+  since Phase 1) via `app.js`/`index.html`. `panels/passport.js` extended
+  (not rewritten) to render the Collection Passport when a Collection scope
+  is active and nothing is individually selected. Confirmed PR #6 (Phase
+  2.7) merged first per its no-dependency note — this phase never touches
+  universe.js/universe-layout.js/camera.js.

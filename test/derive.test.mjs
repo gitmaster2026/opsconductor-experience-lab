@@ -22,6 +22,10 @@ import {
   riskTrajectory,
   buildScopeHierarchy,
   buildScopeFilter,
+  buildHierarchyPathForObject,
+  buildSpiderViewModel,
+  buildCollectionPassportViewModel,
+  SPIDER_AXES,
   KNOWN_OUTPUT_FIELDS,
 } from '../prototype/current/engine/derive.js';
 
@@ -725,6 +729,282 @@ test('buildJarvisViewModel: Suggested Next Step never points outside the current
   if (scoped.suggestedNextStep) {
     assert.equal(scoped.suggestedNextStep.riskBoardId, 'RB-PPS-AQUAGRID');
   }
+});
+
+// ---------------------------------------------------------------------------
+// buildHierarchyPathForObject (V5 Phase 4) - real objects at every
+// hierarchy depth: organization, site, customer, commitment, and a leaf
+// (evidence) below the Scope Explorer's own tree granularity.
+// ---------------------------------------------------------------------------
+
+const REAL_ORG_ID = buildScopeHierarchy(snapshot).id;
+
+test('buildHierarchyPathForObject: the organization itself is a 1-entry, self-selected path', () => {
+  const path = buildHierarchyPathForObject(snapshot, REAL_ORG_ID);
+  assert.equal(path.length, 1);
+  assert.equal(path[0].id, REAL_ORG_ID);
+  assert.equal(path[0].type, 'organization');
+  assert.equal(path[0].isSelected, true);
+});
+
+test('buildHierarchyPathForObject: a site resolves org -> site, site entry selected', () => {
+  const path = buildHierarchyPathForObject(snapshot, 'plant:PLT-200');
+  assert.deepEqual(path.map((p) => p.type), ['organization', 'site']);
+  assert.equal(path[1].id, 'plant:PLT-200');
+  assert.equal(path[1].isSelected, true);
+  assert.equal(path[0].isSelected, false);
+});
+
+test('buildHierarchyPathForObject: a customer under a site resolves org -> site -> customer', () => {
+  const path = buildHierarchyPathForObject(snapshot, 'customer:Horizon LNG Partners');
+  assert.deepEqual(path.map((p) => p.type), ['organization', 'site', 'customer']);
+  assert.equal(path[2].id, 'customer:Horizon LNG Partners');
+  assert.equal(path[2].isSelected, true);
+});
+
+test('buildHierarchyPathForObject: an orphan customer with no commitment (Helios Hydrogen) resolves org -> customer directly', () => {
+  const path = buildHierarchyPathForObject(snapshot, 'customer:Helios Hydrogen');
+  assert.deepEqual(path.map((p) => p.type), ['organization', 'customer']);
+  assert.equal(path[1].isSelected, true);
+});
+
+test('buildHierarchyPathForObject: a commitment resolves org -> site -> customer -> commitment', () => {
+  const path = buildHierarchyPathForObject(snapshot, 'e6bc8583-d191-417b-9284-01303238ddfc');
+  assert.deepEqual(path.map((p) => p.type), ['organization', 'site', 'customer', 'commitment']);
+  assert.equal(path[3].id, 'e6bc8583-d191-417b-9284-01303238ddfc');
+  assert.equal(path[3].isSelected, true);
+});
+
+test('buildHierarchyPathForObject: an object below the Scope Explorer tree granularity (evidence) appends as a trailing selected leaf under its resolved commitment', () => {
+  const path = buildHierarchyPathForObject(snapshot, 'evidence-shortage-cpp');
+  assert.deepEqual(path.map((p) => p.type), ['organization', 'site', 'customer', 'commitment', 'evidence']);
+  assert.equal(path[3].id, 'e6bc8583-d191-417b-9284-01303238ddfc');
+  assert.equal(path[3].isSelected, false, 'the intermediate commitment ancestor must not itself be flagged selected');
+  assert.equal(path[4].id, 'evidence-shortage-cpp');
+  assert.equal(path[4].isSelected, true);
+});
+
+test('buildHierarchyPathForObject: an unrecognized id returns an empty path', () => {
+  assert.deepEqual(buildHierarchyPathForObject(snapshot, 'not-a-real-object-id'), []);
+});
+
+test('buildHierarchyPathForObject: exactly one path entry has isSelected true, and it is always the last entry', () => {
+  const ids = [
+    REAL_ORG_ID,
+    'plant:PLT-200',
+    'customer:Horizon LNG Partners',
+    'e6bc8583-d191-417b-9284-01303238ddfc',
+    'evidence-shortage-cpp',
+  ];
+  for (const id of ids) {
+    const path = buildHierarchyPathForObject(snapshot, id);
+    const selectedIndices = path.map((p, i) => (p.isSelected ? i : -1)).filter((i) => i >= 0);
+    assert.deepEqual(selectedIndices, [path.length - 1], `object "${id}" must have exactly one, trailing, isSelected entry`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// buildSpiderViewModel (V5 Phase 4) - hand-computed fixtures against the
+// REAL dataset (not synthetic data), for 2+ different selected objects, per
+// the phase's explicit invariant requirement. Each fixture's expected
+// numbers below were independently derived by hand-tracing
+// buildUniverseGraph()'s real nodes/edges out to 2 hops from the subject
+// and manually applying the field-map.md formula (critical=3/elevated=2/
+// watch=1, normalized against the max raw axis score) - see this test
+// file's accompanying phase notes for the full by-hand trace. This is not
+// "assert whatever the function returns" - the expected values are fixed,
+// independently-reasoned constants.
+// ---------------------------------------------------------------------------
+
+test('SPIDER_AXES: exactly the 7 domain values documented in docs/field-map.md, in a fixed order', () => {
+  assert.deepEqual(SPIDER_AXES, ['commercial', 'supply', 'quality', 'engineering', 'manufacturing', 'logistics', 'customer']);
+});
+
+test('buildSpiderViewModel: fixture 1 - org-level (no selection), t2 (all revealed) - hand-computed against real commitments/risk-board data', () => {
+  // Hand trace: org's 2-hop neighborhood at t2 is exactly the 5 real
+  // commitment nodes (org -> 2 plants -> 5 commitments). Each commitment
+  // node's own risk_state (already joined from its risk-board cell in
+  // buildUniverseGraph, all visible/non-dormant at t2) is, in commitments.json
+  // order: critical(3) + elevated(2) + watch(1) + elevated(2) + critical(3)
+  // = 11 weighted commercial points (commitments are domain='commercial').
+  // No other domain has ANY 2-hop neighbor from the org node in this
+  // dataset (items/demand_signals/etc. are 3+ hops away), so every other
+  // axis is exactly 0.
+  const spider = buildSpiderViewModel(snapshot, null, 2);
+
+  assert.equal(spider.isOrgLevel, true);
+  assert.equal(spider.subjectId, REAL_ORG_ID);
+  assert.equal(spider.sliceId, 't2');
+  assert.equal(spider.spiderAxisScores.length, 7);
+  assert.deepEqual(spider.spiderAxisScores.map((a) => a.domain), SPIDER_AXES);
+
+  const commercial = spider.spiderAxisScores.find((a) => a.domain === 'commercial');
+  assert.equal(commercial.rawScore, 11);
+  assert.equal(commercial.score, 1);
+  assert.equal(commercial.worstObjectId, '43f187a7-5e39-48d4-9524-ce7004b3649d');
+  assert.equal(commercial.worstRiskState, 'critical');
+
+  for (const axis of spider.spiderAxisScores) {
+    if (axis.domain === 'commercial') continue;
+    assert.equal(axis.rawScore, 0, `axis "${axis.domain}" expected rawScore 0`);
+    assert.equal(axis.score, 0, `axis "${axis.domain}" expected score 0`);
+    assert.equal(axis.worstObjectId, null);
+  }
+});
+
+test('buildSpiderViewModel: fixture 2 - a specific commitment (ITEM-NR-CPP-1000, Horizon LNG), t2 - hand-computed against real supply-chain joins', () => {
+  // Hand trace (see this commitment's full 1-hop/2-hop neighborhood):
+  //   commercial axis: RB-CPP-HORIZON risk cell (critical=3, 1 hop)
+  //     + sibling commitment ITEM-NR-PPS-2000 (elevated=2, 2 hops)
+  //     + customer:Horizon LNG Partners (neutral=0, 2 hops)
+  //     + expedite_supply recommendation (critical=3 via its commitment's
+  //       cell, 2 hops) + shortage_coverage evidence (critical=3, 2 hops)
+  //     = 3+2+0+3+3 = 11
+  //   supply axis: item node (neutral=0, 1 hop) + demand_signal (critical=3,
+  //     1 hop) + allocation (critical=3, 1 hop) + inventory (critical=3, 2
+  //     hops) + shortage_exception (critical=3, 2 hops) = 0+3+3+3+3 = 12
+  //   max raw = 12 -> commercial normalizes to 11/12, supply to 12/12 = 1
+  const spider = buildSpiderViewModel(snapshot, 'e6bc8583-d191-417b-9284-01303238ddfc', 2);
+
+  assert.equal(spider.isOrgLevel, false);
+  assert.equal(spider.subjectId, 'e6bc8583-d191-417b-9284-01303238ddfc');
+
+  const commercial = spider.spiderAxisScores.find((a) => a.domain === 'commercial');
+  assert.equal(commercial.rawScore, 11);
+  assert.equal(commercial.score, 11 / 12);
+  assert.equal(commercial.worstObjectId, '091ebb8d-c7d8-49aa-beda-3858e8eece5a');
+  assert.equal(commercial.worstRiskState, 'critical');
+
+  const supply = spider.spiderAxisScores.find((a) => a.domain === 'supply');
+  assert.equal(supply.rawScore, 12);
+  assert.equal(supply.score, 1);
+  assert.equal(supply.worstObjectId, '0224567c-5ce5-4119-8fd5-5144c4488cec');
+  assert.equal(supply.worstRiskState, 'critical');
+
+  for (const axis of spider.spiderAxisScores) {
+    if (axis.domain === 'commercial' || axis.domain === 'supply') continue;
+    assert.equal(axis.rawScore, 0, `axis "${axis.domain}" expected rawScore 0`);
+  }
+});
+
+test('buildSpiderViewModel: time-gating - the same org-level radar is all-zero at t0 (nothing revealed yet) but non-zero at t2', () => {
+  const atT0 = buildSpiderViewModel(snapshot, null, 0);
+  for (const axis of atT0.spiderAxisScores) {
+    assert.equal(axis.rawScore, 0, `axis "${axis.domain}" expected rawScore 0 at t0 (nothing revealed)`);
+  }
+  const atT2 = buildSpiderViewModel(snapshot, null, 2);
+  const commercialAtT2 = atT2.spiderAxisScores.find((a) => a.domain === 'commercial');
+  assert.ok(commercialAtT2.rawScore > 0, 't2 (all revealed) must show non-zero commercial exposure');
+});
+
+test('buildSpiderViewModel: an unrecognized selectedObjectId returns a total-zero result without throwing', () => {
+  const spider = buildSpiderViewModel(snapshot, 'not-a-real-object-id', 2);
+  assert.equal(spider.subjectId, null);
+  assert.equal(spider.subjectLabel, null);
+  assert.equal(spider.spiderAxisScores.length, 7);
+  for (const axis of spider.spiderAxisScores) {
+    assert.equal(axis.rawScore, 0);
+    assert.equal(axis.score, 0);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// buildCollectionPassportViewModel (V5 Phase 4) - a real 2-member Collection
+// built the same way panels/scope.js's Scope Explorer builds one (a
+// { type: 'collection', memberIds } scope over real customer nodes).
+// ---------------------------------------------------------------------------
+
+test('buildCollectionPassportViewModel: null for a non-collection scope, an empty collection, or a collection whose only member cannot be resolved to a graph node', () => {
+  assert.equal(buildCollectionPassportViewModel(snapshot, null, 2), null);
+  assert.equal(
+    buildCollectionPassportViewModel(snapshot, { type: 'customer', id: 'customer:Horizon LNG Partners' }, 2),
+    null
+  );
+  assert.equal(buildCollectionPassportViewModel(snapshot, { type: 'collection', memberIds: [] }, 2), null);
+  assert.equal(
+    buildCollectionPassportViewModel(
+      snapshot,
+      { type: 'collection', memberIds: [{ type: 'program', id: 'no-such-program-node' }] },
+      2
+    ),
+    null
+  );
+});
+
+test('buildCollectionPassportViewModel: aggregates a real 2-member Collection (two customer nodes) correctly - cross-checked against each member\'s own buildPassportViewModel() independently', () => {
+  const scope = {
+    type: 'collection',
+    id: 'collection:test-fixture',
+    label: '2 items',
+    memberIds: [
+      { type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' },
+      { type: 'customer', id: 'customer:AquaGrid Utilities', label: 'AquaGrid Utilities' },
+    ],
+  };
+  const sliceIndex = 2;
+  const collectionPassport = buildCollectionPassportViewModel(snapshot, scope, sliceIndex);
+  assert.ok(collectionPassport);
+  assert.equal(collectionPassport.memberCount, 2);
+  assert.equal(collectionPassport.members.length, 2);
+
+  // Independently computed (not by calling the function under test) via
+  // each member's own, already-tested buildPassportViewModel() - this is
+  // what makes the assertions below a real cross-check of the aggregation,
+  // not a tautology.
+  const memberA = buildPassportViewModel(snapshot, 'customer:Horizon LNG Partners', sliceIndex);
+  const memberB = buildPassportViewModel(snapshot, 'customer:AquaGrid Utilities', sliceIndex);
+  assert.ok(memberA && memberB);
+
+  assert.deepEqual(
+    collectionPassport.members.map((m) => m.objectId).sort(),
+    [memberA.objectId, memberB.objectId].sort()
+  );
+
+  assert.equal(memberA.currentRisk, 'neutral');
+  assert.equal(memberB.currentRisk, 'neutral');
+  assert.equal(collectionPassport.currentRisk, 'neutral', 'worst-of-two-neutrals must be neutral');
+
+  const expectedRelationshipIds = new Set([
+    ...memberA.relationships.map((r) => r.relationshipId),
+    ...memberB.relationships.map((r) => r.relationshipId),
+  ]);
+  const actualRelationshipIds = new Set(collectionPassport.relationships.map((r) => r.relationshipId));
+  assert.deepEqual(actualRelationshipIds, expectedRelationshipIds);
+  assert.equal(collectionPassport.relationships.length, expectedRelationshipIds.size, 'relationships must be deduplicated by relationshipId');
+
+  const expectedRecommendationIds = new Set([
+    ...memberA.recommendations.map((r) => r.id),
+    ...memberB.recommendations.map((r) => r.id),
+  ]);
+  assert.deepEqual(new Set(collectionPassport.recommendations.map((r) => r.id)), expectedRecommendationIds);
+
+  const expectedEvidenceIds = new Set([...memberA.evidence.map((e) => e.id), ...memberB.evidence.map((e) => e.id)]);
+  assert.deepEqual(new Set(collectionPassport.evidence.map((e) => e.id)), expectedEvidenceIds);
+
+  // Operational history events are sorted chronologically across BOTH
+  // members, not just concatenated in member order.
+  const eventDates = collectionPassport.operationalHistory.events.map((e) => new Date(e.occurred_at).getTime());
+  const sortedDates = [...eventDates].sort((a, b) => a - b);
+  assert.deepEqual(eventDates, sortedDates);
+});
+
+test('buildCollectionPassportViewModel: a 3-member Collection mixing customer and commitment members aggregates all resolvable members', () => {
+  const scope = {
+    type: 'collection',
+    id: 'collection:test-fixture-3',
+    label: '3 items',
+    memberIds: [
+      { type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' },
+      { type: 'commitment', id: 'e6bc8583-d191-417b-9284-01303238ddfc', label: 'ITEM-NR-CPP-1000' },
+      { type: 'commitment', id: '43f187a7-5e39-48d4-9524-ce7004b3649d', label: 'ITEM-NR-LCM-5000' },
+    ],
+  };
+  const collectionPassport = buildCollectionPassportViewModel(snapshot, scope, 2);
+  assert.ok(collectionPassport);
+  assert.equal(collectionPassport.memberCount, 3);
+  // The critical commitment (43f187a7...) must make the aggregate's worst
+  // risk 'critical', even though the customer member alone is 'neutral'.
+  assert.equal(collectionPassport.currentRisk, 'critical');
 });
 
 // ---------------------------------------------------------------------------

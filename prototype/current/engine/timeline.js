@@ -37,6 +37,21 @@
  *   buildScopeHierarchy() output (the org -> site -> customer -> program ->
  *   commitment tree the Scope Explorer browses).
  * @property {{ sliceIndex: number, sliceId: string|null, visibility: Object }} timeline
+ * @property {Array<Object>} hierarchyPath - V5 Phase 4 (docs/V5_DESIGN_SPEC.md
+ *   §5.2): engine/derive.js's buildHierarchyPathForObject() output for the
+ *   current selection, consumed by lenses/text-view.js. Empty array when
+ *   nothing is selected.
+ * @property {Object} spider - V5 Phase 4 (docs/V5_DESIGN_SPEC.md §4):
+ *   engine/derive.js's buildSpiderViewModel() output for the current
+ *   selection + time slice, consumed by lenses/spider.js. Computed even
+ *   when nothing is selected (radars the Organization - §4.3's "no
+ *   selection = whole-enterprise exposure" empty state).
+ * @property {Object|null} collectionPassport - V5 Phase 4
+ *   (docs/V5_HANDOVER.md §9.1/§10.2): engine/derive.js's
+ *   buildCollectionPassportViewModel() output when state.scopeContext is a
+ *   Collection, consumed by panels/passport.js as a fallback when no single
+ *   object is selected. Null when scope is not a Collection, or the
+ *   Collection has no resolvable members.
  */
 
 /**
@@ -128,6 +143,15 @@ export function initTimeline({ store, getSnapshot, derive }) {
       ? derive.buildPassportViewModel(snapshot, state.selectedObjectId, sliceIndex)
       : null;
     const jarvis = derive.buildJarvisViewModel(snapshot, state, scope);
+    const hierarchyPath = state.selectedObjectId
+      ? derive.buildHierarchyPathForObject(snapshot, state.selectedObjectId)
+      : [];
+    const spider = derive.buildSpiderViewModel(snapshot, state.selectedObjectId, sliceIndex);
+    const collectionPassport = derive.buildCollectionPassportViewModel(
+      snapshot,
+      state.scopeContext ?? null,
+      sliceIndex
+    );
 
     /** @type {DerivedBundle} */
     const bundle = {
@@ -143,6 +167,9 @@ export function initTimeline({ store, getSnapshot, derive }) {
         sliceId: timeSlices[sliceIndex] ? timeSlices[sliceIndex].id : null,
         visibility,
       },
+      hierarchyPath,
+      spider,
+      collectionPassport,
     };
 
     lastBundle = bundle;
