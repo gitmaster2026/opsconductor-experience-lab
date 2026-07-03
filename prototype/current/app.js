@@ -57,6 +57,7 @@ import { mountPassportPanel } from './panels/passport.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
 import { mountScopePanel } from './panels/scope.js';
 import { mountNavHistoryRail } from './panels/nav-history.js';
+import { mountSavedViewsManager } from './engine/saved-views.js';
 
 // ---------------------------------------------------------------------------
 // DOM references (same element ids as the previous prototype iteration, so
@@ -82,6 +83,7 @@ const els = {
   scopeExplorer: document.getElementById('scopeExplorer'),
   navHistoryRail: document.getElementById('navHistoryRail'),
   nodeTooltip: document.getElementById('nodeTooltip'),
+  savedViewsManager: document.getElementById('savedViewsManager'),
 };
 
 // ---------------------------------------------------------------------------
@@ -205,6 +207,13 @@ async function main() {
     onHover: (cellId) => store.setHovered(cellId),
   });
 
+  // V5 Phase 4.6 (docs/V5_HANDOVER.md §9.2/§9.4): the shared "Manage Saved
+  // Views" modal - one instance, opened from either Dashboard's or
+  // Workbench's own "Manage Saved Views" button (same one-state-many-
+  // triggers pattern as panels/scope.js's Scope Explorer, just with two
+  // trigger points instead of one).
+  const savedViewsManager = mountSavedViewsManager(els.savedViewsManager);
+
   // V5 Phase 4.5 (docs/V5_HANDOVER.md §9.2/§11.6): the Workbench lens -
   // needs the raw snapshot (not just the per-lens view-models already in
   // the bundle) since engine/relationship-dataset.js traverses the full
@@ -212,6 +221,7 @@ async function main() {
   const workbenchLens = mountWorkbenchLens(els.workbenchEl, {
     getBundle: () => timeline.getDerivedBundle(),
     getSnapshot: () => snapshot,
+    onOpenSavedViewsManager: () => savedViewsManager.open(),
   });
 
   // --- Panel mounting ------------------------------------------------------
@@ -234,6 +244,7 @@ async function main() {
       riskBoardLens.render();
     },
     onSetLens: (lens) => store.setLens(lens),
+    onOpenSavedViewsManager: () => savedViewsManager.open(),
   });
 
   const passportPanel = mountPassportPanel(els.leftPanel, {

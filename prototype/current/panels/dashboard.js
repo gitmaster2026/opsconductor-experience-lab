@@ -29,6 +29,7 @@
 // exercised by node:test without a browser.
 
 import { pickPrimaryFocusObjectId, pickLensForFocusObjects } from './dashboard-helpers.js';
+import { mountSaveNamePrompt, placeholderSaveNote } from '../engine/saved-views.js';
 
 /**
  * KPI card id -> whether its numeric value should be read as "the bigger
@@ -144,15 +145,94 @@ function escapeHtml(value) {
  * @param {(lens: 'universe'|'risk_board') => void} callbacks.onSetLens -
  *   switches the active workspace lens (wired to engine/state.js's
  *   setLens).
+ * @param {() => void} [callbacks.onOpenSavedViewsManager] - opens the
+ *   shared "Manage Saved Views" modal (panels/saved-views.js's
+ *   mountSavedViewsManager) - V5 Phase 4.6.
  * @returns {{ render: () => void, destroy: () => void }}
  */
 export function mountDashboardPanel(el, callbacks) {
   if (!el || typeof el.appendChild !== 'function') {
     throw new Error('mountDashboardPanel: el must be a DOM element');
   }
-  const { getBundle, onSelect, onFocusObjects, onSetLens } = callbacks ?? {};
+  const { getBundle, onSelect, onFocusObjects, onSetLens, onOpenSavedViewsManager } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountDashboardPanel: callbacks.getBundle is required');
+  }
+
+  // V5 Phase 4.6 (docs/V5_HANDOVER.md §9.2/§9.4): the view-actions row
+  // (Save Current View / Save Dashboard / Duplicate View / Share View /
+  // Manage Saved Views) and its shared naming popover are static chrome,
+  // rebuilt lazily by ensureChrome() below rather than on every render() -
+  // render() is called on every timeline update (any selection/scope/time
+  // change anywhere in the app, including hovering Universe/Risk Board
+  // while this panel is simply visible alongside them), so if the action
+  // bar markup lived inside render()'s own wholesale-replaced template, an
+  // in-progress "Save..." popover could be wiped out mid-interaction by an
+  // unrelated hover event.
+  //
+  // `el` (#leftPanel) is SHARED with panels/passport.js, which fully
+  // replaces el.innerHTML on its own render() whenever leftPanelMode is
+  // 'passport' - so this chrome WILL get torn down when the user switches
+  // away, and must be rebuilt (not just skipped) the next time Dashboard
+  // becomes active. ensureChrome() below handles both cases: build once,
+  // then no-op on every subsequent render() until el.contains(contentEl)
+  // goes false (i.e. Passport's render() blew it away in the meantime).
+  let contentEl = null;
+  let sliceLabelEl = null;
+  let scopeLabelEl = null;
+  let saveNamePrompt = null;
+
+  function ensureChrome() {
+    if (contentEl && el.contains(contentEl)) return; // still attached, nothing to do
+
+    el.innerHTML = `
+      <div class="panel-surface dashboard-panel">
+        <div class="panel-heading">
+          <h2>Dashboard</h2>
+          <p class="panel-subhead" data-dash-slice-label></p>
+          <p class="panel-subhead panel-subhead--scope" data-dash-scope-label></p>
+          <div class="view-actions-bar">
+            <button type="button" class="view-action-btn" data-view-action="save-view">Save Current View</button>
+            <button type="button" class="view-action-btn" data-view-action="save-dashboard">Save Dashboard</button>
+            <button type="button" class="view-action-btn" data-view-action="duplicate-view">Duplicate View</button>
+            <button type="button" class="view-action-btn" data-view-action="share-view" disabled title="Sharing is a future capability">Share View</button>
+            <button type="button" class="view-action-btn" data-view-action="manage-saved-views">Manage Saved Views</button>
+          </div>
+          <div class="save-name-prompt hidden" data-save-name-prompt></div>
+        </div>
+        <div data-dash-content></div>
+      </div>
+    `;
+
+    contentEl = el.querySelector('[data-dash-content]');
+    sliceLabelEl = el.querySelector('[data-dash-slice-label]');
+    scopeLabelEl = el.querySelector('[data-dash-scope-label]');
+    saveNamePrompt = mountSaveNamePrompt(el.querySelector('[data-save-name-prompt]'));
+
+    el.querySelector('[data-view-action="save-view"]').addEventListener('click', () => {
+      saveNamePrompt.open({
+        title: 'Save Current View',
+        placeholder: 'e.g. Horizon LNG Partners — Watchlist',
+        onConfirm: (name) => placeholderSaveNote(name),
+      });
+    });
+    el.querySelector('[data-view-action="save-dashboard"]').addEventListener('click', () => {
+      saveNamePrompt.open({
+        title: 'Save Dashboard',
+        placeholder: 'e.g. Executive Daily Dashboard',
+        onConfirm: (name) => placeholderSaveNote(name),
+      });
+    });
+    el.querySelector('[data-view-action="duplicate-view"]').addEventListener('click', () => {
+      saveNamePrompt.open({
+        title: 'Duplicate View',
+        placeholder: 'e.g. Copy of Executive Daily Dashboard',
+        onConfirm: (name) => placeholderSaveNote(name),
+      });
+    });
+    el.querySelector('[data-view-action="manage-saved-views"]').addEventListener('click', () => {
+      if (typeof onOpenSavedViewsManager === 'function') onOpenSavedViewsManager();
+    });
   }
 
   /**
@@ -266,6 +346,8 @@ export function mountDashboardPanel(el, callbacks) {
   }
 
   function render() {
+    ensureChrome();
+
     const bundle = getBundle();
     const dashboard = bundle?.dashboard ?? { cards: [], sliceLabel: null };
     const cards = Array.isArray(dashboard.cards) ? dashboard.cards : [];
@@ -273,29 +355,24 @@ export function mountDashboardPanel(el, callbacks) {
     const headline = cards.find((c) => c.id === HEADLINE_CARD_ID);
     const rest = cards.filter((c) => c.id !== HEADLINE_CARD_ID);
 
-    el.innerHTML = `
-      <div class="panel-surface dashboard-panel">
-        <div class="panel-heading">
-          <h2>Dashboard</h2>
-          <p class="panel-subhead">${escapeHtml(dashboard.sliceLabel ?? 'Current state')}</p>
-          <p class="panel-subhead panel-subhead--scope">Scope: ${escapeHtml(dashboard.scopeLabel ?? 'Whole Organization')}</p>
-        </div>
+    sliceLabelEl.textContent = dashboard.sliceLabel ?? 'Current state';
+    scopeLabelEl.textContent = `Scope: ${dashboard.scopeLabel ?? 'Whole Organization'}`;
 
-        ${headline ? `<div class="kpi-headline">${renderCard(headline)}</div>` : ''}
+    contentEl.innerHTML = `
+      ${headline ? `<div class="kpi-headline">${renderCard(headline)}</div>` : ''}
 
-        <div class="kpi-grid">
-          ${rest.map((card) => renderCard(card)).join('')}
-        </div>
+      <div class="kpi-grid">
+        ${rest.map((card) => renderCard(card)).join('')}
+      </div>
 
-        <div class="dash-section">
-          <h3 class="dash-section-title">Top Commitment Risks</h3>
-          ${renderTopCommitmentRisks(bundle)}
-        </div>
+      <div class="dash-section">
+        <h3 class="dash-section-title">Top Commitment Risks</h3>
+        ${renderTopCommitmentRisks(bundle)}
       </div>
     `;
 
     // Wire KPI card clicks.
-    el.querySelectorAll('[data-card-id]').forEach((cardEl) => {
+    contentEl.querySelectorAll('[data-card-id]').forEach((cardEl) => {
       const cardId = cardEl.getAttribute('data-card-id');
       const card = cards.find((c) => c.id === cardId);
       if (!card || !card.clickTarget) return;
@@ -303,7 +380,7 @@ export function mountDashboardPanel(el, callbacks) {
     });
 
     // Wire "Top Commitment Risks" list item clicks/keyboard activation.
-    el.querySelectorAll('[data-select-id]').forEach((itemEl) => {
+    contentEl.querySelectorAll('[data-select-id]').forEach((itemEl) => {
       const targetId = itemEl.getAttribute('data-select-id');
       const activate = () => {
         if (typeof onSelect === 'function') onSelect(targetId);
