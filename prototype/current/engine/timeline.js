@@ -27,6 +27,15 @@
  * @property {Object} dashboard
  * @property {Object|null} passport - null when nothing is selected
  * @property {Object} jarvis
+ * @property {{ isUnscoped: boolean, label: string, scopedNodeIds: string[], scopedCommitmentCellIds: string[] }} scope -
+ *   V5 Phase 3.5 (docs/V5_HANDOVER.md §9.1-§9.3): engine/derive.js's
+ *   buildScopeFilter() output for the current state.scopeContext, computed
+ *   once per recompute and threaded into riskBoard/dashboard/jarvis above
+ *   so every scope-aware surface derives from this single source rather
+ *   than each recomputing scope membership independently.
+ * @property {Object} scopeHierarchy - engine/derive.js's
+ *   buildScopeHierarchy() output (the org -> site -> customer -> program ->
+ *   commitment tree the Scope Explorer browses).
  * @property {{ sliceIndex: number, sliceId: string|null, visibility: Object }} timeline
  */
 
@@ -111,12 +120,14 @@ export function initTimeline({ store, getSnapshot, derive }) {
 
     const visibility = derive.resolveVisibilityForSlice(snapshot, sliceIndex);
     const universe = derive.buildUniverseGraph(snapshot);
-    const riskBoard = derive.buildRiskBoardViewModel(snapshot, sliceIndex);
-    const dashboard = derive.buildDashboardViewModel(snapshot, sliceIndex);
+    const scope = derive.buildScopeFilter(snapshot, state.scopeContext ?? null);
+    const scopeHierarchy = derive.buildScopeHierarchy(snapshot);
+    const riskBoard = derive.buildRiskBoardViewModel(snapshot, sliceIndex, scope);
+    const dashboard = derive.buildDashboardViewModel(snapshot, sliceIndex, scope);
     const passport = state.selectedObjectId
       ? derive.buildPassportViewModel(snapshot, state.selectedObjectId, sliceIndex)
       : null;
-    const jarvis = derive.buildJarvisViewModel(snapshot, state);
+    const jarvis = derive.buildJarvisViewModel(snapshot, state, scope);
 
     /** @type {DerivedBundle} */
     const bundle = {
@@ -125,6 +136,8 @@ export function initTimeline({ store, getSnapshot, derive }) {
       dashboard,
       passport,
       jarvis,
+      scope,
+      scopeHierarchy,
       timeline: {
         sliceIndex,
         sliceId: timeSlices[sliceIndex] ? timeSlices[sliceIndex].id : null,

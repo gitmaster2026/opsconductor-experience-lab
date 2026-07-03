@@ -66,7 +66,8 @@ concept" and "did this invent a new entity type."
 | 1 — State/camera engine, field-map governance | ✅ Done | `8f0f768` |
 | 2 — Universe galaxy (orbit layout, labels, strata, flight) | ✅ Done, functionally validated | `f721680` |
 | 2.6 — Visual language refinement | 🟢 **Decisions resolved, ready to implement** — see §4, prompt in §7a | — |
-| 3 — Risk Board v2 | ✅ Done — severity-banded editorial cards, sparklines, FLIP band migration | (this branch) |
+| 3 — Risk Board v2 | ✅ Done — severity-banded editorial cards, sparklines, FLIP band migration | `7954684` |
+| 3.5 — Operational Scope + global sync | ✅ Done — Scope Bar, Scope Explorer, scope-aware Universe/Risk Board/Dashboard/Jarvis | (this branch) |
 | 4 — Text View + Spider | ⬜ Not started | — |
 | 5 — Motion grammar + doc reconciliation | ⬜ Not started | — |
 | Mobile/responsive/touch | 🔶 **Backlogged, out of scope** — see §6 | — |
@@ -544,6 +545,22 @@ and route to a no-op/placeholder handler.
 
 | Date/Session | Change |
 |---|---|
+| +6 | Phase 3.5 (Operational Scope + global synchronization) executed:
+  `engine/state.js` gained `scopeContext`/`setScope()` (orthogonal to
+  selection/time/zoom/focusTrail, per §9.3); `engine/derive.js` gained
+  `buildScopeHierarchy()` (org -> site -> customer -> program -> commitment
+  tree, reusing existing joins) and `buildScopeFilter()` (resolves a scope
+  descriptor to scoped Universe node ids / risk-board cell ids; "whole org"
+  is a pure no-op filter, satisfying the regression requirement);
+  `buildRiskBoardViewModel`/`buildDashboardViewModel`/`buildJarvisViewModel`
+  now accept an optional scope filter and narrow their output accordingly.
+  New `panels/scope.js` (Scope Bar + Scope Explorer modal, one cohesive
+  module). `lenses/universe.js` gained scope-based recede (dim + shrink,
+  reusing the existing per-node opacity pipeline) via an optional
+  `getScope` callback - no changes to orbit-layout/camera/label internals
+  beyond that. `engine/timeline.js` threads `scope`/`scopeHierarchy` into
+  the bundle so all 4 existing surfaces derive from one computed scope per
+  recompute. 26 new tests (state/derive/timeline), 241 total passing. |
 | Initial | Created post-Phase 2, consolidating Phases 0-2 history, §4 open
   decisions from live user feedback, §6 mobile backlog, §7 Phase 3 prompt. |
 | +1 | §4 label/shape/color decisions resolved; §7a Phase 2.6 prompt added. |

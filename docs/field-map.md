@@ -98,6 +98,16 @@ Jarvis responses in this lab must be deterministic.
 | Suggested Next Step | deterministic recommendation/risk/evidence state | derived_supported |
 | Evidence Reference | evidence/source record fields | supported |
 
+## Operational Scope fields
+
+Operational Scope (V5 Phase 3.5, `docs/V5_HANDOVER.md` §9.1) is a UI-first concept: "the current operational context being explored by the user." Every field below is a derived filter/label/tree-nesting concept over data that already has its own field-map.md row elsewhere (Commitment ID, Customer, Program, Risk State, Revenue Value) - Scope introduces no new backend concept, only a narrowing view and a browsing hierarchy over the existing ones.
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Scope Hierarchy | organization/sites/commitments/demand_signals/operational-objects joins (the same joins Universe/RiskBoard already use) | derived_supported |
+| Scope Filter | commitment/customer/site/program membership, derived from the same joins, applied to Universe node ids and risk-board cell ids | derived_supported |
+| Current Context (scope) | active scope's human-readable label, echoed alongside existing Jarvis Current Context fields | derived_supported |
+
 ## UX hypotheses
 
 Add any desired but unsupported field here instead of placing it directly in prototypes.

@@ -682,6 +682,238 @@ export function buildUniverseGraph(snapshot) {
 }
 
 // ---------------------------------------------------------------------------
+// Operational Scope (V5 Phase 3.5, docs/V5_HANDOVER.md §9.1-§9.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-commitment scope descriptor: which site/customer/program a given
+ * commitment (and its risk-board cell) belongs to. Joined entirely from
+ * fields already used elsewhere in this file - commitments.customer_or_owner
+ * (the same PLT-200/PLT-300 free-text field buildUniverseGraph() already
+ * reads for its plantCode), demand_signals.customer/site (raw fields), and
+ * operational-objects.program (raw field) - no new joins invented, this is
+ * a projection of the exact same commitment->allocation->demand_signal->
+ * risk-board chain buildUniverseGraph() already walks per commitment.
+ *
+ * @param {any} snapshot
+ * @returns {Array<{ commitmentId: string, cellId: string|null, site: string|null, customer: string|null, program: string|null }>}
+ */
+function commitmentScopeDescriptors(snapshot) {
+  const commitments = recordsOf(snapshot.commitments);
+  const allocations = recordsOf(snapshot.allocations);
+  const demandSignals = recordsOf(snapshot.demandSignals);
+  const riskBoard = recordsOf(snapshot.riskBoard);
+  const operationalObjects = recordsOf(snapshot.operationalObjects);
+
+  return commitments.map((commitment) => {
+    const allocation = allocations.find((a) => a.commitment_id === commitment.id) ?? null;
+    const demandSignal = allocation
+      ? demandSignals.find((d) => d.id === allocation.demand_signal_id) ?? null
+      : null;
+    const cell = demandSignal
+      ? riskBoard.find((r) => r.demand_signal_id === demandSignal.id) ?? null
+      : null;
+    // Program: the only real field carrying a program value
+    // (operational-objects.json) is not stored on commitments.json at all
+    // in this dataset - it only exists on the narrative chain tied to a
+    // customer. A commitment "has" a program only when some narrative
+    // object shares its demand signal's customer AND declares a program -
+    // a real, derived join (reusing the exact `customer` field
+    // buildUniverseGraph()'s relates_to_customer edge already matches on),
+    // not a fabricated one. Most commitments legitimately have no program
+    // in this data checkpoint - that is a real gap, not something to paper
+    // over with an invented value.
+    const program = demandSignal
+      ? operationalObjects.find((o) => o.customer === demandSignal.customer && o.program)?.program ?? null
+      : null;
+
+    return {
+      commitmentId: commitment.id,
+      cellId: cell ? cell.id : null,
+      site: commitment.customer_or_owner ?? null,
+      customer: demandSignal ? demandSignal.customer : null,
+      program,
+    };
+  });
+}
+
+/**
+ * Build the org -> site -> customer -> program -> commitment tree the Scope
+ * Explorer browses (docs/V5_HANDOVER.md §9.1: "Lets user browse/select
+ * organization -> site -> customer -> program -> commitment hierarchy to
+ * set scope"). Every level is a REAL join already used elsewhere in this
+ * file (buildUniverseGraph()'s org/plant anchor construction,
+ * commitmentScopeDescriptors()'s site/customer/program joins) - reused, not
+ * re-derived a second way. No invented levels: a "program" node only ever
+ * appears under a commitment that genuinely has one (see
+ * commitmentScopeDescriptors()'s note - only one exists in this data
+ * checkpoint, Horizon LNG's CPP-1000 commitment), and customers with no
+ * commitment (e.g. this dataset's Helios Hydrogen, sourced from an
+ * operational-object warranty record rather than a demand signal) still
+ * appear, as direct children of the organization root, since they are real
+ * customers.json rows rather than being silently dropped.
+ *
+ * @param {any} snapshot
+ * @returns {{ id: string, type: 'organization', label: string, children: Array<Object> }}
+ */
+export function buildScopeHierarchy(snapshot) {
+  assertSnapshot(snapshot);
+  const orgRecord = recordsOf(snapshot.organization)[0] ?? null;
+  const enterprise = snapshot.schemaAuthority?.canonicalDemoFacts?.enterprise;
+  const { label: orgLabel } = splitEnterpriseBrand(enterprise);
+  const commitments = recordsOf(snapshot.commitments);
+  const items = recordsOf(snapshot.items);
+  const customersFile = recordsOf(snapshot.customers);
+  const descriptors = commitmentScopeDescriptors(snapshot);
+
+  const siteKeys = [...new Set(descriptors.map((d) => d.site).filter(Boolean))].sort();
+  const siteChildren = siteKeys.map((siteKey) => {
+    const atSite = descriptors.filter((d) => d.site === siteKey);
+    const customerNames = [...new Set(atSite.map((d) => d.customer).filter(Boolean))];
+    return {
+      id: `plant:${siteKey}`,
+      type: 'site',
+      label: PLANT_DISPLAY_LABELS[siteKey] ?? siteKey,
+      children: customerNames.map((customerName) => ({
+        id: `customer:${customerName}`,
+        type: 'customer',
+        label: customerName,
+        children: atSite
+          .filter((d) => d.customer === customerName)
+          .map((d) => {
+            const commitment = commitments.find((c) => c.id === d.commitmentId);
+            const item = commitment ? items.find((i) => i.id === commitment.item_id) : null;
+            return {
+              id: d.commitmentId,
+              type: 'commitment',
+              label: item ? item.canonical_item_number : d.commitmentId,
+              children: d.program
+                ? [{ id: d.program, type: 'program', label: d.program, children: [] }]
+                : [],
+            };
+          }),
+      })),
+    };
+  });
+
+  const scopedCustomerNames = new Set(descriptors.map((d) => d.customer).filter(Boolean));
+  const orphanCustomers = customersFile
+    .filter((c) => !scopedCustomerNames.has(c.customer))
+    .map((c) => ({ id: `customer:${c.customer}`, type: 'customer', label: c.customer, children: [] }));
+
+  return {
+    id: orgRecord ? orgRecord.id : 'organization',
+    type: 'organization',
+    label: orgLabel,
+    children: [...siteChildren, ...orphanCustomers],
+  };
+}
+
+/**
+ * Universe node types whose presence never depends on scope - the graph's
+ * structural anchors, kept as permanent orientation context regardless of
+ * how narrow the current scope is. An implementer's UX choice ("nodes
+ * outside current scope recede/hide per your judgment," docs/V5_HANDOVER.md
+ * §9.1), not a data rule.
+ */
+const SCOPE_ALWAYS_VISIBLE_NODE_TYPES = new Set(['organization', 'plant']);
+
+/**
+ * Resolve an Operational Scope descriptor (whatever plain
+ * `{ type, id, label }` shape engine/state.js's scopeContext currently
+ * holds, or null) into the concrete Universe node ids / risk-board cell ids
+ * it narrows the workspace down to. Pure and total: always returns a usable
+ * result, even for null/malformed scope input (treated as unscoped).
+ *
+ * "Unscoped" (scope null, or scope.type === 'organization', or scope.id ==
+ * null) returns EVERY node id / EVERY cell id - i.e. scoping to "whole
+ * org" is a pure no-op filter, so every caller (buildRiskBoardViewModel,
+ * buildDashboardViewModel, buildJarvisViewModel, lenses/universe.js) can
+ * apply this result uniformly (intersect against scopedNodeIds/
+ * scopedCommitmentCellIds) without a separate isUnscoped branch -  this is
+ * exactly what makes "whole org" scope equivalent to the prior unscoped
+ * behavior (docs/V5_HANDOVER.md §9.3's explicit regression requirement).
+ *
+ * Node-level membership reuses resolveCommitmentForObject() (already
+ * exported, already tested) for every supply-chain node type (item,
+ * demand_signal, allocation, inventory, shortage_exception, risk cell,
+ * recommendation, evidence) rather than re-deriving a second join chain;
+ * narrative (operational-objects) nodes, which do not resolve to a
+ * commitment, are matched directly on their own `customer`/`program`
+ * fields instead (the same fields commitmentScopeDescriptors() reads).
+ *
+ * @param {any} snapshot
+ * @param {{ type: string, id: string|null, label?: string }|null} scope
+ * @returns {{ isUnscoped: boolean, label: string, scopedNodeIds: string[], scopedCommitmentCellIds: string[] }}
+ */
+export function buildScopeFilter(snapshot, scope) {
+  assertSnapshot(snapshot);
+  const graph = buildUniverseGraph(snapshot);
+  const allNodeIds = graph.nodes.map((n) => n.id);
+  const allCellIds = recordsOf(snapshot.riskBoard).map((c) => c.id);
+
+  const isRealScope = Boolean(
+    scope && typeof scope === 'object' && scope.type !== 'organization' && scope.id != null
+  );
+  if (!isRealScope) {
+    return {
+      isUnscoped: true,
+      label: 'Whole Organization',
+      scopedNodeIds: allNodeIds,
+      scopedCommitmentCellIds: allCellIds,
+    };
+  }
+
+  // scope.id is expected to be whichever id buildScopeHierarchy() assigned
+  // that tree node (the Scope Explorer passes a tree node's own id/type/
+  // label straight through to onSetScope() - see panels/scope.js) - `site`
+  // and `customer` ids carry the same `plant:`/`customer:` prefix
+  // buildUniverseGraph()'s own node ids use (by design: same id space,
+  // easy to cross-reference), while `program`/`commitment` ids are the raw
+  // program string / commitment id, unprefixed, matching
+  // buildScopeHierarchy()'s own id assignment for those two levels exactly.
+  const descriptors = commitmentScopeDescriptors(snapshot);
+  let matched;
+  if (scope.type === 'site') {
+    matched = descriptors.filter((d) => `plant:${d.site}` === scope.id);
+  } else if (scope.type === 'customer') {
+    matched = descriptors.filter((d) => `customer:${d.customer}` === scope.id);
+  } else if (scope.type === 'program') {
+    matched = descriptors.filter((d) => d.program === scope.id);
+  } else if (scope.type === 'commitment') {
+    matched = descriptors.filter((d) => d.commitmentId === scope.id || d.cellId === scope.id);
+  } else {
+    matched = [];
+  }
+
+  const scopedCommitmentIds = new Set(matched.map((d) => d.commitmentId));
+  const scopedCellIds = matched.map((d) => d.cellId).filter(Boolean);
+  const scopedCustomerNames = new Set(matched.map((d) => d.customer).filter(Boolean));
+  const scopedPrograms = new Set(
+    scope.type === 'program' ? [scope.id] : matched.map((d) => d.program).filter(Boolean)
+  );
+
+  const scopedNodeIds = graph.nodes
+    .filter((node) => {
+      if (SCOPE_ALWAYS_VISIBLE_NODE_TYPES.has(node.type)) return true;
+      if (node.type === 'customer') return scopedCustomerNames.has(node.label);
+      const commitmentId = resolveCommitmentForObject(snapshot, node.id);
+      if (commitmentId && scopedCommitmentIds.has(commitmentId)) return true;
+      if (node.customer && scopedCustomerNames.has(node.customer)) return true;
+      if (node.program && scopedPrograms.has(node.program)) return true;
+      return false;
+    })
+    .map((n) => n.id);
+
+  return {
+    isUnscoped: false,
+    label: scope.label ?? String(scope.id),
+    scopedNodeIds,
+    scopedCommitmentCellIds: scopedCellIds,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // buildRiskBoardViewModel
 // ---------------------------------------------------------------------------
 
@@ -694,15 +926,28 @@ export function buildUniverseGraph(snapshot) {
  *
  * @param {any} snapshot
  * @param {number} sliceIndex
+ * @param {{ isUnscoped: boolean, scopedCommitmentCellIds: string[] }} [scopeFilter] -
+ *   V5 Phase 3.5: buildScopeFilter()'s output. When provided and narrowed
+ *   (isUnscoped === false), cells outside scopedCommitmentCellIds are
+ *   dropped from the output entirely (docs/V5_HANDOVER.md §9.2: "Risk
+ *   Board: commitments outside scope filtered from cards" - a literal
+ *   filter, unlike the time-visibility "always render, dormant if not yet
+ *   revealed" rule above, which this leaves untouched). Omitted/unscoped
+ *   preserves the prior "all 5 always render" behavior exactly.
  * @returns {{ sliceId: string, sliceLabel: string, cells: Array<Object> }}
  */
-export function buildRiskBoardViewModel(snapshot, sliceIndex) {
+export function buildRiskBoardViewModel(snapshot, sliceIndex, scopeFilter) {
   assertSnapshot(snapshot);
   const timeSlices = recordsOf(snapshot.timeSlices);
   const slice = timeSlices[Math.max(0, Math.min(sliceIndex, timeSlices.length - 1))] ?? null;
   const visibility = resolveVisibilityForSlice(snapshot, sliceIndex);
 
-  const riskBoard = recordsOf(snapshot.riskBoard);
+  const scopedCellIdSet =
+    scopeFilter && !scopeFilter.isUnscoped ? new Set(scopeFilter.scopedCommitmentCellIds) : null;
+
+  const riskBoard = recordsOf(snapshot.riskBoard).filter(
+    (cell) => !scopedCellIdSet || scopedCellIdSet.has(cell.id)
+  );
   const recommendations = recordsOf(snapshot.recommendations);
   const evidence = recordsOf(snapshot.evidence);
 
@@ -822,22 +1067,57 @@ export function riskTrajectory(snapshot, commitmentId) {
  *
  * @param {any} snapshot
  * @param {number} sliceIndex
- * @returns {{ sliceId: string, sliceLabel: string, cards: Array<Object> }}
+ * @param {{ isUnscoped: boolean, label: string, scopedCommitmentCellIds: string[] }} [scopeFilter] -
+ *   V5 Phase 3.5: buildScopeFilter()'s output. When narrowed, every count/
+ *   sum below is computed from the scoped subset of risk-board.json cells
+ *   and their linked recommendations only (docs/V5_HANDOVER.md §9.2:
+ *   "Dashboard: KPIs reflect scoped subset"), and each card's clickTarget
+ *   objectIds is scoped the same way, so acting on a KPI card never
+ *   navigates outside the current scope. Operational Health is left
+ *   reading the org-wide time-slices.json score unscoped either way - it
+ *   is a single pre-computed aggregate score with no per-cell breakdown to
+ *   recompute a scoped variant from, so scoping it would mean inventing a
+ *   new formula rather than filtering an existing one (out of scope for
+ *   this phase's "reuse existing data" constraint). Omitted/unscoped
+ *   preserves the prior exact values (time-slices.json's own
+ *   revenue_at_risk/commitments_at_risk aggregates), satisfying the
+ *   whole-org regression requirement.
+ * @returns {{ sliceId: string, sliceLabel: string, scopeLabel: string, cards: Array<Object> }}
  */
-export function buildDashboardViewModel(snapshot, sliceIndex) {
+export function buildDashboardViewModel(snapshot, sliceIndex, scopeFilter) {
   assertSnapshot(snapshot);
   const timeSlices = recordsOf(snapshot.timeSlices);
   const clampedIndex = Math.max(0, Math.min(sliceIndex, timeSlices.length - 1));
   const slice = timeSlices[clampedIndex] ?? null;
   const visibility = resolveVisibilityForSlice(snapshot, clampedIndex);
 
-  const riskBoard = recordsOf(snapshot.riskBoard);
-  const recommendations = recordsOf(snapshot.recommendations);
+  const scopedCellIdSet =
+    scopeFilter && !scopeFilter.isUnscoped ? new Set(scopeFilter.scopedCommitmentCellIds) : null;
+  const isScoped = scopedCellIdSet !== null;
 
-  const visibleRiskBoardRows = riskBoard.filter((cell) => visibility.visibleRiskBoardIds.includes(cell.id));
+  const riskBoard = recordsOf(snapshot.riskBoard);
+  const recommendationsAll = recordsOf(snapshot.recommendations);
+  // Scope a recommendation by the risk-board cell it joins to via
+  // demand_signal_id (same join buildRiskBoardViewModel/buildUniverseGraph
+  // already use) - a recommendation for an out-of-scope commitment should
+  // never count toward a scoped KPI.
+  const recommendations = recommendationsAll.filter((r) => {
+    if (!scopedCellIdSet) return true;
+    const cell = riskBoard.find((c) => c.demand_signal_id === r.demand_signal_id);
+    return Boolean(cell && scopedCellIdSet.has(cell.id));
+  });
+
+  const visibleRiskBoardRows = riskBoard
+    .filter((cell) => visibility.visibleRiskBoardIds.includes(cell.id))
+    .filter((cell) => !scopedCellIdSet || scopedCellIdSet.has(cell.id));
   const criticalCount = visibleRiskBoardRows.filter((c) => c.risk_state === 'critical').length;
   const elevatedCount = visibleRiskBoardRows.filter((c) => c.risk_state === 'elevated').length;
   const watchCount = visibleRiskBoardRows.filter((c) => c.risk_state === 'watch').length;
+  const scopedVisibleRiskBoardIds = visibleRiskBoardRows.map((c) => c.id);
+  const scopedRevenueAtRisk = visibleRiskBoardRows.reduce((sum, c) => sum + (Number(c.revenue_at_risk) || 0), 0);
+  const scopedVisibleRecommendationIds = visibility.visibleRecommendationIds.filter((id) =>
+    recommendations.some((r) => r.id === id)
+  );
 
   const cards = [
     {
@@ -853,37 +1133,41 @@ export function buildDashboardViewModel(snapshot, sliceIndex) {
     {
       id: 'revenue-at-risk',
       title: 'Revenue at Risk',
-      value: slice ? slice.revenue_at_risk : null,
+      value: isScoped ? scopedRevenueAtRisk : slice ? slice.revenue_at_risk : null,
       unit: 'USD',
-      sourceField: 'time-slices.json[].revenue_at_risk',
-      clickTarget: { type: 'focus_objects', objectIds: visibility.visibleRiskBoardIds },
+      sourceField: isScoped
+        ? 'sum of risk-board.json revenue_at_risk over scoped, visible cells'
+        : 'time-slices.json[].revenue_at_risk',
+      clickTarget: { type: 'focus_objects', objectIds: scopedVisibleRiskBoardIds },
     },
     {
       id: 'commitments-at-risk',
       title: 'Commitments at Risk',
-      value: slice ? slice.commitments_at_risk : null,
+      value: isScoped ? visibleRiskBoardRows.length : slice ? slice.commitments_at_risk : null,
       unit: 'count',
-      sourceField: 'time-slices.json[].commitments_at_risk',
+      sourceField: isScoped
+        ? 'count of risk-board.json cells, scoped and visible'
+        : 'time-slices.json[].commitments_at_risk',
       clickTarget: { type: 'focus_lens', lens: 'risk_board' },
     },
     {
       id: 'critical-recommendations',
       title: 'Critical Recommendations',
-      value: recommendations.filter((r) => visibility.visibleRecommendationIds.includes(r.id)).length,
+      value: scopedVisibleRecommendationIds.length,
       unit: 'count',
       // supported per field-map.md: "recommendations.status,
       // recommendation_text, evidence-backed rows" (this dataset's
       // recommendations.json is the shortage_recommendations mirror; see
       // field-map.md's Passport section note on the actual fields present)
-      sourceField: 'recommendations.json (filtered by resolveVisibilityForSlice)',
-      clickTarget: { type: 'focus_objects', objectIds: visibility.visibleRecommendationIds },
+      sourceField: 'recommendations.json (filtered by resolveVisibilityForSlice, then by scope)',
+      clickTarget: { type: 'focus_objects', objectIds: scopedVisibleRecommendationIds },
     },
     {
       id: 'new-shortages',
       title: 'New Shortages',
-      value: visibility.revealedCount,
+      value: isScoped ? scopedVisibleRecommendationIds.length : visibility.revealedCount,
       unit: 'count',
-      sourceField: 'derived from resolveVisibilityForSlice (shortage_exceptions/demand_signals join)',
+      sourceField: 'derived from resolveVisibilityForSlice (shortage_exceptions/demand_signals join), scoped',
       clickTarget: { type: 'focus_lens', lens: 'risk_board' },
     },
     {
@@ -891,7 +1175,7 @@ export function buildDashboardViewModel(snapshot, sliceIndex) {
       title: 'Trending Issues',
       value: criticalCount + elevatedCount,
       unit: 'count',
-      sourceField: 'derived from risk-board.json risk_state counts, filtered to visible cells',
+      sourceField: 'derived from risk-board.json risk_state counts, filtered to visible cells and scope',
       clickTarget: {
         type: 'focus_objects',
         objectIds: visibleRiskBoardRows
@@ -904,7 +1188,7 @@ export function buildDashboardViewModel(snapshot, sliceIndex) {
       title: 'Active Investigations',
       value: watchCount,
       unit: 'count',
-      sourceField: 'derived from risk-board.json risk_state="watch" counts, filtered to visible cells',
+      sourceField: 'derived from risk-board.json risk_state="watch" counts, filtered to visible cells and scope',
       clickTarget: {
         type: 'focus_objects',
         objectIds: visibleRiskBoardRows.filter((c) => c.risk_state === 'watch').map((c) => c.id),
@@ -915,6 +1199,7 @@ export function buildDashboardViewModel(snapshot, sliceIndex) {
   return {
     sliceId: slice ? slice.id : null,
     sliceLabel: slice ? slice.label : null,
+    scopeLabel: scopeFilter ? scopeFilter.label : 'Whole Organization',
     cards,
   };
 }
@@ -1186,9 +1471,17 @@ function buildFallbackOverview(node) {
  *
  * @param {any} snapshot
  * @param {{ selectedObjectId: string|null, workspaceLens: string, timeSliceId: string, zoomLevel: number }} state
+ * @param {{ isUnscoped: boolean, label: string, scopedCommitmentCellIds: string[] }} [scopeFilter] -
+ *   V5 Phase 3.5 (docs/V5_HANDOVER.md §9.2: "Jarvis: context reflects
+ *   current scope"). buildScopeFilter()'s output. currentContext always
+ *   echoes the scope's human label; Important Changes and Suggested Next
+ *   Step are additionally restricted to the scoped subset of risk-board
+ *   cells when narrowed, so Jarvis never surfaces a next step outside the
+ *   context the user is currently investigating. Omitted/unscoped
+ *   preserves prior behavior exactly.
  * @returns {Object}
  */
-export function buildJarvisViewModel(snapshot, state) {
+export function buildJarvisViewModel(snapshot, state, scopeFilter) {
   assertSnapshot(snapshot);
   if (!state || typeof state !== 'object') {
     throw new Error('buildJarvisViewModel: state must be an object (see engine/state.js getState())');
@@ -1199,7 +1492,11 @@ export function buildJarvisViewModel(snapshot, state) {
   const slice = timeSlices[sliceIndex] ?? timeSlices[0] ?? null;
   const visibility = resolveVisibilityForSlice(snapshot, sliceIndex);
 
-  const riskBoard = recordsOf(snapshot.riskBoard);
+  const scopedCellIdSet =
+    scopeFilter && !scopeFilter.isUnscoped ? new Set(scopeFilter.scopedCommitmentCellIds) : null;
+
+  const riskBoardAll = recordsOf(snapshot.riskBoard);
+  const riskBoard = riskBoardAll.filter((c) => !scopedCellIdSet || scopedCellIdSet.has(c.id));
   const recommendations = recordsOf(snapshot.recommendations);
   const evidence = recordsOf(snapshot.evidence);
 
@@ -1225,17 +1522,26 @@ export function buildJarvisViewModel(snapshot, state) {
     timeSliceId: slice ? slice.id : null,
     timeSliceLabel: slice ? slice.label : null,
     zoomLevel: state.zoomLevel,
+    scopeLabel: scopeFilter ? scopeFilter.label : 'Whole Organization',
   };
 
   // Important Changes: what became newly visible at this slice, compared
-  // to the immediately preceding slice (or nothing, at t0).
+  // to the immediately preceding slice (or nothing, at t0), restricted to
+  // recommendations whose linked risk-board cell is within the current
+  // scope (riskBoard above is already the scoped subset).
   const previousVisibility =
     sliceIndex > 0 ? resolveVisibilityForSlice(snapshot, sliceIndex - 1) : null;
-  const newlyVisibleRecommendationIds = previousVisibility
+  const newlyVisibleRecommendationIds = (previousVisibility
     ? visibility.visibleRecommendationIds.filter(
         (id) => !previousVisibility.visibleRecommendationIds.includes(id)
       )
-    : visibility.visibleRecommendationIds;
+    : visibility.visibleRecommendationIds
+  ).filter((recId) => {
+    if (!scopedCellIdSet) return true;
+    const rec = recommendations.find((r) => r.id === recId);
+    const cell = rec ? riskBoardAll.find((c) => c.demand_signal_id === rec.demand_signal_id) : null;
+    return Boolean(cell && scopedCellIdSet.has(cell.id));
+  });
   const importantChanges = newlyVisibleRecommendationIds.map((recId) => {
     const rec = recommendations.find((r) => r.id === recId);
     const cell = rec ? riskBoard.find((c) => c.demand_signal_id === rec.demand_signal_id) : null;
@@ -1436,6 +1742,15 @@ export function resolveCommitmentForObject(snapshot, objectId) {
  * introduces already maps to a category/note in docs/field-map.md.
  */
 export const KNOWN_OUTPUT_FIELDS = Object.freeze({
+  // --- commitmentScopeDescriptors / buildScopeHierarchy / buildScopeFilter (V5 Phase 3.5) ---
+  commitmentId: { category: 'derived_supported', note: 'field-map.md Operational Scope: Scope Hierarchy/Filter, per-commitment scope descriptor joined the same way buildUniverseGraph already joins commitments -> allocations -> demand_signals -> risk-board' },
+  cellId: { category: 'derived_supported', note: 'field-map.md Operational Scope: Scope Filter, risk-board.json cell id joined per commitment, same join buildRiskBoardViewModel already performs' },
+  children: { category: 'derived_supported', note: 'field-map.md Operational Scope: Scope Hierarchy, UI-only tree-nesting field (no backend equivalent, structural only)' },
+  isUnscoped: { category: 'derived_supported', note: 'field-map.md Operational Scope: Scope Filter, frontend-only flag distinguishing whole-organization from a narrowed scope' },
+  scopedNodeIds: { category: 'derived_supported', note: 'field-map.md Operational Scope: Scope Filter, ids of already-real Universe graph nodes (buildUniverseGraph) within the current scope' },
+  scopedCommitmentCellIds: { category: 'derived_supported', note: 'field-map.md Operational Scope: Scope Filter, ids of already-real risk-board.json cells within the current scope' },
+  scopeLabel: { category: 'derived_supported', note: 'field-map.md Operational Scope: Current Context, human-readable scope label echoed on the Dashboard/Jarvis view-models' },
+
   // --- resolveVisibilityForSlice ---
   visibleRecommendationIds: { category: 'derived_supported', note: 'field-map.md Universe: Timeline Visibility' },
   visibleEvidenceIds: { category: 'derived_supported', note: 'field-map.md Universe: Timeline Visibility' },
