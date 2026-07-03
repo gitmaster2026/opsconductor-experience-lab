@@ -579,6 +579,312 @@ body {
 }
 
 /* ---------------------------------------------------------------------
+   Workbench lens (V5 Phase 4.5, docs/V5_HANDOVER.md §9.2/§11.6) - an
+   analytical workspace: root-type + domain selectors build a joined
+   dataset (engine/relationship-dataset.js), a field/column picker chooses
+   which resolved columns to show, engine/filterable-table.js's REUSABLE
+   sort/filter table renders the rows, and a minimal bar/line chart sits
+   below. Editorial/document material (like Risk Board), not spatial -
+   reads as a workbench, not a third variation on Universe's canvas.
+   --------------------------------------------------------------------- */
+
+.workbench {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.workbench-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.02);
+  flex-wrap: wrap;
+}
+
+.workbench-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.workbench-field label,
+.workbench-field-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+  color: var(--cyan-accent);
+  white-space: nowrap;
+}
+
+.workbench-toolbar select,
+.workbench-chart-controls select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.workbench-domains {
+  flex-wrap: wrap;
+}
+
+.workbench-domain-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.workbench-domain-chip,
+.workbench-column-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 3px 10px 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.workbench-domain-chip:has(input:checked),
+.workbench-column-toggle:has(input:checked) {
+  color: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.1);
+}
+
+.workbench-toolbar-spacer {
+  flex: 1;
+}
+
+.workbench-ghost-btn {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  padding: 6px 14px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.workbench-ghost-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--cyan-accent);
+}
+
+.workbench-ghost-btn.is-flashing {
+  color: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+}
+
+.workbench-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  min-height: 0;
+}
+
+.workbench-columns {
+  border-right: 1px solid var(--panel-border);
+  padding: 14px 14px 40px;
+  overflow-y: auto;
+}
+
+.workbench-columns h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cyan-accent);
+}
+
+.workbench-column-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workbench-column-list .workbench-column-toggle {
+  border-radius: 6px;
+}
+
+.workbench-main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workbench-meta {
+  padding: 10px 18px 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.workbench-table-container {
+  flex: 1 1 55%;
+  overflow: auto;
+  padding: 10px 18px;
+  min-height: 120px;
+}
+
+.filterable-table-root {
+  position: relative;
+}
+
+.filterable-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.filterable-table th,
+.filterable-table td {
+  border-bottom: 1px solid var(--panel-border);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filterable-table-sort-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.filterable-table-sort-btn:hover {
+  color: var(--cyan-accent);
+}
+
+.filterable-table-filter-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.filterable-table-row.is-clickable {
+  cursor: pointer;
+}
+
+.filterable-table-row:hover {
+  background: var(--card-bg-hover);
+}
+
+.filterable-table-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 24px 0;
+}
+
+.filterable-table-empty.hidden {
+  display: none;
+}
+
+.workbench-chart-panel {
+  flex: 1 1 40%;
+  border-top: 1px solid var(--panel-border);
+  padding: 10px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+}
+
+.workbench-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.workbench-chart-canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 100px;
+}
+
+.workbench-save-prompt {
+  position: absolute;
+  top: 54px;
+  right: 20px;
+  z-index: 5;
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 14px;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.5);
+}
+
+.workbench-save-prompt.hidden {
+  display: none;
+}
+
+.workbench-save-prompt label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cyan-accent);
+}
+
+.workbench-save-prompt input[type='text'] {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.workbench-save-prompt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.workbench-save-prompt-note {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------------
    Scrollbars (subtle, matches the glassmorphic dark aesthetic)
    --------------------------------------------------------------------- */
 

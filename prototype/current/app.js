@@ -51,6 +51,7 @@ import { initTimeline } from './engine/timeline.js';
 import { clampZoom, zoomLevelInfo } from './engine/camera.js';
 import { mountUniverseLens } from './lenses/universe.js';
 import { mountRiskBoardLens } from './lenses/risk-board.js';
+import { mountWorkbenchLens } from './lenses/workbench.js';
 import { mountDashboardPanel } from './panels/dashboard.js';
 import { mountPassportPanel } from './panels/passport.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
@@ -65,6 +66,7 @@ import { mountNavHistoryRail } from './panels/nav-history.js';
 const els = {
   lensUniverseBtn: document.getElementById('lensUniverse'),
   lensRiskBtn: document.getElementById('lensRisk'),
+  lensWorkbenchBtn: document.getElementById('lensWorkbench'),
   panelDashboardBtn: document.getElementById('panelDashboard'),
   panelPassportBtn: document.getElementById('panelPassport'),
   zoomSlider: document.getElementById('zoom'),
@@ -75,6 +77,7 @@ const els = {
   jarvisPanel: document.getElementById('jarvisPanel'),
   universeCanvas: document.getElementById('universeCanvas'),
   riskBoardEl: document.getElementById('riskBoard'),
+  workbenchEl: document.getElementById('workbench'),
   scopeBar: document.getElementById('scopeBar'),
   scopeExplorer: document.getElementById('scopeExplorer'),
   navHistoryRail: document.getElementById('navHistoryRail'),
@@ -202,6 +205,15 @@ async function main() {
     onHover: (cellId) => store.setHovered(cellId),
   });
 
+  // V5 Phase 4.5 (docs/V5_HANDOVER.md §9.2/§11.6): the Workbench lens -
+  // needs the raw snapshot (not just the per-lens view-models already in
+  // the bundle) since engine/relationship-dataset.js traverses the full
+  // merged operational graph itself.
+  const workbenchLens = mountWorkbenchLens(els.workbenchEl, {
+    getBundle: () => timeline.getDerivedBundle(),
+    getSnapshot: () => snapshot,
+  });
+
   // --- Panel mounting ------------------------------------------------------
   //
   // Dashboard KPI clicks are the entry point for the founder's required
@@ -265,6 +277,7 @@ async function main() {
 
   els.lensUniverseBtn.addEventListener('click', () => store.setLens('universe'));
   els.lensRiskBtn.addEventListener('click', () => store.setLens('risk_board'));
+  els.lensWorkbenchBtn.addEventListener('click', () => store.setLens('workbench'));
   els.panelDashboardBtn.addEventListener('click', () => store.setLeftPanel('dashboard'));
   els.panelPassportBtn.addEventListener('click', () => store.setLeftPanel('passport'));
 
@@ -283,18 +296,24 @@ async function main() {
 
   function applyLensVisibility(state) {
     const isUniverse = state.workspaceLens === 'universe';
+    const isRiskBoard = state.workspaceLens === 'risk_board';
+    const isWorkbench = state.workspaceLens === 'workbench';
     els.universeCanvas.classList.toggle('hidden', !isUniverse);
-    els.riskBoardEl.classList.toggle('hidden', isUniverse);
+    els.riskBoardEl.classList.toggle('hidden', !isRiskBoard);
+    els.workbenchEl.classList.toggle('hidden', !isWorkbench);
     els.lensUniverseBtn.classList.toggle('active', isUniverse);
-    els.lensRiskBtn.classList.toggle('active', !isUniverse);
+    els.lensRiskBtn.classList.toggle('active', isRiskBoard);
+    els.lensWorkbenchBtn.classList.toggle('active', isWorkbench);
     // Resize/re-render whichever lens just became visible - a canvas (and
     // an absolutely-positioned DOM layout) both need a fresh
     // measurement/redraw after being un-hidden, since a hidden element's
     // getBoundingClientRect() reports zero size.
     if (isUniverse) {
       universeLens.resize();
-    } else {
+    } else if (isRiskBoard) {
       riskBoardLens.resize();
+    } else if (isWorkbench) {
+      workbenchLens.resize();
     }
   }
 
@@ -345,6 +364,7 @@ async function main() {
 
     universeLens.render();
     riskBoardLens.render();
+    workbenchLens.render();
   }
 
   timeline.onUpdate(() => renderAll());
@@ -355,6 +375,7 @@ async function main() {
   window.addEventListener('resize', () => {
     universeLens.resize();
     riskBoardLens.resize();
+    workbenchLens.resize();
   });
 }
 
