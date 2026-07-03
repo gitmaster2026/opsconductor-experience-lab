@@ -14,7 +14,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTestSnapshot } from './fixtures/load-snapshot.mjs';
 import { buildUniverseGraph } from '../prototype/current/engine/derive.js';
-import { computeClusterLayout, mulberry32 } from '../prototype/current/lenses/universe-layout.js';
+import { computeClusterLayout, mulberry32, computeOrbitLayout } from '../prototype/current/lenses/universe-layout.js';
 
 const snapshot = loadTestSnapshot();
 const realGraph = buildUniverseGraph(snapshot);
@@ -239,3 +239,87 @@ test('computeClusterLayout (real graph): nodes in the same domain sit closer tog
 function average(arr) {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
+
+// ---------------------------------------------------------------------------
+// computeOrbitLayout (V5 Phase 2, docs/V5_DESIGN_SPEC.md §2.3)
+// ---------------------------------------------------------------------------
+
+test('computeOrbitLayout: returns empty rings for a null/missing selection', () => {
+  assert.deepEqual(computeOrbitLayout(null, realGraph.edges, realGraph.nodes), { orbitIds: [], ring1: [], ring2: [] });
+  assert.deepEqual(computeOrbitLayout('does-not-exist', realGraph.edges, realGraph.nodes), { orbitIds: [], ring1: [], ring2: [] });
+});
+
+test('computeOrbitLayout: ring membership matches hop-distance exactly on a small synthetic chain graph', () => {
+  // A -- B -- C -- D  (a straight chain), plus a second 1-hop branch A -- E.
+  const nodes = [{ id: 'A' }, { id: 'B' }, { id: 'C' }, { id: 'D' }, { id: 'E' }];
+  const edges = [
+    { from_id: 'A', to_id: 'B', relationship_type: 'linked' },
+    { from_id: 'B', to_id: 'C', relationship_type: 'linked' },
+    { from_id: 'C', to_id: 'D', relationship_type: 'linked' },
+    { from_id: 'A', to_id: 'E', relationship_type: 'linked' },
+  ];
+
+  const orbit = computeOrbitLayout('A', edges, nodes);
+
+  const ring1Ids = orbit.ring1.map((m) => m.id).sort();
+  const ring2Ids = orbit.ring2.map((m) => m.id).sort();
+
+  assert.deepEqual(ring1Ids, ['B', 'E'], 'ring 1 must be exactly the 1-hop neighbors of A');
+  assert.deepEqual(ring2Ids, ['C'], 'ring 2 must be exactly the 2-hop neighbors, excluding anything already in ring 1');
+  assert.ok(!ring1Ids.includes('D') && !ring2Ids.includes('D'), 'D is 3 hops away and must not appear in either ring');
+  assert.ok(!ring1Ids.includes('A') && !ring2Ids.includes('A'), 'the selected object itself must never appear in its own orbit');
+  assert.deepEqual(orbit.orbitIds.sort(), ['B', 'C', 'E'], 'orbitIds must be exactly the union of ring1+ring2 ids');
+});
+
+test('computeOrbitLayout: a node reachable via two different edges only ever appears in ONE ring (the shortest hop distance)', () => {
+  // A -- B -- C, and also A -- C directly: C is both 1-hop (direct) and
+  // 2-hop (via B) from A - it must land in ring 1 only, never ring 2 too.
+  const nodes = [{ id: 'A' }, { id: 'B' }, { id: 'C' }];
+  const edges = [
+    { from_id: 'A', to_id: 'B', relationship_type: 'linked' },
+    { from_id: 'B', to_id: 'C', relationship_type: 'linked' },
+    { from_id: 'A', to_id: 'C', relationship_type: 'linked' },
+  ];
+  const orbit = computeOrbitLayout('A', edges, nodes);
+  assert.deepEqual(orbit.ring1.map((m) => m.id).sort(), ['B', 'C']);
+  assert.deepEqual(orbit.ring2, []);
+});
+
+test('computeOrbitLayout: is deterministic - same inputs produce identical ring membership and angles on the real dataset', () => {
+  const selectedId = 'customer:Horizon LNG Partners';
+  const first = computeOrbitLayout(selectedId, realGraph.edges, realGraph.nodes);
+  const second = computeOrbitLayout(selectedId, realGraph.edges, realGraph.nodes);
+  assert.deepEqual(first, second);
+});
+
+test('computeOrbitLayout: no angular overlap within a relationship_type sector, on a real multi-member sector', () => {
+  // customer:Horizon LNG Partners has 6 ring-1 neighbors sharing the same
+  // 'relates_to_customer' relationship_type - a real dense sector.
+  const orbit = computeOrbitLayout('customer:Horizon LNG Partners', realGraph.edges, realGraph.nodes);
+  const sectorMembers = orbit.ring1.filter((m) => m.relationshipType === 'relates_to_customer');
+  assert.ok(sectorMembers.length >= 2, 'sanity check: this fixture must actually exercise a multi-member sector');
+
+  const angles = sectorMembers.map((m) => m.angle);
+  const uniqueAngles = new Set(angles);
+  assert.equal(uniqueAngles.size, angles.length, 'every member of the same sector must get a distinct angle');
+
+  const sectorWidth = (Math.PI * 2) / new Set(orbit.ring1.map((m) => m.relationshipType)).size;
+  const sectorStart = Math.min(...sectorMembers.map((m) => m.angle)) - sectorWidth / (2 * sectorMembers.length);
+  for (const angle of angles) {
+    assert.ok(angle >= sectorStart - 1e-9 && angle <= sectorStart + sectorWidth + 1e-9, 'every member angle must fall within its own sector span');
+  }
+});
+
+test('computeOrbitLayout: no angular overlap within a sector, checked across every possible selection in the real dataset', () => {
+  for (const node of realGraph.nodes) {
+    const orbit = computeOrbitLayout(node.id, realGraph.edges, realGraph.nodes);
+    for (const ring of [orbit.ring1, orbit.ring2]) {
+      const byAngle = new Map();
+      for (const member of ring) {
+        const key = member.angle;
+        assert.ok(!byAngle.has(key), `node "${node.id}": two members share the exact same angle (${key}) in ring ${member.ring}`);
+        byAngle.set(key, member.id);
+      }
+    }
+  }
+});

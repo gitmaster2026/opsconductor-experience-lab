@@ -467,6 +467,35 @@ export function setHovered(id) {
   setState({ hoveredObjectId: id });
 }
 
+/**
+ * Update cameraPhase only. Added in V5 Phase 2 (not part of Phase 1's
+ * original scope, which deferred phase-advancement to "a renderer's job" -
+ * see docs/V5_DESIGN_SPEC.md §10 Phase 2: "this is where cameraPhase
+ * actually advances through its states"). lenses/universe.js owns the
+ * actual depart(200ms)->travel(600ms)->arrive(400ms) timing (a per-frame
+ * animation concern that does not belong in this dependency-free store);
+ * this mutator is the single choke point it calls back through so
+ * engine/state.js's cameraPhase stays the canonical, single source of
+ * truth as that timer advances, rather than the renderer keeping a
+ * silently-diverging shadow copy.
+ *
+ * Intentionally patches ONLY cameraPhase - selectObject()/popFocus()
+ * remain the only functions that touch cameraTarget or selectedObjectId,
+ * so a renderer driving phase transitions can never accidentally change
+ * what is selected.
+ *
+ * @param {'idle'|'depart'|'travel'|'arrive'} phase
+ */
+export function setCameraPhase(phase) {
+  assertInitialized();
+  if (!CAMERA_PHASES.includes(phase)) {
+    throw new Error(
+      `setCameraPhase: invalid phase "${phase}" (expected one of ${CAMERA_PHASES.join(', ')})`
+    );
+  }
+  setState({ cameraPhase: phase });
+}
+
 // Exported for tests / advanced callers that want to inspect the allowed
 // enum values without hardcoding them a second time.
 export const WORKSPACE_LENS_VALUES = WORKSPACE_LENSES;

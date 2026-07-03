@@ -77,11 +77,17 @@ export function mulberry32(seed) {
  * - not cryptographic, just needs to be stable and well-distributed enough
  * for jitter purposes.
  *
+ * Exported (V5 Phase 2) so lenses/universe.js's seeded idle-drift/risk-pulse
+ * phase offsets (docs/V5_DESIGN_SPEC.md §2.2 "Idle life": "Deterministic
+ * (seeded)") can derive a per-node-id integer seed for mulberry32() the
+ * same way this module's own jitter does, rather than reimplementing a
+ * second hash function.
+ *
  * @param {string} str
  * @param {number} baseSeed
  * @returns {number}
  */
-function hashSeed(str, baseSeed) {
+export function hashSeed(str, baseSeed) {
   let h = (baseSeed ^ 0x811c9dc5) >>> 0;
   for (let i = 0; i < str.length; i += 1) {
     h ^= str.charCodeAt(i);
@@ -390,3 +396,130 @@ export function computeClusterLayout(nodes, edges, options = {}) {
 // the ring-slot assignment without recomputing it (e.g. to draw a subtle
 // domain-region backdrop behind the nodes).
 export const RING_DOMAIN_ORDER_EXPORT = RING_DOMAIN_ORDER;
+
+// ---------------------------------------------------------------------------
+// computeOrbitLayout (V5 Phase 2, docs/V5_DESIGN_SPEC.md §2.3 "Solar-system
+// focus")
+// ---------------------------------------------------------------------------
+
+const EMPTY_ORBIT_LAYOUT = Object.freeze({ orbitIds: [], ring1: [], ring2: [] });
+
+/**
+ * Assign every member of a relationship-sector to a unique angle within its
+ * sector, so members never overlap angularly within the same sector.
+ * Sectors are the distinct relationship_type values present in `members`,
+ * ordered alphabetically (deterministic - carries no semantic weight, just
+ * stability run-to-run) and given an equal slice of the full circle.
+ * Within a sector, members are ordered by id (deterministic tie-break) and
+ * spaced evenly across the sector's angular span.
+ *
+ * @param {Array<{ id: string, relationshipType: string }>} members
+ * @returns {Array<{ id: string, relationshipType: string, angle: number, sectorIndex: number }>}
+ */
+function assignSectorAngles(members) {
+  if (members.length === 0) return [];
+  const types = [...new Set(members.map((m) => m.relationshipType))].sort();
+  const sectorWidth = (Math.PI * 2) / types.length;
+
+  const result = [];
+  types.forEach((type, sectorIndex) => {
+    const sectorStart = sectorIndex * sectorWidth;
+    const inSector = members
+      .filter((m) => m.relationshipType === type)
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    inSector.forEach((member, i) => {
+      // (i + 0.5) / count strictly increases with i for a fixed count, so
+      // no two members in the same sector ever land on the same angle.
+      const angle = sectorStart + ((i + 0.5) / inSector.length) * sectorWidth;
+      result.push({ id: member.id, relationshipType: type, angle, sectorIndex });
+    });
+  });
+  return result;
+}
+
+/**
+ * Compute the orbital-ring membership and angular position for every
+ * object related to `selectedObjectId`, per docs/V5_DESIGN_SPEC.md §2.3:
+ * "Ring 1 (inner): direct relationships (1 hop)... grouped by
+ * relationship_type into angular sectors. Ring 2 (outer): 2-hop objects."
+ *
+ * This is the function that populates the `orbitIds` set
+ * engine/camera.js's assignStratum() (V5 Phase 1) already accepts via
+ * `state.orbitIds` but nothing produced until this phase.
+ *
+ * Pure function: hop distance is computed by a plain breadth-first walk
+ * over `relationships` (an undirected adjacency - relationship direction
+ * doesn't change orbital membership, only from_id/to_id order in the
+ * source data), so the same inputs always produce the same ring
+ * membership/angles, in the same order, on every call.
+ *
+ * @param {string|null} selectedObjectId - object to orbit around, or null
+ * @param {Array<{ from_id: string, to_id: string, relationship_type?: string }>} relationships -
+ *   buildUniverseGraph() edges (or any from_id/to_id/relationship_type list).
+ * @param {Array<{ id: string }>} nodes - buildUniverseGraph() nodes, used
+ *   only to validate which ids actually exist in the graph.
+ * @returns {{ orbitIds: string[], ring1: Array<{ id: string, relationshipType: string, angle: number, sectorIndex: number, ring: 1 }>, ring2: Array<{ id: string, relationshipType: string, angle: number, sectorIndex: number, ring: 2 }> }}
+ */
+export function computeOrbitLayout(selectedObjectId, relationships, nodes) {
+  if (selectedObjectId === null || typeof selectedObjectId !== 'string') {
+    return EMPTY_ORBIT_LAYOUT;
+  }
+  const nodeIds = new Set(Array.isArray(nodes) ? nodes.map((n) => n.id) : []);
+  if (!nodeIds.has(selectedObjectId)) {
+    return EMPTY_ORBIT_LAYOUT;
+  }
+  const edgeList = Array.isArray(relationships) ? relationships : [];
+
+  // Undirected adjacency list, built once: nodeId -> [{ neighborId,
+  // relationshipType }], in the exact order `relationships` was iterated
+  // (both directions of each edge added), which is what makes the
+  // "first-seen relationship_type wins" tie-break below deterministic.
+  /** @type {Map<string, Array<{ neighborId: string, relationshipType: string }>>} */
+  const adjacency = new Map();
+  function addAdjacency(fromId, toId, relationshipType) {
+    if (!nodeIds.has(fromId) || !nodeIds.has(toId)) return; // referential-integrity guard, ignore rather than throw (layout concern, not the graph's own integrity check)
+    const list = adjacency.get(fromId) ?? [];
+    list.push({ neighborId: toId, relationshipType: String(relationshipType ?? 'related') });
+    adjacency.set(fromId, list);
+  }
+  for (const edge of edgeList) {
+    addAdjacency(edge.from_id, edge.to_id, edge.relationship_type);
+    addAdjacency(edge.to_id, edge.from_id, edge.relationship_type);
+  }
+
+  // Ring 1: every node exactly 1 hop from selectedObjectId. First-seen
+  // relationship_type wins if a pair is connected by more than one edge.
+  /** @type {Map<string, string>} neighborId -> relationshipType */
+  const ring1Map = new Map();
+  for (const { neighborId, relationshipType } of adjacency.get(selectedObjectId) ?? []) {
+    if (neighborId === selectedObjectId) continue; // ignore any self-loop
+    if (!ring1Map.has(neighborId)) ring1Map.set(neighborId, relationshipType);
+  }
+
+  // Ring 2: every node exactly 2 hops away - i.e. a neighbor of a ring-1
+  // member that is neither the selection itself nor already in ring 1.
+  // relationship_type is the edge connecting it to whichever ring-1 member
+  // reached it first (deterministic: ring1Map's insertion order, itself
+  // derived from `relationships`' own array order).
+  const excludedFromRing2 = new Set([selectedObjectId, ...ring1Map.keys()]);
+  /** @type {Map<string, string>} */
+  const ring2Map = new Map();
+  for (const ring1Id of ring1Map.keys()) {
+    for (const { neighborId, relationshipType } of adjacency.get(ring1Id) ?? []) {
+      if (excludedFromRing2.has(neighborId)) continue;
+      if (!ring2Map.has(neighborId)) ring2Map.set(neighborId, relationshipType);
+    }
+  }
+
+  const ring1Members = [...ring1Map.entries()].map(([id, relationshipType]) => ({ id, relationshipType }));
+  const ring2Members = [...ring2Map.entries()].map(([id, relationshipType]) => ({ id, relationshipType }));
+
+  const ring1 = assignSectorAngles(ring1Members).map((m) => ({ ...m, ring: 1 }));
+  const ring2 = assignSectorAngles(ring2Members).map((m) => ({ ...m, ring: 2 }));
+
+  return {
+    orbitIds: [...ring1.map((m) => m.id), ...ring2.map((m) => m.id)],
+    ring1,
+    ring2,
+  };
+}

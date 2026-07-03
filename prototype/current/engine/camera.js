@@ -279,10 +279,16 @@ const NODE_TYPE_NATURAL_ZOOM_INDEX = Object.freeze({
 const NATURAL_ZOOM_INDEX_FALLBACK = 4;
 
 /**
+ * Exported (V5 Phase 2) so engine/labels.js's depthMatch() priority term
+ * (docs/V5_DESIGN_SPEC.md §8.1: "node's natural depth == current zoom") can
+ * reuse the exact same depth-matching definition assignStratum() uses for
+ * its Midground rule, instead of re-deriving a second, possibly-drifting
+ * type->depth mapping in a different module.
+ *
  * @param {{ type?: string, object_type?: string, nodeType?: string }} node
  * @returns {number} zoom-depth index 0-7
  */
-function naturalZoomIndexForNode(node) {
+export function naturalZoomIndexForNode(node) {
   const kind = String(node.type ?? node.object_type ?? node.nodeType ?? '').toLowerCase();
   return NODE_TYPE_NATURAL_ZOOM_INDEX[kind] ?? NATURAL_ZOOM_INDEX_FALLBACK;
 }

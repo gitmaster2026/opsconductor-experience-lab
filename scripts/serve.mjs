@@ -94,7 +94,7 @@ const server = http.createServer((req, res) => {
 
   fs.stat(filePath, (statErr, stats) => {
     if (statErr || !stats.isFile()) {
-      sendNotFound(res, `Not found: ${urlPath}`);
+      sendNotFound(res, `Not found: ${requestUrl}`);
       return;
     }
 

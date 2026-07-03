@@ -154,6 +154,13 @@ async function main() {
     getBundle: () => timeline.getDerivedBundle(),
     getZoomLevel: () => store.getState().zoomLevel,
     getSelectedId: () => store.getState().selectedObjectId,
+    // V5 Phase 2: feed engine/state.js's focusTrail/hoveredObjectId into
+    // the lens's assignStratum()/computeLabelPlan() calls, and feed the
+    // lens's own three-phase flight timer back into the canonical
+    // cameraPhase field (docs/V5_DESIGN_SPEC.md §10 Phase 2).
+    getFocusTrail: () => store.getState().focusTrail,
+    getHoveredId: () => store.getState().hoveredObjectId,
+    onCameraPhaseChange: (phase) => store.setCameraPhase(phase),
     getHighlightIds: () => getHighlightedIds(),
     onSelect: (nodeId) => selectAndClearHighlight(nodeId),
     onHover: (nodeId) => store.setHovered(nodeId),

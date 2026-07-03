@@ -19,7 +19,9 @@ import {
   setHovered,
   pushFocus,
   popFocus,
+  setCameraPhase,
   WORKSPACE_LENS_VALUES,
+  CAMERA_PHASE_VALUES,
 } from '../prototype/current/engine/state.js';
 
 test('initState returns the documented canonical AppState shape with defaults', () => {
@@ -375,4 +377,31 @@ test('setZoom never mutates timeSliceId (mirrors the existing setTimeSlice/zoomL
   initState({ initialTimeSliceId: 't1' });
   setZoom(7);
   assert.equal(getState().timeSliceId, 't1', 'setZoom must not touch timeSliceId');
+});
+
+// ---------------------------------------------------------------------------
+// V5 Phase 2: setCameraPhase (docs/V5_DESIGN_SPEC.md §10 Phase 2)
+// ---------------------------------------------------------------------------
+
+test('CAMERA_PHASE_VALUES lists all 4 documented cameraPhase values', () => {
+  assert.deepEqual(CAMERA_PHASE_VALUES, ['idle', 'depart', 'travel', 'arrive']);
+});
+
+test('setCameraPhase updates cameraPhase only, touching nothing else', () => {
+  initState();
+  selectObject('obj-1');
+  const before = getState();
+
+  setCameraPhase('travel');
+  const after = getState();
+
+  assert.equal(after.cameraPhase, 'travel');
+  assert.equal(after.selectedObjectId, before.selectedObjectId, 'setCameraPhase must not touch selectedObjectId');
+  assert.equal(after.cameraTarget, before.cameraTarget, 'setCameraPhase must not touch cameraTarget');
+  assert.deepEqual(after.focusTrail, before.focusTrail, 'setCameraPhase must not touch focusTrail');
+});
+
+test('setCameraPhase rejects an invalid phase', () => {
+  initState();
+  assert.throws(() => setCameraPhase('flying'));
 });
