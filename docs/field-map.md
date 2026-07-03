@@ -75,6 +75,14 @@ The Spider lens is a radar view over the same operational dataset: axes are the 
 |---|---|---|
 | Spider Axis Score | weighted count of ≤2-hop related objects per domain whose risk_state is critical (w=3) / elevated (w=2) / watch (w=1), normalized [0,1] per axis; derived from `relationships.json`, node `domain` fields, and `risk-board.json` per-slice risk states | derived_supported |
 
+## Text View fields
+
+The Text View lens (V5 Phase 4, docs/V5_DESIGN_SPEC.md §5) renders the same Passport fields (below) as a collapsible outline, plus one new presentation-only concept: the hierarchy path from the organization down to the selected object. No new backend fields - Hierarchy Path is a walk of the same joins Operational Scope's Scope Hierarchy already performs.
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Hierarchy Path | org -> site -> customer -> program -> commitment -> selected object, walked from Operational Scope's Scope Hierarchy tree (see Operational Scope fields below), with the selected object appended as the trailing entry when it is more granular than the tree's own levels | derived_supported |
+
 ## Passport fields
 
 | UI Field | Source / Derivation | Status |
@@ -86,6 +94,8 @@ The Spider lens is a radar view over the same operational dataset: axes are the 
 | Evidence | `recommendation_evidence.evidence_type`, `source_table`, `source_record_id`, `evidence_summary` | supported |
 | Operational History | timeline events + effective dating + activity log where available | derived_supported |
 | Source Records | source lineage fields and `recommendation_evidence.source_*` fields | supported |
+
+**Collection Passport (V5 Phase 4, docs/V5_HANDOVER.md §9.1/§10.2):** a Collection (a Scope Explorer multi-select, see Operational Scope fields below) gets the same seven sections above, aggregated across every member's own Passport (worst Current Risk, deduplicated Relationships/Recommendations/Evidence/Operational History/Source Records). No new fields - only multi-object aggregation of the rows above, plus two frontend-only summary fields (member count, per-member id/label/type/risk list).
 
 ## Jarvis fields
 

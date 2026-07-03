@@ -14,6 +14,18 @@
 // delineated sections, Source Records as a compact monospace lineage
 // footer.
 //
+// V5 Phase 4 (docs/V5_HANDOVER.md §9.1/§10.2, docs/field-map.md "Collection
+// Passport"): when bundle.collectionPassport is present (the user built a
+// Collection via the Scope Explorer, engine/derive.js's
+// buildCollectionPassportViewModel()) AND no single object is explicitly
+// selected, this panel renders the SAME 7-section structure below for the
+// Collection instead of the empty state - reusing every render*Section()
+// function unchanged (they were already generic over "a list," never
+// assuming a single-object subject), plus one small Collection-only
+// overview header listing the members. A concrete single selection
+// (bundle.passport) always takes priority over the Collection view when
+// both are present, since it is the more specific signal.
+//
 // Two of this panel's sections are explicit steps in the founder's
 // required exploration flow (see prototype/current/app.js's header
 // comment / the phase brief):
@@ -275,6 +287,43 @@ function renderSourceRecordsSection(sourceRecords) {
   `;
 }
 
+/**
+ * The Collection Passport's overview header - the one piece of this
+ * rendering path that has no single-object equivalent (renderOverviewSection
+ * above is written around one selected object's fields, not a member list).
+ * Every other section below the header (Current Risk / Relationships /
+ * Recommendations / Evidence / Operational History / Source Records) reuses
+ * the exact same render*Section() functions the single-object Passport
+ * uses, unchanged.
+ *
+ * @param {Object} collectionPassport - buildCollectionPassportViewModel() output.
+ * @returns {string}
+ */
+function renderCollectionOverviewSection(collectionPassport) {
+  const members = Array.isArray(collectionPassport.members) ? collectionPassport.members : [];
+  return `
+    <header class="passport-overview passport-overview--collection">
+      <div class="passport-overview-type">Collection · ${members.length} member${members.length === 1 ? '' : 's'}</div>
+      <h2 class="passport-overview-label">${escapeHtml(collectionPassport.collectionLabel ?? 'Collection')}</h2>
+      <p class="passport-overview-summary">${escapeHtml(collectionPassport.overview?.summary ?? '')}</p>
+      <ul class="passport-collection-members">
+        ${members
+          .map(
+            (m) => `
+          <li>
+            <button type="button" class="passport-collection-member" data-select-id="${escapeHtml(m.objectId)}">
+              <span class="risk-dot risk-dot--${riskBucketClass(m.currentRisk)}"></span>
+              <span class="passport-collection-member-label">${escapeHtml(m.label)}</span>
+              <span class="passport-collection-member-type">${escapeHtml(m.objectType)}</span>
+            </button>
+          </li>`
+          )
+          .join('')}
+      </ul>
+    </header>
+  `;
+}
+
 function renderEmptyState() {
   return `
     <div class="panel-surface passport-panel passport-empty-state">
@@ -295,7 +344,9 @@ function renderEmptyState() {
  * @param {Object} callbacks
  * @param {() => Object} callbacks.getBundle - returns the current
  *   engine/timeline.js DerivedBundle (must have .passport, which is
- *   null when nothing is selected).
+ *   null when nothing is selected, and .collectionPassport - V5 Phase 4 -
+ *   rendered instead of the empty state when a Collection scope is active
+ *   and no single object is selected).
  * @param {(objectId: string|null) => void} callbacks.onSelect - selects a
  *   related object (the "Related Objects" click-through step).
  * @returns {{ render: () => void, destroy: () => void }}
@@ -309,9 +360,40 @@ export function mountPassportPanel(el, callbacks) {
     throw new Error('mountPassportPanel: callbacks.getBundle is required');
   }
 
+  function wireSelectHandlers() {
+    // Wire every clickable related-object entry ("Related Objects" step of
+    // the exploration flow) - shared by both the single-object and
+    // Collection rendering paths below.
+    el.querySelectorAll('[data-select-id]').forEach((itemEl) => {
+      const targetId = itemEl.getAttribute('data-select-id');
+      itemEl.addEventListener('click', () => {
+        if (typeof onSelect === 'function') onSelect(targetId);
+      });
+    });
+  }
+
   function render() {
     const bundle = getBundle();
     const passport = bundle?.passport ?? null;
+    const collectionPassport = bundle?.collectionPassport ?? null;
+
+    // A concrete single selection always wins over the Collection view (see
+    // this module's header comment) - it is the more specific signal.
+    if (!passport && collectionPassport) {
+      el.innerHTML = `
+        <div class="panel-surface passport-panel passport-panel--collection">
+          ${renderCollectionOverviewSection(collectionPassport)}
+          ${renderCurrentRiskSection(collectionPassport.currentRisk)}
+          ${renderRelationshipsSection(collectionPassport.relationships)}
+          ${renderRecommendationsSection(collectionPassport.recommendations)}
+          ${renderEvidenceSection(collectionPassport.evidence)}
+          ${renderOperationalHistorySection(collectionPassport.operationalHistory)}
+          ${renderSourceRecordsSection(collectionPassport.sourceRecords)}
+        </div>
+      `;
+      wireSelectHandlers();
+      return;
+    }
 
     if (!passport) {
       el.innerHTML = renderEmptyState();
@@ -330,14 +412,7 @@ export function mountPassportPanel(el, callbacks) {
       </div>
     `;
 
-    // Wire every clickable related-object entry ("Related Objects" step of
-    // the exploration flow).
-    el.querySelectorAll('[data-select-id]').forEach((itemEl) => {
-      const targetId = itemEl.getAttribute('data-select-id');
-      itemEl.addEventListener('click', () => {
-        if (typeof onSelect === 'function') onSelect(targetId);
-      });
-    });
+    wireSelectHandlers();
   }
 
   function destroy() {

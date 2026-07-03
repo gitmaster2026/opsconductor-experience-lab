@@ -1633,6 +1633,459 @@ export function buildJarvisViewModel(snapshot, state, scopeFilter) {
 }
 
 // ---------------------------------------------------------------------------
+// buildHierarchyPathForObject (V5 Phase 4, docs/V5_DESIGN_SPEC.md §5.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Depth-first search for a tree node matching `matchId` inside
+ * buildScopeHierarchy()'s tree, returning the root-to-match path (inclusive
+ * of both ends) or null if no node in the tree has that id. Not exported -
+ * purely an internal helper for buildHierarchyPathForObject() below, which
+ * is the only thing that needs to walk this specific tree shape.
+ *
+ * @param {Object} node
+ * @param {string} matchId
+ * @returns {Array<Object>|null}
+ */
+function findHierarchyTreePath(node, matchId) {
+  if (node.id === matchId) return [node];
+  for (const child of node.children ?? []) {
+    const sub = findHierarchyTreePath(child, matchId);
+    if (sub) return [node, ...sub];
+  }
+  return null;
+}
+
+/**
+ * Build the org -> site -> customer -> program -> commitment -> selected
+ * hierarchy path for Text View's collapsible outline (docs/V5_DESIGN_SPEC.md
+ * §5.2 "HIERARCHY  org -> plant -> customer -> commitment (the zoom path to
+ * S)"). Reuses buildScopeHierarchy()'s exact tree - the same
+ * organization/site/customer/program/commitment joins Operational Scope
+ * already licenses (docs/field-map.md "Scope Hierarchy") - rather than
+ * deriving a second, parallel hierarchy from scratch.
+ *
+ * Not every selectable object IS a node in that tree (e.g. a risk-board
+ * cell, an item, a recommendation, an evidence row, or a narrative
+ * operational object) - for those, this walks the tree to the nearest real
+ * ancestor (the commitment objectId resolves to via
+ * resolveCommitmentForObject(), or failing that the customer objectId
+ * shares via its own `customer` field) and appends objectId itself as the
+ * final, explicitly-flagged "selected" leaf entry - so the path Text View
+ * renders always ends at the actual selection, even when that selection is
+ * more granular than the Scope Explorer's own tree levels.
+ *
+ * @param {any} snapshot
+ * @param {string} objectId
+ * @returns {Array<{ id: string, type: string, label: string, isSelected: boolean }>}
+ *   empty array if objectId does not resolve to any node in the merged
+ *   Universe graph.
+ */
+export function buildHierarchyPathForObject(snapshot, objectId) {
+  assertSnapshot(snapshot);
+  if (typeof objectId !== 'string' || objectId.length === 0) {
+    return [];
+  }
+
+  const graph = buildUniverseGraph(snapshot);
+  const node = graph.nodes.find((n) => n.id === objectId);
+  if (!node) {
+    return [];
+  }
+
+  const hierarchy = buildScopeHierarchy(snapshot);
+  const commitmentId = resolveCommitmentForObject(snapshot, objectId);
+
+  const path =
+    findHierarchyTreePath(hierarchy, objectId) ??
+    (commitmentId ? findHierarchyTreePath(hierarchy, commitmentId) : null) ??
+    (node.customer ? findHierarchyTreePath(hierarchy, `customer:${node.customer}`) : null) ??
+    [hierarchy];
+
+  const entries = path.map((n) => ({ id: n.id, type: n.type, label: n.label, isSelected: false }));
+
+  const last = entries[entries.length - 1];
+  if (last && last.id === objectId) {
+    last.isSelected = true;
+  } else {
+    entries.push({ id: node.id, type: node.type, label: node.label, isSelected: true });
+  }
+
+  return entries;
+}
+
+// ---------------------------------------------------------------------------
+// buildSpiderViewModel (V5 Phase 4, docs/V5_DESIGN_SPEC.md §4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Spider lens axes - the exact `domain` values buildUniverseGraph() already
+ * assigns to every node (docs/field-map.md "Spider Axis Score"). No
+ * invented categories: this is the same vocabulary
+ * buildUniverseGraph()/buildPassportViewModel() already use for every
+ * node's `domain` field.
+ *
+ * @type {ReadonlyArray<string>}
+ */
+export const SPIDER_AXES = Object.freeze([
+  'commercial',
+  'supply',
+  'quality',
+  'engineering',
+  'manufacturing',
+  'logistics',
+  'customer',
+]);
+
+/**
+ * Risk-state -> weight, per the field-map.md "Spider Axis Score" formula
+ * ("critical (w=3) / elevated (w=2) / watch (w=1)"). Written as a switch
+ * (not an object-literal lookup map) so scripts/verify-field-map.mjs's
+ * conservative "identifier:" scan never mistakes these risk_state VALUES
+ * for output field KEYS - the same distinct-value vocabulary is already
+ * used as string values (not keys) throughout this file, e.g. `risk_state:
+ * 'critical'` in buildUniverseGraph() above.
+ *
+ * @param {string} riskState
+ * @returns {number}
+ */
+function spiderRiskWeight(riskState) {
+  switch (riskState) {
+    case 'critical':
+      return 3;
+    case 'elevated':
+      return 2;
+    case 'watch':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Breadth-first hop distances from `startId` out to `maxHops`, over the
+ * Universe graph's edges treated as undirected (a relationship's direction
+ * carries semantic meaning elsewhere, but "how many hops away" for the
+ * Spider formula's purposes does not distinguish outgoing from incoming -
+ * both are still "related"). Pure, no snapshot access beyond the graph
+ * already passed in.
+ *
+ * @param {{ nodes: Array<Object>, edges: Array<Object> }} graph
+ * @param {string} startId
+ * @param {number} maxHops
+ * @returns {Map<string, number>} nodeId -> hop count (startId itself -> 0)
+ */
+function bfsHopDistances(graph, startId, maxHops) {
+  const adjacency = new Map();
+  function link(a, b) {
+    if (!adjacency.has(a)) adjacency.set(a, new Set());
+    adjacency.get(a).add(b);
+  }
+  for (const edge of graph.edges) {
+    link(edge.from_id, edge.to_id);
+    link(edge.to_id, edge.from_id);
+  }
+
+  const distances = new Map([[startId, 0]]);
+  let frontier = [startId];
+  for (let hop = 1; hop <= maxHops; hop += 1) {
+    const next = [];
+    for (const id of frontier) {
+      for (const neighbor of adjacency.get(id) ?? []) {
+        if (!distances.has(neighbor)) {
+          distances.set(neighbor, hop);
+          next.push(neighbor);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return distances;
+}
+
+/**
+ * The risk_state a node "counts as" at a given time slice for the Spider
+ * formula. Reuses the exact same visibility-gating rules
+ * resolveVisibilityForSlice()/riskTrajectory() already apply elsewhere in
+ * this file, rather than inventing a third notion of "current risk":
+ *
+ *   - A risk-board cell (or any node that resolves to a commitment with a
+ *     linked risk-board cell, via resolveCommitmentForObject() - the same
+ *     join buildPassportViewModel()'s "Current Risk" section already
+ *     performs) reads as 'dormant' until visibility.visibleRiskBoardIds
+ *     includes its cell, then as that cell's real risk_state.
+ *   - A narrative operational-objects node reads as 'dormant' until
+ *     visibility.visibleNarrativeObjectIds includes it, then as its own
+ *     severity (node.risk_state).
+ *   - Everything else (organization/plant/customer/item anchors, etc.)
+ *     uses node.risk_state as-is (almost always 'neutral', so it never
+ *     contributes weight - see SPIDER_RISK_WEIGHTS).
+ *
+ * @param {any} snapshot
+ * @param {{ nodes: Array<Object>, edges: Array<Object> }} graph
+ * @param {ReturnType<typeof resolveVisibilityForSlice>} visibility
+ * @param {Object} node
+ * @returns {string}
+ */
+function effectiveRiskStateAtSlice(snapshot, graph, visibility, node) {
+  const riskBoard = recordsOf(snapshot.riskBoard);
+  const commitments = recordsOf(snapshot.commitments);
+
+  if (node.type === 'commitment_risk_cell') {
+    return visibility.visibleRiskBoardIds.includes(node.id) ? node.risk_state : 'dormant';
+  }
+
+  const commitmentId = resolveCommitmentForObject(snapshot, node.id);
+  if (commitmentId) {
+    const commitment = commitments.find((c) => c.id === commitmentId);
+    const cell = commitment
+      ? riskBoard.find((r) =>
+          graph.edges.some(
+            (e) => e.from_id === commitmentId && e.to_id === r.id && e.relationship_type === 'has_risk_state'
+          )
+        )
+      : null;
+    if (cell) {
+      return visibility.visibleRiskBoardIds.includes(cell.id) ? cell.risk_state : 'dormant';
+    }
+  }
+
+  if (node.sourceTable === 'operational_domain_objects') {
+    return visibility.visibleNarrativeObjectIds.includes(node.id) ? node.risk_state ?? 'neutral' : 'dormant';
+  }
+
+  return node.risk_state ?? 'neutral';
+}
+
+/**
+ * Build the Spider lens view-model for a given selection + time slice, per
+ * docs/field-map.md's "Spider Axis Score" formula: "weighted count of
+ * <=2-hop related objects per domain whose risk_state is critical (w=3) /
+ * elevated (w=2) / watch (w=1), normalized [0,1] per axis." No selection
+ * (selectedObjectId null) radars the Organization itself - "whole-enterprise
+ * exposure" (docs/V5_DESIGN_SPEC.md §4.3) - using the exact same formula
+ * with the org node as subject, not a special-cased second computation.
+ *
+ * @param {any} snapshot
+ * @param {string|null} selectedObjectId
+ * @param {number} sliceIndex
+ * @returns {{
+ *   subjectId: string|null,
+ *   subjectLabel: string|null,
+ *   isOrgLevel: boolean,
+ *   sliceId: string|null,
+ *   sliceLabel: string|null,
+ *   spiderAxisScores: Array<{ domain: string, rawScore: number, score: number, worstObjectId: string|null, worstObjectLabel: string|null, worstRiskState: string|null }>
+ * }}
+ */
+export function buildSpiderViewModel(snapshot, selectedObjectId, sliceIndex) {
+  assertSnapshot(snapshot);
+  const graph = buildUniverseGraph(snapshot);
+  const visibility = resolveVisibilityForSlice(snapshot, sliceIndex);
+  const timeSlices = recordsOf(snapshot.timeSlices);
+  const slice = timeSlices[Math.max(0, Math.min(sliceIndex, timeSlices.length - 1))] ?? null;
+
+  const isOrgLevel = !selectedObjectId;
+  const orgNode = graph.nodes.find((n) => n.type === 'organization') ?? null;
+  const subjectId = selectedObjectId ?? (orgNode ? orgNode.id : null);
+  const subjectNode = subjectId ? graph.nodes.find((n) => n.id === subjectId) ?? null : null;
+
+  const emptyAxisScores = () =>
+    SPIDER_AXES.map((domain) => ({
+      domain,
+      rawScore: 0,
+      score: 0,
+      worstObjectId: null,
+      worstObjectLabel: null,
+      worstRiskState: null,
+    }));
+
+  if (!subjectNode) {
+    return {
+      subjectId: null,
+      subjectLabel: null,
+      isOrgLevel,
+      sliceId: slice ? slice.id : null,
+      sliceLabel: slice ? slice.label : null,
+      spiderAxisScores: emptyAxisScores(),
+    };
+  }
+
+  const hopDistances = bfsHopDistances(graph, subjectId, 2);
+  const axisRaw = new Map(SPIDER_AXES.map((a) => [a, 0]));
+  /** @type {Map<string, { weight: number, node: Object, state: string }>} */
+  const axisWorst = new Map();
+
+  for (const [nodeId, hops] of hopDistances) {
+    if (nodeId === subjectId || hops < 1 || hops > 2) continue;
+    const node = graph.nodes.find((n) => n.id === nodeId);
+    if (!node || !SPIDER_AXES.includes(node.domain)) continue;
+
+    const state = effectiveRiskStateAtSlice(snapshot, graph, visibility, node);
+    const weight = spiderRiskWeight(state);
+    if (weight <= 0) continue;
+
+    axisRaw.set(node.domain, axisRaw.get(node.domain) + weight);
+    const currentWorst = axisWorst.get(node.domain);
+    // Deterministic tie-break: higher weight wins; equal weight keeps the
+    // lexicographically-lowest node id (arbitrary but stable, same
+    // "ties broken by node id" convention docs/V5_DESIGN_SPEC.md §8.1 uses
+    // for label priority).
+    if (!currentWorst || weight > currentWorst.weight || (weight === currentWorst.weight && node.id < currentWorst.node.id)) {
+      axisWorst.set(node.domain, { weight, node, state });
+    }
+  }
+
+  const maxRaw = Math.max(0, ...[...axisRaw.values()]);
+  const spiderAxisScores = SPIDER_AXES.map((domain) => {
+    const worst = axisWorst.get(domain) ?? null;
+    return {
+      domain,
+      rawScore: axisRaw.get(domain),
+      score: maxRaw > 0 ? axisRaw.get(domain) / maxRaw : 0,
+      worstObjectId: worst ? worst.node.id : null,
+      worstObjectLabel: worst ? worst.node.label : null,
+      worstRiskState: worst ? worst.state : null,
+    };
+  });
+
+  return {
+    subjectId,
+    subjectLabel: subjectNode.label,
+    isOrgLevel,
+    sliceId: slice ? slice.id : null,
+    sliceLabel: slice ? slice.label : null,
+    spiderAxisScores,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// buildCollectionPassportViewModel (V5 Phase 4, docs/V5_HANDOVER.md §9.1/§10.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Aggregate buildPassportViewModel()'s 7-section structure across every
+ * member of a Collection (a Scope Explorer multi-select scope,
+ * `{ type: 'collection', memberIds }` - see engine/derive.js's
+ * buildScopeFilter() collection branch and panels/scope.js's "Build
+ * Collection" action). This is deliberately NOT a rewrite: each member that
+ * resolves to a real Universe graph node gets its normal
+ * buildPassportViewModel() called, and this function only does the
+ * aggregation (worst risk state, deduplicated relationship/recommendation/
+ * evidence/history/source-record lists) - no new joins invented beyond what
+ * buildPassportViewModel() already performs per member.
+ *
+ * Member descriptors from panels/scope.js are `{ type, id, label }` values
+ * drawn from buildScopeHierarchy()'s tree (site/customer/commitment ids
+ * already ARE real graph node ids in this dataset's id space - see
+ * buildScopeFilter()'s doc comment; a bare `program` id is not a graph node
+ * on its own and is skipped for per-member Passport lookup, same as
+ * buildScopeFilter() already treats it as a filter-only dimension rather
+ * than a node).
+ *
+ * @param {any} snapshot
+ * @param {{ type: string, memberIds?: Array<{ type: string, id: string, label?: string }>, label?: string }|null} scope
+ * @param {number} sliceIndex
+ * @returns {Object|null} null when `scope` is not a non-empty Collection, or
+ *   when none of its members resolve to a real Universe graph node.
+ */
+export function buildCollectionPassportViewModel(snapshot, scope, sliceIndex) {
+  assertSnapshot(snapshot);
+  if (!scope || scope.type !== 'collection' || !Array.isArray(scope.memberIds) || scope.memberIds.length === 0) {
+    return null;
+  }
+
+  const graph = buildUniverseGraph(snapshot);
+  const memberNodeIds = [
+    ...new Set(
+      scope.memberIds
+        .map((member) => member.id)
+        .filter((id) => graph.nodes.some((n) => n.id === id))
+    ),
+  ];
+
+  const memberPassports = memberNodeIds
+    .map((id) => buildPassportViewModel(snapshot, id, sliceIndex))
+    .filter(Boolean);
+
+  if (memberPassports.length === 0) {
+    return null;
+  }
+
+  // Written as a switch, not an object-literal lookup map - same
+  // verify-field-map.mjs rationale as spiderRiskWeight() above.
+  function riskRank(riskState) {
+    switch (riskState) {
+      case 'critical':
+        return 4;
+      case 'elevated':
+        return 3;
+      case 'watch':
+        return 2;
+      case 'attention':
+        return 1;
+      case 'neutral':
+        return 0;
+      default:
+        return -1; // dormant / unrecognized
+    }
+  }
+  let worstRisk = memberPassports[0].currentRisk ?? 'neutral';
+  for (const p of memberPassports) {
+    const risk = p.currentRisk ?? 'neutral';
+    if (riskRank(risk) > riskRank(worstRisk)) {
+      worstRisk = risk;
+    }
+  }
+
+  function dedupeBy(list, key) {
+    const seen = new Set();
+    const out = [];
+    for (const item of list) {
+      const value = item[key];
+      if (value !== null && value !== undefined) {
+        if (seen.has(value)) continue;
+        seen.add(value);
+      }
+      out.push(item);
+    }
+    return out;
+  }
+
+  const members = memberPassports.map((p) => ({
+    objectId: p.objectId,
+    label: p.overview.label,
+    objectType: p.overview.objectType,
+    currentRisk: p.currentRisk,
+  }));
+
+  const collectionLabel = scope.label ?? `${memberPassports.length} items`;
+
+  return {
+    collectionLabel,
+    memberCount: memberPassports.length,
+    members,
+    overview: {
+      label: collectionLabel,
+      objectType: 'collection',
+      memberCount: memberPassports.length,
+      summary: `Collection of ${memberPassports.length} object${memberPassports.length === 1 ? '' : 's'}: ${members.map((m) => m.label).join(', ')}.`,
+    },
+    currentRisk: worstRisk,
+    relationships: dedupeBy(memberPassports.flatMap((p) => p.relationships), 'relationshipId'),
+    recommendations: dedupeBy(memberPassports.flatMap((p) => p.recommendations), 'id'),
+    evidence: dedupeBy(memberPassports.flatMap((p) => p.evidence), 'id'),
+    operationalHistory: {
+      events: dedupeBy(memberPassports.flatMap((p) => p.operationalHistory.events), 'id').sort(
+        (a, b) => new Date(a.occurred_at) - new Date(b.occurred_at)
+      ),
+      effectiveDating: {},
+    },
+    sourceRecords: memberPassports.flatMap((p) => p.sourceRecords),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // resolveCommitmentForObject
 // ---------------------------------------------------------------------------
 
@@ -1862,4 +2315,23 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   riskBoardId: { category: 'supported', note: 'risk-board.json id passthrough, cited inside Jarvis suggestedNextStep' },
   evidenceIds: { category: 'supported', note: 'field-map.md Jarvis: Evidence Reference (list of evidence.json ids)' },
   sourceRecordIds: { category: 'supported', note: 'field-map.md Jarvis: Evidence Reference (list of cited source record ids)' },
+
+  // --- buildHierarchyPathForObject (V5 Phase 4) ---
+  isSelected: { category: 'derived_supported', note: 'field-map.md Text View: Hierarchy Path, frontend-only flag marking the trailing (actually-selected) path entry' },
+
+  // --- buildSpiderViewModel (V5 Phase 4) ---
+  subjectId: { category: 'supported', note: 'field-map.md Spider: Spider Axis Score, the selected object id (or org id) the radar is computed for' },
+  subjectLabel: { category: 'supported', note: 'field-map.md Universe: Node Label, echoed as the Spider subject label' },
+  isOrgLevel: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score, frontend-only flag for the "no selection = whole-enterprise" empty state (docs/V5_DESIGN_SPEC.md §4.3)' },
+  spiderAxisScores: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score (V5 Phase 4 governance-gated key, docs/V5_DESIGN_SPEC.md §4.2/§10)' },
+  rawScore: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score, pre-normalization weighted count per axis' },
+  score: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score, normalized [0,1] per-axis value' },
+  worstObjectId: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score, vertex-click drill-down target (docs/V5_DESIGN_SPEC.md §4.3)' },
+  worstObjectLabel: { category: 'supported', note: 'field-map.md Universe: Node Label, echoed for the Spider axis\' worst contributor' },
+  worstRiskState: { category: 'derived_supported', note: 'field-map.md RiskBoard: Risk State / Universe: Risk Intensity, echoed for the Spider axis\' worst contributor' },
+
+  // --- buildCollectionPassportViewModel (V5 Phase 4) ---
+  collectionLabel: { category: 'supported', note: 'docs/V5_HANDOVER.md §9.1 scopeContext.label, echoed as the Collection Passport subject label' },
+  memberCount: { category: 'derived_supported', note: 'field-map.md Passport fields note on Collection Passport aggregation - count of Collection members with a resolvable Passport' },
+  members: { category: 'derived_supported', note: 'field-map.md Passport fields note on Collection Passport aggregation - per-member id/label/type/risk summary list' },
 });

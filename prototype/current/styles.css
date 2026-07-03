@@ -2507,3 +2507,422 @@ body {
   opacity: 0.7;
   font-style: italic;
 }
+
+/* ---------------------------------------------------------------------
+   Spider lens (V5 Phase 4, docs/V5_DESIGN_SPEC.md §4) - a radar chart over
+   the existing operational domains. Structured/centered like Risk Board,
+   not spatial like Universe: one static SVG chart, centered in the
+   workspace, with a small header above it.
+   --------------------------------------------------------------------- */
+
+.spider-chart {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spider-surface {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.spider-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.spider-kicker {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--cyan-accent);
+}
+
+.spider-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.spider-slice {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.spider-svg-wrap {
+  width: 100%;
+  max-width: 440px;
+  aspect-ratio: 1 / 1;
+}
+
+.spider-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.spider-ring {
+  fill: none;
+  stroke: var(--panel-border);
+  stroke-width: 1;
+}
+
+.spider-spoke {
+  stroke: var(--panel-border);
+  stroke-width: 1;
+}
+
+.spider-polygon {
+  --spider-fill-color: var(--gray);
+  fill: var(--spider-fill-color);
+  fill-opacity: 0.22;
+  stroke: var(--spider-fill-color);
+  stroke-width: 2;
+  transition: fill 0.25s ease, stroke 0.25s ease;
+}
+
+.spider-vertex {
+  --spider-vertex-color: var(--gray);
+  fill: var(--bg-void);
+  stroke: var(--spider-vertex-color);
+  stroke-width: 2.5;
+}
+
+.spider-vertex.is-clickable {
+  cursor: pointer;
+}
+
+.spider-vertex.is-clickable:hover,
+.spider-vertex.is-clickable:focus-visible {
+  fill: var(--spider-vertex-color);
+}
+
+.spider-axis-label {
+  fill: var(--text-secondary);
+  font-size: 11px;
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+}
+
+.spider-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 40px 0;
+}
+
+.spider-empty.hidden {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------
+   Text View lens (V5 Phase 4, docs/V5_DESIGN_SPEC.md §5) - the same
+   investigation as a structured, keyboard-navigable outline: collapsible
+   <details> sections in the exact §5.2 order, typographic rather than
+   spatial (same "document, not diagram" register as Risk Board/Passport).
+   --------------------------------------------------------------------- */
+
+.text-view-container {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.text-view-surface {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 32px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.text-view-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--section-divider);
+  margin-bottom: 8px;
+}
+
+.text-view-kicker {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--cyan-accent);
+}
+
+.text-view-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.text-view-time {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.text-view-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  padding: 20px 0;
+}
+
+.text-view-section {
+  border-top: 1px solid var(--section-divider);
+  padding: 14px 0;
+}
+
+.text-view-section:first-of-type {
+  border-top: none;
+}
+
+.text-view-section-title {
+  cursor: pointer;
+  list-style: none;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-secondary);
+  padding: 2px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.text-view-section-title::-webkit-details-marker {
+  display: none;
+}
+
+.text-view-section-title::before {
+  content: '▸';
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--cyan-accent);
+}
+
+.text-view-section[open] > .text-view-section-title::before {
+  transform: rotate(90deg);
+}
+
+.text-view-section-body {
+  padding: 10px 0 2px 4px;
+}
+
+.text-view-empty-line {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.text-view-hierarchy {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.text-view-hierarchy-item {
+  padding-left: calc(var(--depth, 0) * 18px);
+  position: relative;
+}
+
+.text-view-hierarchy-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--depth, 0) * 18px + 8px);
+  top: 26px;
+  bottom: -4px;
+  width: 1px;
+  background: var(--section-divider);
+}
+
+.text-view-hierarchy-ref {
+  gap: 8px;
+}
+
+.text-view-hierarchy-type {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  min-width: 66px;
+}
+
+.text-view-hierarchy-label {
+  flex: 1;
+}
+
+.text-view-hierarchy-current {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cyan-accent);
+}
+
+.text-view-hierarchy-item.is-selected .text-view-hierarchy-ref {
+  border-color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.08);
+}
+
+.text-view-risk-badge {
+  display: inline-flex;
+}
+
+.text-view-ref {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 2px 0;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
+  text-align: left;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.text-view-ref:hover,
+.text-view-ref:focus-visible {
+  background: var(--card-bg-hover);
+  border-color: var(--cyan-accent);
+}
+
+.text-view-ref-label {
+  flex: 1;
+}
+
+.text-view-ref-meta,
+.text-view-entry-meta {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.text-view-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.text-view-list-item {
+  font-size: 12.5px;
+}
+
+.text-view-entry.is-dormant {
+  opacity: 0.55;
+}
+
+.text-view-entry-summary {
+  margin: 4px 0 0 10px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.text-view-entry-foot {
+  margin: 4px 0 0 10px;
+  display: flex;
+  gap: 10px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
+.text-view-dating {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.text-view-history li {
+  padding: 6px 10px;
+}
+
+.text-view-source-records .source-cite {
+  font-size: 11px;
+}
+
+/* ---------------------------------------------------------------------
+   Collection Passport (V5 Phase 4, docs/V5_HANDOVER.md §9.1/§10.2) -
+   reuses every .passport-* section style above unchanged; only the
+   overview header (member list instead of a single object's fields) is
+   new.
+   --------------------------------------------------------------------- */
+
+.passport-overview--collection .passport-overview-summary {
+  margin-bottom: 4px;
+}
+
+.passport-collection-members {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.passport-collection-member {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.passport-collection-member:hover,
+.passport-collection-member:focus-visible {
+  background: var(--card-bg-hover);
+  border-color: var(--cyan-accent);
+}
+
+.passport-collection-member-label {
+  flex: 1;
+}
+
+.passport-collection-member-type {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}

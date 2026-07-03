@@ -244,3 +244,87 @@ test('initTimeline: dispose() unsubscribes from the store so no further recomput
   stateModule.setZoom(2);
   assert.equal(updateCount, 1, 'no further onUpdate notifications should fire after dispose()');
 });
+
+// ---------------------------------------------------------------------------
+// V5 Phase 4: bundle.hierarchyPath / bundle.spider / bundle.collectionPassport
+// ---------------------------------------------------------------------------
+
+test('initTimeline: bundle includes hierarchyPath (empty), spider (org-level), and collectionPassport (null) before any selection/scope', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+  const bundle = timeline.getDerivedBundle();
+
+  assert.deepEqual(bundle.hierarchyPath, []);
+  assert.ok(bundle.spider);
+  assert.equal(bundle.spider.isOrgLevel, true);
+  assert.equal(bundle.spider.spiderAxisScores.length, 7);
+  assert.equal(bundle.collectionPassport, null);
+
+  timeline.dispose();
+});
+
+test('initTimeline: selecting an object populates hierarchyPath (ending at that object) and switches spider off org-level', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+
+  stateModule.selectObject('e6bc8583-d191-417b-9284-01303238ddfc');
+  const bundle = timeline.getDerivedBundle();
+
+  assert.ok(bundle.hierarchyPath.length > 0);
+  const last = bundle.hierarchyPath[bundle.hierarchyPath.length - 1];
+  assert.equal(last.id, 'e6bc8583-d191-417b-9284-01303238ddfc');
+  assert.equal(last.isSelected, true);
+
+  assert.equal(bundle.spider.isOrgLevel, false);
+  assert.equal(bundle.spider.subjectId, 'e6bc8583-d191-417b-9284-01303238ddfc');
+
+  timeline.dispose();
+});
+
+test('initTimeline: building a Collection scope populates collectionPassport with the real members', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+
+  stateModule.setScope({
+    type: 'collection',
+    id: 'collection:test',
+    label: '2 items',
+    memberIds: [
+      { type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' },
+      { type: 'customer', id: 'customer:AquaGrid Utilities', label: 'AquaGrid Utilities' },
+    ],
+  });
+  const bundle = timeline.getDerivedBundle();
+
+  assert.ok(bundle.collectionPassport);
+  assert.equal(bundle.collectionPassport.memberCount, 2);
+
+  timeline.dispose();
+});
+
+test('initTimeline: switching every workspace lens preserves hierarchyPath, spider, and collectionPassport unchanged (they are lens-independent, selection/time/scope-driven only)', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+
+  stateModule.selectObject('e6bc8583-d191-417b-9284-01303238ddfc');
+  stateModule.setScope({
+    type: 'collection',
+    id: 'collection:test',
+    label: '2 items',
+    memberIds: [
+      { type: 'customer', id: 'customer:Horizon LNG Partners', label: 'Horizon LNG Partners' },
+      { type: 'customer', id: 'customer:AquaGrid Utilities', label: 'AquaGrid Utilities' },
+    ],
+  });
+
+  const before = timeline.getDerivedBundle();
+  for (const lens of stateModule.WORKSPACE_LENS_VALUES) {
+    stateModule.setLens(lens);
+    const after = timeline.getDerivedBundle();
+    assert.deepEqual(after.hierarchyPath, before.hierarchyPath, `setLens('${lens}') must preserve hierarchyPath`);
+    assert.deepEqual(after.spider, before.spider, `setLens('${lens}') must preserve spider`);
+    assert.deepEqual(after.collectionPassport, before.collectionPassport, `setLens('${lens}') must preserve collectionPassport`);
+  }
+
+  timeline.dispose();
+});
