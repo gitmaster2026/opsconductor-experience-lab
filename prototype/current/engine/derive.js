@@ -734,6 +734,14 @@ export function buildRiskBoardViewModel(snapshot, sliceIndex) {
       evidenceId: evidenceRecord ? evidenceRecord.id : null,
       evidenceSummary: evidenceRecord ? evidenceRecord.evidence_summary : null,
       rootCauseSummary: evidenceRecord ? evidenceRecord.evidence_summary : null,
+      // V5 Phase 3 (docs/V5_DESIGN_SPEC.md §3.2 "the sparkline is the
+      // killer feature"): the field-map.md-authorized "Risk Board
+      // Sparkline" concept, computed once per cell here so
+      // lenses/risk-board.js can render it straight off the bundle without
+      // needing snapshot access of its own (same "derive.js does the
+      // joins, lenses only consume the view-model" separation every other
+      // field on this object already follows).
+      riskTrajectory: riskTrajectory(snapshot, cell.id),
     };
   });
 
@@ -742,6 +750,57 @@ export function buildRiskBoardViewModel(snapshot, sliceIndex) {
     sliceLabel: slice ? slice.label : null,
     cells,
   };
+}
+
+// ---------------------------------------------------------------------------
+// riskTrajectory
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the per-commitment risk trajectory backing the Risk Board's
+ * sparkline (field-map.md RiskBoard: "Risk Board Sparkline - per-commitment
+ * risk_state sequence across all time_slices, derived from risk-board.json
+ * risk_state at each time-slices.json slice").
+ *
+ * risk-board.json itself carries exactly one static risk_state per cell
+ * (no per-slice variant - see this file's resolveVisibilityForSlice header
+ * comment), so the trajectory's actual per-slice signal comes from
+ * resolveVisibilityForSlice's reveal state, applied at EVERY slice instead
+ * of just the current one: a cell reads as its real risk_state once the
+ * timeline has revealed it, and as 'dormant' at every slice before that.
+ * This is the exact same "not-yet-revealed reads as dormant" rule
+ * buildRiskBoardViewModel's visibleAtSlice and
+ * lenses/risk-board-layout.js's assignSeverityBand() already apply to a
+ * single slice - riskTrajectory just evaluates it across every slice so
+ * the sparkline can show the whole history at a glance.
+ *
+ * @param {any} snapshot
+ * @param {string} commitmentId - a risk-board.json cell id (e.g.
+ *   "RB-LCM-ATLAS") - the same id space Risk Board cards/selection already
+ *   use throughout this codebase (see resolveCommitmentForObject's
+ *   "risk-board cell id" resolution case above).
+ * @returns {Array<{ sliceId: string, sliceLabel: string, risk_state: string }>}
+ *   one entry per time-slices.json record, in the file's own chronological
+ *   order. Empty array if commitmentId does not match any risk-board.json row.
+ */
+export function riskTrajectory(snapshot, commitmentId) {
+  assertSnapshot(snapshot);
+  const timeSlices = recordsOf(snapshot.timeSlices);
+  const riskBoard = recordsOf(snapshot.riskBoard);
+  const cell = riskBoard.find((c) => c.id === commitmentId);
+  if (!cell) {
+    return [];
+  }
+
+  return timeSlices.map((slice, sliceIndex) => {
+    const visibility = resolveVisibilityForSlice(snapshot, sliceIndex);
+    const isVisible = visibility.visibleRiskBoardIds.includes(cell.id);
+    return {
+      sliceId: slice.id,
+      sliceLabel: slice.label,
+      risk_state: isVisible ? cell.risk_state : 'dormant',
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1406,6 +1465,7 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   rootCauseSummary: { category: 'derived_supported', note: 'field-map.md RiskBoard: Root Cause Summary' },
   sliceId: { category: 'supported', note: 'time-slices.json id passthrough, echoed on RiskBoard/Dashboard view-model envelopes' },
   sliceLabel: { category: 'supported', note: 'time-slices.json label passthrough, echoed on RiskBoard/Dashboard view-model envelopes' },
+  riskTrajectory: { category: 'derived_supported', note: 'field-map.md RiskBoard: Risk Board Sparkline (V5 Phase 3 governance-gated key, docs/V5_DESIGN_SPEC.md §3.2/§10)' },
 
   // --- buildDashboardViewModel ---
   clickTarget: { category: 'derived_supported', note: 'frontend-only interaction descriptor, not a displayed data field; documents docs/STATE_MODEL.md Select-object trigger sources (Dashboard KPI click)' },

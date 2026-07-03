@@ -8,9 +8,14 @@
  * vocabulary rather than each defining their own colors.
  *
  * Phase 2 extended this for the Universe lens's cluster/pulse treatment
- * and the Risk Board's constellation layout - a genuinely new layout
- * mechanism (replacing the old CSS-grid .risk-board) that keeps the same
- * color tokens, glass panel treatment, and toolbar chrome.
+ * and (at the time) the Risk Board's constellation layout - a genuinely
+ * new layout mechanism (replacing the old CSS-grid .risk-board) that kept
+ * the same color tokens, glass panel treatment, and toolbar chrome.
+ *
+ * V5 Phase 3 replaced that constellation layout again, this time with an
+ * editorial severity-band commitment board (docs/V5_DESIGN_SPEC.md §3) -
+ * see the "Risk Board lens" section below - still reading from the exact
+ * same shared risk color tokens.
  *
  * Phase 3 (this addition, see the "Panels" section far below) gives
  * Dashboard/Passport/Jarvis their OWN clear visual identity as "context
@@ -290,236 +295,255 @@ body {
 }
 
 /* ---------------------------------------------------------------------
-   Risk Board lens - "operational constellation", not a card grid.
+   Risk Board lens (V5 Phase 3) - an editorial commitment board, the
+   deliberate visual OPPOSITE of the Universe lens's spatial/ambient
+   constellation this replaces (docs/V5_DESIGN_SPEC.md §3): horizontal
+   severity bands (Critical/Elevated/Watch/Normal/Dormant), top to bottom,
+   each a row of typographic commitment cards sorted by revenue_at_risk.
+   Structured and document-like where Universe is cinematic - two visibly
+   different lenses over the same operational dataset, not two variations
+   on one theme. Still explicitly NOT Kanban (docs/LENS_SPECIFICATIONS.md):
+   cards are not draggable; a band is a computed severity state.
    --------------------------------------------------------------------- */
 
 .risk-board {
   position: absolute;
   inset: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.risk-constellation-surface {
-  position: absolute;
-  inset: 24px;
-}
-
-.risk-constellation-surface.is-empty::after {
-  content: 'No risk-board cells at this time slice.';
-  position: absolute;
-  inset: 0;
+.risk-editorial-surface {
+  padding: 22px 26px 40px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 100%;
+}
+
+.risk-editorial-empty {
+  text-align: center;
   color: var(--text-secondary);
   font-size: 13px;
+  padding: 40px 0;
 }
 
-.risk-control-point {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 10px;
-  height: 10px;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  background: var(--cyan-accent);
-  box-shadow: 0 0 18px 4px rgba(90, 209, 255, 0.55);
-  pointer-events: none;
-  z-index: 1;
+.risk-editorial-empty.hidden {
+  display: none;
 }
 
-.risk-control-point span {
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cyan-accent);
-  opacity: 0.65;
-  white-space: nowrap;
+.risk-band-row {
+  border-top: 1px solid var(--panel-border);
+  padding: 14px 0 18px;
 }
 
-.risk-ring-guides {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+.risk-band-row:first-child {
+  border-top: none;
 }
 
-.risk-ring-guide {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  border: 1px dashed rgba(120, 160, 200, 0.14);
-  border-radius: 50%;
-}
-
-.risk-cell {
-  position: absolute;
-  appearance: none;
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.08), rgba(10, 14, 20, 0.55) 70%);
-  color: var(--text-primary);
-  cursor: pointer;
+.risk-band-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 6px;
-  z-index: 2;
-  transition: left 0.7s cubic-bezier(0.22, 1, 0.36, 1), top 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    width 0.7s cubic-bezier(0.22, 1, 0.36, 1), height 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.5s ease, border-color 0.5s ease, transform 0.2s ease;
-  box-shadow: 0 0 0 1px var(--risk-cell-color, var(--gray)) inset, 0 0 22px -4px var(--risk-cell-color, var(--gray));
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-.risk-cell:hover,
-.risk-cell:focus-visible {
-  transform: scale(1.05);
-  z-index: 5;
+.risk-band-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--risk-band-color, var(--gray));
+  box-shadow: 0 0 10px 1px var(--risk-band-color, var(--gray));
+  flex-shrink: 0;
+}
+
+.risk-band-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.risk-band-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.risk-band-row.is-empty .risk-band-header {
+  opacity: 0.45;
+}
+
+.risk-band-row.is-empty .risk-band-cards::after {
+  content: 'No commitments currently in this band.';
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  opacity: 0.55;
+  padding: 2px 0 4px;
+}
+
+.risk-band-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.risk-card {
+  appearance: none;
+  text-align: left;
+  width: 264px;
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--risk-card-color, var(--gray));
+  border-radius: 10px;
+  background: var(--card-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 12px 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, opacity 0.25s ease;
+}
+
+.risk-card:hover,
+.risk-card:focus-visible {
+  background: var(--card-bg-hover);
   outline: none;
-  box-shadow: 0 0 0 1.5px var(--risk-cell-color, var(--gray)) inset, 0 0 32px -2px var(--risk-cell-color, var(--gray));
+  box-shadow: 0 0 0 1px var(--risk-card-color, var(--gray));
 }
 
-.risk-cell.is-selected {
+.risk-card.is-selected {
   border-color: var(--cyan-accent);
-  box-shadow: 0 0 0 2px var(--cyan-accent) inset, 0 0 36px -2px var(--cyan-accent);
-  z-index: 6;
+  box-shadow: 0 0 0 1.5px var(--cyan-accent), 0 0 24px -6px var(--cyan-accent);
 }
 
-.risk-cell.is-dormant {
+.risk-card.is-dormant {
+  opacity: 0.55;
+  filter: saturate(0.6);
+}
+
+.risk-card.is-critical {
+  animation: risk-card-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes risk-card-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 16px -4px var(--risk-card-color, var(--red));
+  }
+}
+
+/* Dashboard KPI "focus objects" cross-lens highlight (see
+   lenses/risk-board.js's getHighlightIds option and app.js's
+   highlightedIds transient state) - same figure/ground split
+   lenses/universe.js applies to its own nodes for the same flow. */
+.risk-card.is-highlighted {
+  border-color: var(--cyan-accent);
+  box-shadow: 0 0 0 1.5px var(--cyan-accent), 0 0 28px -4px var(--cyan-accent);
+  animation: risk-card-spotlight-pulse 0.9s ease-out 1;
+}
+
+.risk-card.is-dimmed-by-highlight {
   opacity: 0.4;
   filter: saturate(0.5);
 }
 
-/* Phase 3: Dashboard KPI "focus objects" cross-lens highlight (see
-   lenses/risk-board.js's getHighlightIds option and app.js's
-   highlightedIds transient state). A spotlighted cell brightens and gets
-   a cyan-accent ring (matching the equivalent treatment
-   lenses/universe.js applies to its own nodes); every other cell dims,
-   creating a clear figure/ground split while the highlight is active. */
-.risk-cell.is-highlighted {
-  border-color: var(--cyan-accent);
-  box-shadow: 0 0 0 2px var(--cyan-accent) inset, 0 0 40px 2px var(--cyan-accent);
-  z-index: 7;
-  animation: risk-cell-spotlight-pulse 0.9s ease-out 1;
-}
-
-.risk-cell.is-dimmed-by-highlight {
-  opacity: 0.28;
-  filter: saturate(0.55);
-}
-
-@keyframes risk-cell-spotlight-pulse {
+@keyframes risk-card-spotlight-pulse {
   0% {
-    box-shadow: 0 0 0 2px var(--cyan-accent) inset, 0 0 60px 10px var(--cyan-accent);
+    box-shadow: 0 0 0 2px var(--cyan-accent), 0 0 40px 4px var(--cyan-accent);
   }
   100% {
-    box-shadow: 0 0 0 2px var(--cyan-accent) inset, 0 0 40px 2px var(--cyan-accent);
+    box-shadow: 0 0 0 1.5px var(--cyan-accent), 0 0 28px -4px var(--cyan-accent);
   }
 }
 
-.risk-cell.is-critical {
-  animation: risk-cell-pulse 2.2s ease-in-out infinite;
+.risk-card-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
-@keyframes risk-cell-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 1px var(--risk-cell-color, var(--red)) inset, 0 0 20px -4px var(--risk-cell-color, var(--red));
-  }
-  50% {
-    box-shadow: 0 0 0 1.5px var(--risk-cell-color, var(--red)) inset, 0 0 44px 4px var(--risk-cell-color, var(--red));
-  }
-}
-
-.risk-cell-glow {
-  position: absolute;
-  inset: -2px;
+.risk-card-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  pointer-events: none;
-  background: radial-gradient(circle, var(--risk-cell-color, var(--gray)) 0%, transparent 70%);
-  opacity: 0.18;
+  background: var(--risk-card-color, var(--gray));
+  flex-shrink: 0;
+  margin-bottom: 1px;
 }
 
-.risk-cell-body {
-  position: relative;
-  text-align: center;
-  line-height: 1.25;
-  pointer-events: none;
-}
-
-.risk-cell-customer {
-  font-size: 10.5px;
+.risk-card-id {
+  font-size: 9.5px;
   font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.risk-card-customer {
+  font-size: 12.5px;
+  font-weight: 700;
   color: var(--text-primary);
-  max-width: 90%;
-  margin: 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.risk-card-revenue {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--risk-card-color, var(--text-primary));
+  white-space: nowrap;
+}
+
+.risk-card-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.risk-card-item {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.risk-cell-revenue {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--risk-cell-color, var(--text-primary));
-  margin-top: 2px;
+.risk-card-required {
+  white-space: nowrap;
 }
 
-.risk-cell-detail {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%) translateY(4px);
-  min-width: 190px;
-  background: rgba(8, 12, 18, 0.92);
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  padding: 8px 10px;
+.risk-card-sparkline-wrap {
+  line-height: 0;
+}
+
+.risk-sparkline {
+  width: 100%;
+  height: 26px;
+  display: block;
+}
+
+.risk-card-counts {
   font-size: 10.5px;
   color: var(--text-secondary);
-  text-align: left;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  z-index: 20;
-  backdrop-filter: blur(10px);
 }
 
-.risk-cell:hover .risk-cell-detail,
-.risk-cell:focus-visible .risk-cell-detail,
-.risk-cell.is-selected .risk-cell-detail {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-.risk-cell-detail-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 1px 0;
-}
-
-.risk-cell-detail-row span {
-  color: var(--text-secondary);
-}
-
-.risk-cell-detail-row strong {
-  color: var(--text-primary);
-  font-weight: 600;
-  text-align: right;
-}
-
-.risk-cell-detail-summary {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--panel-border);
+.risk-card-rootcause {
+  font-size: 11px;
   color: var(--text-primary);
   line-height: 1.4;
+  padding-top: 6px;
+  border-top: 1px solid var(--section-divider);
+  opacity: 0.9;
 }
 
 /* ---------------------------------------------------------------------

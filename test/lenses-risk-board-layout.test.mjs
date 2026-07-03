@@ -1,11 +1,12 @@
 // test/lenses-risk-board-layout.test.mjs
 //
-// Unit tests for lenses/risk-board-layout.js's pure
-// computeRiskConstellationLayout() function, exercised both against
-// synthetic cell sets (for precise control over severity/revenue
-// combinations) and against the REAL buildRiskBoardViewModel() output
-// (via test/fixtures/load-snapshot.mjs) so this test also validates the
-// layout against the actual 5-cell dataset, not just hand-built fixtures.
+// Unit tests for lenses/risk-board-layout.js's V5 Phase 3 pure functions:
+// assignSeverityBand(), buildBandLayout(), and computeFlipDelta() - both
+// against synthetic cell sets (for precise control over severity/revenue
+// combinations) and against the REAL buildRiskBoardViewModel() output (via
+// test/fixtures/load-snapshot.mjs) at every real time slice, so this test
+// also validates band assignment against the actual 5-cell dataset, not
+// just hand-built fixtures.
 //
 // Run with `node --test test/` (plain node:test, node:assert/strict).
 
@@ -13,186 +14,224 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTestSnapshot } from './fixtures/load-snapshot.mjs';
 import { buildRiskBoardViewModel } from '../prototype/current/engine/derive.js';
-import { computeRiskConstellationLayout } from '../prototype/current/lenses/risk-board-layout.js';
+import {
+  SEVERITY_BANDS,
+  assignSeverityBand,
+  buildBandLayout,
+  computeFlipDelta,
+} from '../prototype/current/lenses/risk-board-layout.js';
 
 const snapshot = loadTestSnapshot();
 
 // ---------------------------------------------------------------------------
-// Basic input validation
+// assignSeverityBand
 // ---------------------------------------------------------------------------
 
-test('computeRiskConstellationLayout: throws on non-array cells', () => {
-  assert.throws(() => computeRiskConstellationLayout(null, { width: 100, height: 100 }));
+test('assignSeverityBand: a not-yet-visible cell is always dormant, regardless of risk_state', () => {
+  assert.equal(assignSeverityBand({ risk_state: 'critical', visibleAtSlice: false }), 'dormant');
+  assert.equal(assignSeverityBand({ risk_state: 'watch', visibleAtSlice: false }), 'dormant');
 });
 
-test('computeRiskConstellationLayout: throws on invalid width/height', () => {
-  const cells = [{ id: 'a', revenue_at_risk: 1000, risk_state: 'watch', visibleAtSlice: true }];
-  assert.throws(() => computeRiskConstellationLayout(cells, { width: 0, height: 100 }));
-  assert.throws(() => computeRiskConstellationLayout(cells, { width: 100, height: NaN }));
+test('assignSeverityBand: maps each known risk_state to its band when visible', () => {
+  assert.equal(assignSeverityBand({ risk_state: 'critical', visibleAtSlice: true }), 'critical');
+  assert.equal(assignSeverityBand({ risk_state: 'elevated', visibleAtSlice: true }), 'elevated');
+  assert.equal(assignSeverityBand({ risk_state: 'watch', visibleAtSlice: true }), 'watch');
+  assert.equal(assignSeverityBand({ risk_state: 'normal', visibleAtSlice: true }), 'normal');
 });
 
-test('computeRiskConstellationLayout: returns an empty array for an empty cell list', () => {
-  assert.deepEqual(computeRiskConstellationLayout([], { width: 800, height: 600 }), []);
+test('assignSeverityBand: an unrecognized/missing risk_state falls back to dormant', () => {
+  assert.equal(assignSeverityBand({ risk_state: undefined, visibleAtSlice: true }), 'dormant');
+  assert.equal(assignSeverityBand({ risk_state: 'unknown-state', visibleAtSlice: true }), 'dormant');
 });
 
-test('computeRiskConstellationLayout: returns exactly one entry per input cell, in the same order', () => {
+// ---------------------------------------------------------------------------
+// buildBandLayout: shape, totality, band-order
+// ---------------------------------------------------------------------------
+
+test('buildBandLayout: throws on non-array input', () => {
+  assert.throws(() => buildBandLayout(null));
+});
+
+test('buildBandLayout: returns all 5 severity bands, in the documented top-to-bottom order, even for an empty cell list', () => {
+  const layout = buildBandLayout([]);
+  assert.deepEqual(layout.bands.map((b) => b.band), ['critical', 'elevated', 'watch', 'normal', 'dormant']);
+  assert.deepEqual(layout.bandOrder, SEVERITY_BANDS);
+  for (const entry of layout.bands) {
+    assert.deepEqual(entry.cellIds, []);
+  }
+});
+
+test('buildBandLayout: every input cell appears in exactly one band - none are ever dropped', () => {
   const cells = [
-    { id: 'x', revenue_at_risk: 1000, risk_state: 'watch', visibleAtSlice: true },
-    { id: 'y', revenue_at_risk: 2000, risk_state: 'critical', visibleAtSlice: true },
+    { id: 'a', revenue_at_risk: 100, risk_state: 'critical', visibleAtSlice: true },
+    { id: 'b', revenue_at_risk: 200, risk_state: 'elevated', visibleAtSlice: true },
+    { id: 'c', revenue_at_risk: 300, risk_state: 'watch', visibleAtSlice: true },
+    { id: 'd', revenue_at_risk: 400, risk_state: 'normal', visibleAtSlice: true },
+    { id: 'e', revenue_at_risk: 500, risk_state: 'critical', visibleAtSlice: false },
   ];
-  const result = computeRiskConstellationLayout(cells, { width: 800, height: 600 });
-  assert.equal(result.length, 2);
-  assert.deepEqual(result.map((r) => r.id), ['x', 'y']);
+  const layout = buildBandLayout(cells);
+  const allPlacedIds = layout.bands.flatMap((b) => b.cellIds);
+  assert.equal(allPlacedIds.length, cells.length);
+  assert.deepEqual(new Set(allPlacedIds), new Set(cells.map((c) => c.id)));
+  assert.equal(layout.positionById.size, cells.length);
 });
 
 // ---------------------------------------------------------------------------
-// No NaN/Infinity, no exact duplicate coordinates, bounds
+// buildBandLayout: real dataset, every time slice - deterministic and
+// correct against known risk_state values, not just "does it run."
 // ---------------------------------------------------------------------------
 
-test('computeRiskConstellationLayout (real risk board, t2): every coordinate and radius is finite', () => {
+test('buildBandLayout (real risk-board data, t2 - all revealed): bands match the known risk_state values', () => {
   const { cells } = buildRiskBoardViewModel(snapshot, 2);
-  const layout = computeRiskConstellationLayout(cells, { width: 1000, height: 700 });
-  assert.equal(layout.length, cells.length);
-  for (const p of layout) {
-    assert.ok(Number.isFinite(p.x), `cell ${p.id} has non-finite x`);
-    assert.ok(Number.isFinite(p.y), `cell ${p.id} has non-finite y`);
-    assert.ok(Number.isFinite(p.radius) && p.radius > 0, `cell ${p.id} has invalid radius ${p.radius}`);
+  const layout = buildBandLayout(cells);
+
+  const bandByCellId = new Map();
+  for (const entry of layout.bands) {
+    for (const id of entry.cellIds) bandByCellId.set(id, entry.band);
+  }
+
+  // Known real risk-board.json rows (src/data/risk-board.json): 2 critical
+  // (RB-LCM-ATLAS, RB-CPP-HORIZON), 2 elevated (RB-PPS-AQUAGRID,
+  // RB-MPS-FRONTIER), 1 watch (RB-CPS-CATALYST). At t2 (sliceIndex 2) ALL 5
+  // are revealed, so every cell should land in its own real risk_state's
+  // band - none dormant.
+  assert.equal(bandByCellId.get('RB-LCM-ATLAS'), 'critical');
+  assert.equal(bandByCellId.get('RB-CPP-HORIZON'), 'critical');
+  assert.equal(bandByCellId.get('RB-PPS-AQUAGRID'), 'elevated');
+  assert.equal(bandByCellId.get('RB-MPS-FRONTIER'), 'elevated');
+  assert.equal(bandByCellId.get('RB-CPS-CATALYST'), 'watch');
+
+  assert.equal(layout.bands.find((b) => b.band === 'critical').cellIds.length, 2);
+  assert.equal(layout.bands.find((b) => b.band === 'elevated').cellIds.length, 2);
+  assert.equal(layout.bands.find((b) => b.band === 'watch').cellIds.length, 1);
+  assert.equal(layout.bands.find((b) => b.band === 'normal').cellIds.length, 0);
+  assert.equal(layout.bands.find((b) => b.band === 'dormant').cellIds.length, 0);
+});
+
+test('buildBandLayout (real risk-board data, t0 - baseline): every commitment is dormant and all 5 still appear', () => {
+  const { cells } = buildRiskBoardViewModel(snapshot, 0);
+  const layout = buildBandLayout(cells);
+
+  const dormantBand = layout.bands.find((b) => b.band === 'dormant');
+  assert.equal(dormantBand.cellIds.length, 5);
+  assert.equal(layout.bands.filter((b) => b.band !== 'dormant').every((b) => b.cellIds.length === 0), true);
+});
+
+test('buildBandLayout (real risk-board data, t1 - partial reveal): exactly the 2 documented commitments are revealed, the other 3 are dormant', () => {
+  const { cells } = buildRiskBoardViewModel(snapshot, 1);
+  const layout = buildBandLayout(cells);
+
+  const allNonDormant = layout.bands
+    .filter((b) => b.band !== 'dormant')
+    .flatMap((b) => b.cellIds);
+  const dormantIds = layout.bands.find((b) => b.band === 'dormant').cellIds;
+
+  // docs/V4_DATA_RECONCILIATION.md item 2: t1 reveals PPS + CPP first
+  // chronologically (matches t1's documented revenue_at_risk of 414000).
+  assert.equal(allNonDormant.length, 2);
+  assert.equal(dormantIds.length, 3);
+  assert.deepEqual(new Set(allNonDormant), new Set(['RB-PPS-AQUAGRID', 'RB-CPP-HORIZON']));
+});
+
+test('buildBandLayout: all 5 real commitments are present at every real time slice (none ever disappear)', () => {
+  for (let sliceIndex = 0; sliceIndex <= 2; sliceIndex += 1) {
+    const { cells } = buildRiskBoardViewModel(snapshot, sliceIndex);
+    const layout = buildBandLayout(cells);
+    const total = layout.bands.reduce((sum, b) => sum + b.cellIds.length, 0);
+    assert.equal(total, 5, `expected all 5 commitments present at sliceIndex ${sliceIndex}`);
   }
 });
 
-test('computeRiskConstellationLayout (real risk board, t2): no two cells share the exact same center coordinate', () => {
-  const { cells } = buildRiskBoardViewModel(snapshot, 2);
-  const layout = computeRiskConstellationLayout(cells, { width: 1000, height: 700 });
-  const seen = new Set();
-  for (const p of layout) {
-    const key = `${p.x.toFixed(9)},${p.y.toFixed(9)}`;
-    assert.ok(!seen.has(key), `duplicate coordinate for cell ${p.id}`);
-    seen.add(key);
-  }
-});
+// ---------------------------------------------------------------------------
+// buildBandLayout: within-band sort order (revenue_at_risk descending)
+// ---------------------------------------------------------------------------
 
-test('computeRiskConstellationLayout: cell centers stay within the container bounds', () => {
+test('buildBandLayout: within a band, cells sort by revenue_at_risk descending', () => {
   const cells = [
-    { id: 'a', revenue_at_risk: 190000, risk_state: 'critical', visibleAtSlice: true },
-    { id: 'b', revenue_at_risk: 420000, risk_state: 'elevated', visibleAtSlice: true },
-    { id: 'c', revenue_at_risk: 280000, risk_state: 'watch', visibleAtSlice: true },
+    { id: 'low', revenue_at_risk: 50000, risk_state: 'critical', visibleAtSlice: true },
+    { id: 'high', revenue_at_risk: 500000, risk_state: 'critical', visibleAtSlice: true },
+    { id: 'mid', revenue_at_risk: 200000, risk_state: 'critical', visibleAtSlice: true },
   ];
-  const width = 900;
-  const height = 600;
-  const layout = computeRiskConstellationLayout(cells, { width, height });
-  for (const p of layout) {
-    assert.ok(p.x >= 0 && p.x <= width, `cell ${p.id} x out of bounds`);
-    assert.ok(p.y >= 0 && p.y <= height, `cell ${p.id} y out of bounds`);
-  }
+  const layout = buildBandLayout(cells);
+  const criticalBand = layout.bands.find((b) => b.band === 'critical');
+  assert.deepEqual(criticalBand.cellIds, ['high', 'mid', 'low']);
+});
+
+test('buildBandLayout: ties in revenue_at_risk break deterministically by id', () => {
+  const cells = [
+    { id: 'zeta', revenue_at_risk: 100000, risk_state: 'watch', visibleAtSlice: true },
+    { id: 'alpha', revenue_at_risk: 100000, risk_state: 'watch', visibleAtSlice: true },
+  ];
+  const layout = buildBandLayout(cells);
+  const watchBand = layout.bands.find((b) => b.band === 'watch');
+  assert.deepEqual(watchBand.cellIds, ['alpha', 'zeta']);
+});
+
+test('buildBandLayout: positionById reflects each cell\'s band, bandIndex, and sorted position', () => {
+  const cells = [
+    { id: 'crit-1', revenue_at_risk: 100, risk_state: 'critical', visibleAtSlice: true },
+    { id: 'watch-1', revenue_at_risk: 999, risk_state: 'watch', visibleAtSlice: true },
+  ];
+  const layout = buildBandLayout(cells);
+  assert.deepEqual(layout.positionById.get('crit-1'), { band: 'critical', bandIndex: 0, indexInBand: 0 });
+  assert.deepEqual(layout.positionById.get('watch-1'), { band: 'watch', bandIndex: 2, indexInBand: 0 });
 });
 
 // ---------------------------------------------------------------------------
-// Determinism
+// Determinism / no mutation
 // ---------------------------------------------------------------------------
 
-test('computeRiskConstellationLayout: identical input always produces identical output', () => {
+test('buildBandLayout: identical input always produces identical output', () => {
   const { cells } = buildRiskBoardViewModel(snapshot, 2);
-  const layoutA = computeRiskConstellationLayout(cells, { width: 1000, height: 700 });
-  const layoutB = computeRiskConstellationLayout(cells, { width: 1000, height: 700 });
-  assert.deepStrictEqual(layoutA, layoutB);
+  const layoutA = buildBandLayout(cells);
+  const layoutB = buildBandLayout(cells);
+  assert.deepEqual(layoutA.bands, layoutB.bands);
 });
 
-test('computeRiskConstellationLayout: does not mutate its cells input', () => {
+test('buildBandLayout: does not mutate its cells input', () => {
   const { cells } = buildRiskBoardViewModel(snapshot, 2);
   const cellsCopy = JSON.parse(JSON.stringify(cells));
-  computeRiskConstellationLayout(cells, { width: 1000, height: 700 });
+  buildBandLayout(cells);
   assert.deepEqual(cells, cellsCopy);
 });
 
 // ---------------------------------------------------------------------------
-// Risk-severity radial ordering: critical closest to center, watch
-// farthest, echoing the Universe lens's risk-gravity design language.
+// computeFlipDelta
 // ---------------------------------------------------------------------------
 
-test('computeRiskConstellationLayout: critical cells sit closer to the control point than elevated, which sit closer than watch', () => {
-  const cells = [
-    { id: 'critical-1', revenue_at_risk: 200000, risk_state: 'critical', visibleAtSlice: true },
-    { id: 'elevated-1', revenue_at_risk: 200000, risk_state: 'elevated', visibleAtSlice: true },
-    { id: 'watch-1', revenue_at_risk: 200000, risk_state: 'watch', visibleAtSlice: true },
-  ];
-  const width = 1000;
-  const height = 700;
-  const layout = computeRiskConstellationLayout(cells, { width, height });
-  const byId = new Map(layout.map((p) => [p.id, p]));
-  const cx = width / 2;
-  const cy = height / 2;
-  const dist = (p) => Math.hypot(p.x - cx, p.y - cy);
-
-  assert.ok(dist(byId.get('critical-1')) < dist(byId.get('elevated-1')));
-  assert.ok(dist(byId.get('elevated-1')) < dist(byId.get('watch-1')));
+test('computeFlipDelta: computes the inverse translation between a before and after position', () => {
+  const before = new Map([['a', { x: 100, y: 40 }]]);
+  const after = new Map([['a', { x: 20, y: 260 }]]);
+  const deltas = computeFlipDelta(before, after);
+  assert.deepEqual(deltas.get('a'), { dx: 80, dy: -220 });
 });
 
-test('computeRiskConstellationLayout (real risk board data): critical cells average closer to the control point than watch cells', () => {
-  const { cells } = buildRiskBoardViewModel(snapshot, 2);
-  const width = 1000;
-  const height = 700;
-  const layout = computeRiskConstellationLayout(cells, { width, height });
-  const byId = new Map(layout.map((p) => [p.id, p]));
-  const cx = width / 2;
-  const cy = height / 2;
-  const dist = (p) => Math.hypot(p.x - cx, p.y - cy);
-
-  const criticalCells = cells.filter((c) => c.risk_state === 'critical');
-  const watchCells = cells.filter((c) => c.risk_state === 'watch');
-  assert.ok(criticalCells.length > 0, 'fixture sanity: real risk-board.json has at least one critical cell');
-  assert.ok(watchCells.length > 0, 'fixture sanity: real risk-board.json has at least one watch cell');
-
-  const avgCritical = average(criticalCells.map((c) => dist(byId.get(c.id))));
-  const avgWatch = average(watchCells.map((c) => dist(byId.get(c.id))));
-  assert.ok(avgCritical < avgWatch, `expected avg critical distance (${avgCritical}) < avg watch distance (${avgWatch})`);
+test('computeFlipDelta: zero delta when the position did not change', () => {
+  const before = new Map([['a', { x: 50, y: 50 }]]);
+  const after = new Map([['a', { x: 50, y: 50 }]]);
+  assert.deepEqual(computeFlipDelta(before, after).get('a'), { dx: 0, dy: 0 });
 });
 
-test('computeRiskConstellationLayout: a not-yet-visible (dormant) cell is pushed to the outermost ring regardless of its underlying risk_state', () => {
-  const cells = [
-    { id: 'hidden-critical', revenue_at_risk: 100000, risk_state: 'critical', visibleAtSlice: false },
-    { id: 'shown-watch', revenue_at_risk: 100000, risk_state: 'watch', visibleAtSlice: true },
-  ];
-  const width = 1000;
-  const height = 700;
-  const layout = computeRiskConstellationLayout(cells, { width, height });
-  const byId = new Map(layout.map((p) => [p.id, p]));
-  const cx = width / 2;
-  const cy = height / 2;
-  const dist = (p) => Math.hypot(p.x - cx, p.y - cy);
-
-  assert.equal(byId.get('hidden-critical').ring, 'gray');
-  assert.ok(
-    dist(byId.get('hidden-critical')) > dist(byId.get('shown-watch')),
-    'a dormant (not-yet-revealed) cell should read as farther out / more distant than a revealed watch cell, even though its underlying risk_state is critical'
-  );
+test('computeFlipDelta: a card with no prior position (first mount) gets a zero delta, not a crash', () => {
+  const before = new Map();
+  const after = new Map([['new-card', { x: 10, y: 10 }]]);
+  assert.deepEqual(computeFlipDelta(before, after).get('new-card'), { dx: 0, dy: 0 });
 });
 
-// ---------------------------------------------------------------------------
-// Revenue -> size scaling
-// ---------------------------------------------------------------------------
-
-test('computeRiskConstellationLayout: a higher revenue_at_risk produces a strictly larger radius, all else equal', () => {
-  const cells = [
-    { id: 'small', revenue_at_risk: 50000, risk_state: 'watch', visibleAtSlice: true },
-    { id: 'big', revenue_at_risk: 500000, risk_state: 'watch', visibleAtSlice: true },
-  ];
-  const layout = computeRiskConstellationLayout(cells, { width: 900, height: 600 });
-  const byId = new Map(layout.map((p) => [p.id, p]));
-  assert.ok(byId.get('big').radius > byId.get('small').radius);
+test('computeFlipDelta: accepts plain objects and arrays, not just Maps', () => {
+  const before = { a: { x: 0, y: 0 } };
+  const after = [{ id: 'a', x: 30, y: 10 }];
+  assert.deepEqual(computeFlipDelta(before, after).get('a'), { dx: -30, dy: -10 });
 });
 
-test('computeRiskConstellationLayout: size (revenue) and position (severity) are independent - a large-revenue dormant cell can still be the biggest circle on the board', () => {
-  const cells = [
-    { id: 'big-dormant', revenue_at_risk: 900000, risk_state: 'elevated', visibleAtSlice: false },
-    { id: 'small-critical', revenue_at_risk: 10000, risk_state: 'critical', visibleAtSlice: true },
-  ];
-  const layout = computeRiskConstellationLayout(cells, { width: 900, height: 600 });
-  const byId = new Map(layout.map((p) => [p.id, p]));
-  assert.ok(byId.get('big-dormant').radius > byId.get('small-critical').radius, 'revenue drives size regardless of severity/visibility ring placement');
-  assert.equal(byId.get('big-dormant').ring, 'gray');
-  assert.equal(byId.get('small-critical').ring, 'critical');
+test('computeFlipDelta: only returns entries for ids present in nextPositions', () => {
+  const before = new Map([
+    ['a', { x: 0, y: 0 }],
+    ['b', { x: 5, y: 5 }],
+  ]);
+  const after = new Map([['a', { x: 0, y: 0 }]]);
+  const deltas = computeFlipDelta(before, after);
+  assert.equal(deltas.size, 1);
+  assert.ok(deltas.has('a'));
+  assert.ok(!deltas.has('b'));
 });
-
-function average(arr) {
-  return arr.reduce((a, b) => a + b, 0) / arr.length;
-}

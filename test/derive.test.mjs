@@ -19,6 +19,7 @@ import {
   buildPassportViewModel,
   buildJarvisViewModel,
   resolveCommitmentForObject,
+  riskTrajectory,
   KNOWN_OUTPUT_FIELDS,
 } from '../prototype/current/engine/derive.js';
 
@@ -241,6 +242,53 @@ test('buildRiskBoardViewModel: attaches the correct evidence-backed recommendati
   assert.equal(cppCell.recommendationId, '091ebb8d-c7d8-49aa-beda-3858e8eece5a');
   assert.equal(cppCell.evidenceId, 'evidence-shortage-cpp');
   assert.match(cppCell.rootCauseSummary, /Horizon CPP shortage/);
+});
+
+test('buildRiskBoardViewModel: attaches a riskTrajectory to every cell, matching riskTrajectory() output exactly', () => {
+  const viewModel = buildRiskBoardViewModel(snapshot, 2);
+  for (const cell of viewModel.cells) {
+    assert.deepEqual(cell.riskTrajectory, riskTrajectory(snapshot, cell.id));
+  }
+});
+
+// ---------------------------------------------------------------------------
+// riskTrajectory (V5 Phase 3 - field-map.md RiskBoard: "Risk Board Sparkline")
+// ---------------------------------------------------------------------------
+
+test('riskTrajectory: returns one entry per time-slices.json record, in chronological order', () => {
+  const timeSlices = snapshot.timeSlices.records;
+  for (const cell of snapshot.riskBoard.records) {
+    const trajectory = riskTrajectory(snapshot, cell.id);
+    assert.equal(trajectory.length, timeSlices.length);
+    assert.deepEqual(trajectory.map((t) => t.sliceId), timeSlices.map((s) => s.id));
+  }
+});
+
+test('riskTrajectory: returns an empty array for an id that does not match any risk-board.json row', () => {
+  assert.deepEqual(riskTrajectory(snapshot, 'not-a-real-cell-id'), []);
+});
+
+test('riskTrajectory: reads as dormant before the cell is revealed, and its real risk_state once revealed', () => {
+  // RB-CPP-HORIZON is one of the two cells revealed at t1 (see
+  // resolveVisibilityForSlice's t1 tests above) - dormant at t0, its real
+  // ("critical") risk_state at t1 and t2.
+  const trajectory = riskTrajectory(snapshot, 'RB-CPP-HORIZON');
+  assert.equal(trajectory[0].risk_state, 'dormant');
+  assert.equal(trajectory[1].risk_state, 'critical');
+  assert.equal(trajectory[2].risk_state, 'critical');
+});
+
+test('riskTrajectory: a cell not revealed until t2 (RB-LCM-ATLAS) is dormant at t0/t1 and its real risk_state only at t2', () => {
+  const trajectory = riskTrajectory(snapshot, 'RB-LCM-ATLAS');
+  assert.equal(trajectory[0].risk_state, 'dormant');
+  assert.equal(trajectory[1].risk_state, 'dormant');
+  assert.equal(trajectory[2].risk_state, 'critical');
+});
+
+test('riskTrajectory: is deterministic (calling twice yields identical output)', () => {
+  const a = riskTrajectory(snapshot, 'RB-MPS-FRONTIER');
+  const b = riskTrajectory(snapshot, 'RB-MPS-FRONTIER');
+  assert.deepEqual(a, b);
 });
 
 // ---------------------------------------------------------------------------
