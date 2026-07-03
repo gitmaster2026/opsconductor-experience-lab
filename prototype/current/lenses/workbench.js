@@ -19,11 +19,15 @@
 //      (same rendering technology lenses/universe.js already uses; no new
 //      dependency).
 //
-// Save Layout / Export are explicit UI-only placeholders this phase
-// (docs/V5_HANDOVER.md §9.4): no persistence, no file generation. The
-// "shape" a future save would capture is documented in SavedWorkbenchLayout
-// below so a later phase implements against a known target, per §9.4's
-// instruction.
+// Save Current View / Save Report / Duplicate View / Share View / Manage
+// Saved Views / Export are explicit UI-only placeholders (Phase 4.5's
+// original "Save Layout" folded into "Save Report" in V5 Phase 4.6, per
+// docs/V5_HANDOVER.md §9.2/§9.4): no persistence, no file generation. The
+// naming popover and "Manage Saved Views" modal are the shared
+// engine/saved-views.js component (also used by panels/dashboard.js), not
+// hand-rolled here. The "shape" a future save would capture is documented
+// in SavedWorkbenchLayout below so a later phase implements against a
+// known target, per §9.4's instruction.
 //
 // Like every other lens in this codebase, this file knows nothing about
 // engine/state.js - app.js wires getBundle/getSnapshot in, mirroring the
@@ -31,12 +35,16 @@
 
 import { buildRelationshipDataset, listNodeTypes, listDomains } from '../engine/relationship-dataset.js';
 import { mountFilterableTable, applyTable } from '../engine/filterable-table.js';
+import { mountSaveNamePrompt, placeholderSaveNote } from '../engine/saved-views.js';
 
 /**
- * Documented target shape for a future real "Save Layout" (V5_HANDOVER.md
- * §9.4: "should be documented as a comment/type... so a future agent
- * implements against a known target"). Not constructed or persisted
- * anywhere in this phase - purely documentation.
+ * Documented target shape for a future real "Save Report"/"Save Current
+ * View" (V5_HANDOVER.md §9.4: "should be documented as a comment/type...
+ * so a future agent implements against a known target"). Not constructed
+ * or persisted anywhere in this phase - purely documentation. This is the
+ * Workbench-specific sub-shape; engine/saved-views.js's SavedViewRecord
+ * typedef documents the fuller cross-surface shape this folds into (adds
+ * scope/lens/time/zoom/visible-panels on top of these Workbench fields).
  *
  * @typedef {Object} SavedWorkbenchLayout
  * @property {string} name
@@ -229,13 +237,16 @@ function truncateLabel(label) {
  * @param {() => any} callbacks.getSnapshot - the raw data-repository.js
  *   snapshot (buildRelationshipDataset needs the full graph, not just the
  *   per-lens view-models already in the bundle).
+ * @param {() => void} [callbacks.onOpenSavedViewsManager] - opens the
+ *   shared "Manage Saved Views" modal (engine/saved-views.js's
+ *   mountSavedViewsManager) - V5 Phase 4.6.
  * @returns {{ render: () => void, resize: () => void, destroy: () => void }}
  */
 export function mountWorkbenchLens(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountWorkbenchLens: containerEl must be a DOM element');
   }
-  const { getBundle, getSnapshot } = callbacks ?? {};
+  const { getBundle, getSnapshot, onOpenSavedViewsManager } = callbacks ?? {};
   if (typeof getBundle !== 'function') throw new Error('mountWorkbenchLens: callbacks.getBundle is required');
   if (typeof getSnapshot !== 'function') throw new Error('mountWorkbenchLens: callbacks.getSnapshot is required');
 
@@ -251,9 +262,16 @@ export function mountWorkbenchLens(containerEl, callbacks) {
         <div id="wbDomains" class="workbench-domain-list"></div>
       </div>
       <div class="workbench-toolbar-spacer"></div>
-      <button type="button" id="wbSaveLayoutBtn" class="workbench-ghost-btn">Save Layout</button>
+      <div class="view-actions-bar">
+        <button type="button" id="wbSaveViewBtn" class="view-action-btn">Save Current View</button>
+        <button type="button" id="wbSaveReportBtn" class="view-action-btn">Save Report</button>
+        <button type="button" id="wbDuplicateViewBtn" class="view-action-btn">Duplicate View</button>
+        <button type="button" id="wbShareViewBtn" class="view-action-btn" disabled title="Sharing is a future capability">Share View</button>
+        <button type="button" id="wbManageSavedViewsBtn" class="view-action-btn">Manage Saved Views</button>
+      </div>
       <button type="button" id="wbExportBtn" class="workbench-ghost-btn">Export</button>
     </div>
+    <div id="wbSaveNamePrompt" class="save-name-prompt hidden"></div>
     <div class="workbench-body">
       <aside class="workbench-columns">
         <h3>Columns</h3>
@@ -279,21 +297,15 @@ export function mountWorkbenchLens(containerEl, callbacks) {
         </div>
       </section>
     </div>
-    <div id="wbSaveLayoutPrompt" class="workbench-save-prompt hidden">
-      <label for="wbSaveLayoutName">Name this layout</label>
-      <input type="text" id="wbSaveLayoutName" placeholder="e.g. Commitments at risk" />
-      <div class="workbench-save-prompt-actions">
-        <button type="button" id="wbSaveLayoutConfirm" class="workbench-ghost-btn">Save</button>
-        <button type="button" id="wbSaveLayoutCancel" class="workbench-ghost-btn">Cancel</button>
-      </div>
-      <p id="wbSaveLayoutNote" class="workbench-save-prompt-note"></p>
-    </div>
   `;
 
   const els = {
     rootType: containerEl.querySelector('#wbRootType'),
     domains: containerEl.querySelector('#wbDomains'),
-    saveLayoutBtn: containerEl.querySelector('#wbSaveLayoutBtn'),
+    saveViewBtn: containerEl.querySelector('#wbSaveViewBtn'),
+    saveReportBtn: containerEl.querySelector('#wbSaveReportBtn'),
+    duplicateViewBtn: containerEl.querySelector('#wbDuplicateViewBtn'),
+    manageSavedViewsBtn: containerEl.querySelector('#wbManageSavedViewsBtn'),
     exportBtn: containerEl.querySelector('#wbExportBtn'),
     columnList: containerEl.querySelector('#wbColumnList'),
     rowCount: containerEl.querySelector('#wbRowCount'),
@@ -302,12 +314,9 @@ export function mountWorkbenchLens(containerEl, callbacks) {
     chartNumeric: containerEl.querySelector('#wbChartNumeric'),
     chartGroup: containerEl.querySelector('#wbChartGroup'),
     chartCanvas: containerEl.querySelector('#wbChartCanvas'),
-    savePrompt: containerEl.querySelector('#wbSaveLayoutPrompt'),
-    saveName: containerEl.querySelector('#wbSaveLayoutName'),
-    saveConfirm: containerEl.querySelector('#wbSaveLayoutConfirm'),
-    saveCancel: containerEl.querySelector('#wbSaveLayoutCancel'),
-    saveNote: containerEl.querySelector('#wbSaveLayoutNote'),
   };
+
+  const saveNamePrompt = mountSaveNamePrompt(containerEl.querySelector('#wbSaveNamePrompt'));
 
   // --- Session-only (not engine/state.js) selector state -------------------
   // Mirrors the exact pattern panels/scope.js's Collection builder already
@@ -527,22 +536,38 @@ export function mountWorkbenchLens(containerEl, callbacks) {
     renderChart(currentRows());
   });
 
-  // --- Save Layout (V5_HANDOVER.md §9.4: UI reservation only, no persistence) -
-  els.saveLayoutBtn.addEventListener('click', () => {
-    els.savePrompt.classList.remove('hidden');
-    els.saveNote.textContent = '';
-    els.saveName.value = '';
-    els.saveName.focus();
+  // --- Save Current View / Save Report / Duplicate View / Manage Saved
+  // Views (V5 Phase 4.6, docs/V5_HANDOVER.md §9.2/§9.4): UI reservation
+  // only, no persistence - each "Save"/"Duplicate" action shares ONE
+  // inline naming popover (engine/saved-views.js's mountSaveNamePrompt,
+  // same reusable instance Dashboard's action bar uses), confirm-only.
+  // "Save Report" is this lens's take on the generic "Save" action -
+  // captures the table/chart configuration documented in this module's own
+  // SavedWorkbenchLayout typedef above. Share View stays visibly disabled
+  // per this phase's explicit scope (future capability).
+  els.saveViewBtn.addEventListener('click', () => {
+    saveNamePrompt.open({
+      title: 'Save Current View',
+      placeholder: 'e.g. Commitments at risk',
+      onConfirm: (name) => placeholderSaveNote(name),
+    });
   });
-  els.saveCancel.addEventListener('click', () => {
-    els.savePrompt.classList.add('hidden');
+  els.saveReportBtn.addEventListener('click', () => {
+    saveNamePrompt.open({
+      title: 'Save Report',
+      placeholder: 'e.g. Supply Chain Exposure Report',
+      onConfirm: (name) => placeholderSaveNote(name),
+    });
   });
-  els.saveConfirm.addEventListener('click', () => {
-    const name = els.saveName.value.trim() || 'Untitled layout';
-    // Explicitly NOT implemented this phase - no persistence, no storage
-    // write. See this module's SavedWorkbenchLayout typedef for the shape a
-    // future phase should save.
-    els.saveNote.textContent = `"${name}" would be saved here — not implemented in this prototype.`;
+  els.duplicateViewBtn.addEventListener('click', () => {
+    saveNamePrompt.open({
+      title: 'Duplicate View',
+      placeholder: 'e.g. Copy of Commitments at risk',
+      onConfirm: (name) => placeholderSaveNote(name),
+    });
+  });
+  els.manageSavedViewsBtn.addEventListener('click', () => {
+    if (typeof onOpenSavedViewsManager === 'function') onOpenSavedViewsManager();
   });
 
   // --- Export (UI-only placeholder, no functionality) -----------------------
@@ -564,6 +589,7 @@ export function mountWorkbenchLens(containerEl, callbacks) {
     },
     destroy() {
       table.destroy();
+      saveNamePrompt.destroy();
       containerEl.innerHTML = '';
       containerEl.classList.remove('workbench-root');
     },
