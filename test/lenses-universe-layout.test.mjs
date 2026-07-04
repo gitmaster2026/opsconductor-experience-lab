@@ -25,6 +25,8 @@ import {
   computeCollectionStreamAngles,
   resolveFocusTransition,
   focusModeVisibleNodeIds,
+  collectionGlyphRadius,
+  resolveCollectionExpansion,
 } from '../prototype/current/lenses/universe-layout.js';
 
 const snapshot = loadTestSnapshot();
@@ -494,6 +496,43 @@ test('computeCollectionStreamAngles: strictly reduces crossings on a hand-built 
   assert.equal(result.crossingCount, 0, 'the algorithm must resolve the one crossing in this scenario');
 });
 
+test('computeCollectionStreamAngles: real dataset, a 2-member Collection - correct member set, correct edges, never worse than baseline', () => {
+  // A real, directly-related pair (an actual relationships.json edge, not a
+  // hand-built synthetic one) - the smallest real Collection this phase's
+  // invariants call out ("2 and 3 member cases minimum").
+  const firstEdge = realGraph.edges.find((e) => e.from_id !== e.to_id);
+  assert.ok(firstEdge, 'fixture sanity: the real dataset must have at least one non-self edge');
+  const members = [
+    realGraph.nodes.find((n) => n.id === firstEdge.from_id),
+    realGraph.nodes.find((n) => n.id === firstEdge.to_id),
+  ];
+  const result = computeCollectionStreamAngles(members, realGraph.edges);
+  assert.equal(result.angleById.size, 2, 'exactly the 2 real members, no more, no less');
+  assert.deepEqual(new Set(result.angleById.keys()), new Set(members.map((m) => m.id)));
+  assert.ok(result.crossingCount <= result.baselineCrossingCount);
+});
+
+test('computeCollectionStreamAngles: real dataset, a 3-member Collection - correct member set, correct edges, never worse than baseline', () => {
+  // 3 real nodes that are mutually reachable via real edges (a genuine,
+  // interconnected 3-member Collection, not 3 unrelated nodes).
+  const firstEdge = realGraph.edges.find((e) => e.from_id !== e.to_id);
+  assert.ok(firstEdge, 'fixture sanity: the real dataset must have at least one non-self edge');
+  const thirdEdge = realGraph.edges.find(
+    (e) => (e.from_id === firstEdge.to_id || e.to_id === firstEdge.to_id) && e.from_id !== e.to_id && ![firstEdge.from_id, firstEdge.to_id].every((id) => [e.from_id, e.to_id].includes(id))
+  );
+  const thirdId = thirdEdge ? (thirdEdge.from_id === firstEdge.to_id ? thirdEdge.to_id : thirdEdge.from_id) : null;
+  assert.ok(thirdId, 'fixture sanity: the real dataset must have a 3rd node reachable from the first pair');
+  const memberIds = [firstEdge.from_id, firstEdge.to_id, thirdId];
+  const members = memberIds.map((id) => realGraph.nodes.find((n) => n.id === id));
+  const realMemberEdges = realGraph.edges.filter((e) => memberIds.includes(e.from_id) && memberIds.includes(e.to_id));
+  assert.ok(realMemberEdges.length >= 2, 'fixture sanity: this 3-member set should have at least 2 real internal edges');
+
+  const result = computeCollectionStreamAngles(members, realGraph.edges);
+  assert.equal(result.angleById.size, 3, 'exactly the 3 real members, no more, no less');
+  assert.deepEqual(new Set(result.angleById.keys()), new Set(memberIds));
+  assert.ok(result.crossingCount <= result.baselineCrossingCount);
+});
+
 test('computeCollectionStreamAngles: never produces more crossings than the baseline, across randomized real-dataset subsets', () => {
   // mulberry32 (already imported above) gives a deterministic shuffle, so
   // this test's "random" subsets are exactly reproducible run-to-run.
@@ -604,4 +643,87 @@ test('focusModeVisibleNodeIds: real-dataset sanity - a focal customer\'s visible
   const unrelated = realGraph.nodes.find((n) => n.id !== selectedId && !visible.has(n.id));
   assert.ok(unrelated, 'fixture sanity: the real dataset must contain at least one node unrelated to this selection');
   assert.ok(!visible.has(unrelated.id));
+});
+
+// ---------------------------------------------------------------------------
+// collectionGlyphRadius (V5 Phase 2.7.1, docs/V5_HANDOVER.md §10.2 item H)
+// ---------------------------------------------------------------------------
+
+test('collectionGlyphRadius: zero/invalid member counts return 0 (nothing to render)', () => {
+  assert.equal(collectionGlyphRadius(0), 0);
+  assert.equal(collectionGlyphRadius(-3), 0);
+  assert.equal(collectionGlyphRadius(NaN), 0);
+  assert.equal(collectionGlyphRadius(undefined), 0);
+});
+
+test('collectionGlyphRadius: is deterministic - the same member count always returns the exact same radius', () => {
+  for (const count of [1, 2, 3, 5, 10, 50]) {
+    assert.equal(collectionGlyphRadius(count), collectionGlyphRadius(count));
+  }
+});
+
+test('collectionGlyphRadius: strictly increases as member count grows, below the size ceiling', () => {
+  const counts = [1, 2, 3, 5, 10];
+  let prev = -Infinity;
+  for (const count of counts) {
+    const r = collectionGlyphRadius(count);
+    assert.ok(r > prev, `radius for count=${count} (${r}) should exceed the radius for the previous, smaller count (${prev})`);
+    assert.ok(r < 40, `radius for count=${count} (${r}) should be below the documented ceiling in this range`);
+    prev = r;
+  }
+});
+
+test('collectionGlyphRadius: never decreases as member count grows, even once clamped at the ceiling', () => {
+  const counts = [1, 5, 10, 20, 40, 10000];
+  let prev = -Infinity;
+  for (const count of counts) {
+    const r = collectionGlyphRadius(count);
+    assert.ok(r >= prev, `radius for count=${count} (${r}) should never be smaller than the previous, smaller count's radius (${prev})`);
+    prev = r;
+  }
+});
+
+test('collectionGlyphRadius: never exceeds its documented upper bound even for very large member counts', () => {
+  assert.ok(collectionGlyphRadius(10000) <= 40);
+});
+
+// ---------------------------------------------------------------------------
+// resolveCollectionExpansion (V5 Phase 2.7.1, docs/V5_HANDOVER.md §10.2 item H)
+// ---------------------------------------------------------------------------
+
+test('resolveCollectionExpansion: no scope context - inactive and not expanded', () => {
+  assert.deepEqual(resolveCollectionExpansion(null, null), { isCollectionScopeActive: false, isExpanded: false });
+  assert.deepEqual(resolveCollectionExpansion(null, 'some-id'), { isCollectionScopeActive: false, isExpanded: false });
+});
+
+test('resolveCollectionExpansion: a non-collection scope (e.g. a single customer) is never treated as a Collection', () => {
+  const scope = { type: 'customer', id: 'customer:Acme', memberIds: undefined };
+  assert.deepEqual(resolveCollectionExpansion(scope, 'customer:Acme'), { isCollectionScopeActive: false, isExpanded: false });
+});
+
+test('resolveCollectionExpansion: a Collection scope with no members is not active (nothing to collapse/expand)', () => {
+  const scope = { type: 'collection', id: 'collection:x', memberIds: [] };
+  assert.deepEqual(resolveCollectionExpansion(scope, null), { isCollectionScopeActive: false, isExpanded: false });
+});
+
+test('resolveCollectionExpansion: an active Collection scope is COLLAPSED by default (not auto-expanded)', () => {
+  const scope = { type: 'collection', id: 'collection:abc', memberIds: [{ type: 'item', id: '1' }, { type: 'item', id: '2' }] };
+  assert.deepEqual(resolveCollectionExpansion(scope, null), { isCollectionScopeActive: true, isExpanded: false });
+  // Some unrelated real object is selected - still collapsed, not expanded.
+  assert.deepEqual(resolveCollectionExpansion(scope, 'some-other-object'), { isCollectionScopeActive: true, isExpanded: false });
+});
+
+test('resolveCollectionExpansion: EXPANDED exactly when the Collection\'s own id is the current selection', () => {
+  const scope = { type: 'collection', id: 'collection:abc', memberIds: [{ type: 'item', id: '1' }, { type: 'item', id: '2' }] };
+  assert.deepEqual(resolveCollectionExpansion(scope, 'collection:abc'), { isCollectionScopeActive: true, isExpanded: true });
+});
+
+test('resolveCollectionExpansion: collapsing back - clearing the selection (e.g. via popFocus()) returns to collapsed while the scope is still active', () => {
+  const scope = { type: 'collection', id: 'collection:abc', memberIds: [{ type: 'item', id: '1' }, { type: 'item', id: '2' }] };
+  const expanded = resolveCollectionExpansion(scope, 'collection:abc');
+  assert.equal(expanded.isExpanded, true);
+  // popFocus() restores whatever selection preceded the glyph click (here, null) -
+  // re-resolving with that restored selection must report collapsed again.
+  const collapsedAgain = resolveCollectionExpansion(scope, null);
+  assert.deepEqual(collapsedAgain, { isCollectionScopeActive: true, isExpanded: false });
 });
