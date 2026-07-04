@@ -614,6 +614,33 @@ export function buildUniverseGraph(snapshot) {
     }
   }
 
+  // --- (d.1) Narrative-linked evidence ---------------------------------------
+  // evidence.json rows that document an operational object directly (e.g.
+  // evidence-horizon-escalation/CESC-NR-2026-014, evidence-cpp-fat-gate/
+  // FAT-NR-2026-3002) rather than a recommendation - joined via the same
+  // evidence.source_record_id <-> operational_objects.source_identifier
+  // match resolveVisibilityForSlice() (above) already uses for the
+  // escalation-evidence visibility check. These were never added as graph
+  // nodes anywhere (the per-commitment loop above only picks up evidence
+  // keyed to a recommendation.id), so a relationships.json row citing one
+  // (e.g. rel-cpp-evidence-to-source) would fail the referential-integrity
+  // guard in the loop below.
+  for (const ev of evidence) {
+    if (nodes.has(ev.id)) continue; // already added via the recommendation-linked path above
+    const linkedObject = operationalObjects.find((o) => o.source_identifier === ev.source_record_id);
+    if (!linkedObject) continue;
+    addNode({
+      id: ev.id,
+      type: 'evidence',
+      label: ev.evidence_type,
+      domain: linkedObject.domain || DOMAIN_FALLBACK,
+      risk_state: 'neutral',
+      sourceTable: ev.source_table,
+      sourceRecordId: ev.source_record_id,
+    });
+    addEdge(ev.id, linkedObject.id, 'cites_source_record');
+  }
+
   // relationships.json chain edges. Some from_id/to_id values reference
   // risk-board ids (RB-CPP-HORIZON, RB-LCM-ATLAS, RB-MPS-FRONTIER), which
   // are already added above as commitment_risk_cell nodes, so these edges
