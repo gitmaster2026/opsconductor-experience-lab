@@ -2926,3 +2926,366 @@ body {
   letter-spacing: 0.06em;
   color: var(--text-secondary);
 }
+
+/* ---------------------------------------------------------------------
+   Conductor Studio (V5 Phase 4.7, docs/V5_HANDOVER.md §11)
+
+   The 6th workspace lens - a calm, professional "strategic operations
+   room," deliberately NOT a chat-bubble/chatbot layout (per the phase
+   brief's explicit visual direction). It gets its OWN 3-column layout
+   (nav / center / right) rather than slotting into #mainLayout's three
+   columns like every other lens does, since its left nav (9 sub-panels)
+   and right panel (Scope/Time/Evidence/Related Objects/Jarvis Summary)
+   are both distinct from the standing Dashboard/Passport left panel and
+   persistent Jarvis panel - see app.js's applyLensVisibility(), which
+   swaps #mainLayout and #conductorStudio as a pair rather than hiding one
+   column at a time.
+
+   Still draws from the exact same :root tokens as every other surface -
+   no new color vocabulary, only new layout for a different kind of room.
+   --------------------------------------------------------------------- */
+
+.conductor-studio {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 220px 1fr 300px;
+  min-height: 0;
+}
+
+.cs-nav {
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  border-right: 1px solid var(--panel-border);
+  padding: 14px 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cs-nav-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.cs-nav-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.cs-nav-btn.active {
+  background: rgba(90, 209, 255, 0.14);
+  color: var(--cyan-accent);
+}
+
+.cs-center {
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.cs-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.cs-section-header h2 {
+  font-size: 14px;
+  margin: 0;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cs-row-count {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.cs-section-note {
+  font-size: 11.5px;
+  font-style: italic;
+  opacity: 0.75;
+  margin: 4px 0 14px;
+}
+
+.cs-table-container {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+
+/* --- Recommendation action bar (Approve/Reject/Modify/Request More
+   Evidence/Assign/Defer + optional rationale) - UI-only interaction
+   capture, no persistence. --------------------------------------------- */
+
+.cs-action-bar {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+}
+
+.cs-action-bar-header {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.cs-action-bar-evidence {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+
+.cs-rationale-input {
+  width: 100%;
+  min-height: 52px;
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.cs-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cs-action-btn {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.cs-action-btn:hover,
+.cs-action-btn:focus-visible {
+  border-color: var(--cyan-accent);
+  color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.1);
+}
+
+.cs-action-confirm {
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.cs-action-confirm.is-flashing {
+  color: var(--cyan-accent);
+}
+
+/* --- Mock panel cards (docs/RULES.md §12) ------------------------------ */
+
+.cs-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.cs-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.cs-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cs-card-top h4 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cs-card-meta {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin: 6px 0;
+}
+
+.cs-card p {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.cs-card-status {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(179, 157, 255, 0.12);
+  color: var(--jarvis-accent);
+}
+
+.cs-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.cs-metric-delta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+.cs-trend-arrow {
+  font-size: 11px;
+}
+
+.cs-trend-up {
+  color: var(--orange);
+}
+
+.cs-trend-down {
+  color: var(--green);
+}
+
+.cs-trend-flat {
+  color: var(--gray);
+}
+
+/* The mandatory "Future" badge (docs/RULES.md §12 condition 2) - a soft
+   violet tint (the same --jarvis-accent family already used elsewhere in
+   this app for "not a hard data surface, copilot/aspirational-flavored"
+   content), deliberately distinct from the risk color vocabulary
+   (red/orange/yellow/green/gray) so it is never mistaken for a risk state. */
+.cs-future-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(179, 157, 255, 0.14);
+  color: var(--jarvis-accent);
+  border: 1px dashed rgba(179, 157, 255, 0.5);
+  white-space: nowrap;
+}
+
+.cs-future-action-btn {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  margin-left: auto;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* --- Right panel: Scope / Time / Evidence / Related Objects / Jarvis
+   Summary - real data, normal governance, same "context surface" identity
+   as .jarvis-panel/.panel elsewhere in this app. ------------------------- */
+
+.cs-right {
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  border-left: 1px solid var(--panel-border);
+  padding: 16px 18px;
+  overflow-y: auto;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.cs-right-block {
+  margin-bottom: 20px;
+}
+
+.cs-right-block h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cyan-accent);
+  margin: 0 0 8px;
+}
+
+.cs-right-row {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--section-divider);
+  line-height: 1.5;
+}
+
+.cs-right-row:last-child {
+  border-bottom: none;
+}
+
+.cs-right-row-clickable {
+  cursor: pointer;
+  transition: color 0.14s ease;
+}
+
+.cs-right-row-clickable:hover {
+  color: var(--cyan-accent);
+}
+
+.cs-jarvis-next {
+  padding: 8px 10px;
+  background: rgba(179, 157, 255, 0.08);
+  border: 1px solid rgba(179, 157, 255, 0.25);
+  border-radius: 8px;
+}
+
+.cs-mono {
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 10.5px;
+  opacity: 0.8;
+}
+
+.cs-empty-note {
+  font-style: italic;
+  opacity: 0.7;
+  font-size: 11px;
+}

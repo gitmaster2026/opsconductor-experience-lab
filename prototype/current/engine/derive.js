@@ -1084,6 +1084,85 @@ export function riskTrajectory(snapshot, commitmentId) {
 }
 
 // ---------------------------------------------------------------------------
+// buildRecommendationReviewViewModel (V5 Phase 4.7, docs/V5_HANDOVER.md §11)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the Conductor Studio "Recommendation Review" row set: one row per
+ * recommendations.json record, joined to its risk-board.json cell (via
+ * demand_signal_id, the exact same join buildRiskBoardViewModel already
+ * performs the other direction) and its evidence.json record (via
+ * source_record_id, same join buildPassportViewModel's Evidence section
+ * already performs). Approval Queue (Conductor Studio's other real-data
+ * panel) is not a separate derivation - it is this exact same row set,
+ * filtered to `status === 'generated'` (this dataset's only "not yet
+ * resolved" status value) by the panel itself, per docs/V5_HANDOVER.md
+ * §11.2's "filtered pending-items view of the above."
+ *
+ * Every field below is either a raw src/data/*.json field (id, status,
+ * category, created_at, demand_signal_id, customer, item_number,
+ * required_date, revenue_at_risk, currency, risk_state) or already
+ * documented in this file's own KNOWN_OUTPUT_FIELDS manifest (cellId,
+ * visibleAtSlice, evidenceId, evidenceSummary) - this function introduces
+ * zero new field names, so it requires no new field-map.md/
+ * KNOWN_OUTPUT_FIELDS entries beyond what buildRiskBoardViewModel already
+ * licenses.
+ *
+ * @param {any} snapshot
+ * @param {number} sliceIndex
+ * @param {{ isUnscoped: boolean, scopedCommitmentCellIds: string[] }} [scopeFilter] -
+ *   V5 Phase 3.5's buildScopeFilter() output. When narrowed, rows whose
+ *   linked risk-board cell falls outside scopedCommitmentCellIds are
+ *   dropped entirely (same scoping behavior as buildRiskBoardViewModel).
+ *   A recommendation with no resolvable risk-board cell is dropped when
+ *   scoped (nothing to confirm it's in-scope) but kept when unscoped.
+ * @returns {{ sliceId: string, sliceLabel: string, rows: Array<Object> }}
+ */
+export function buildRecommendationReviewViewModel(snapshot, sliceIndex, scopeFilter) {
+  assertSnapshot(snapshot);
+  const timeSlices = recordsOf(snapshot.timeSlices);
+  const slice = timeSlices[Math.max(0, Math.min(sliceIndex, timeSlices.length - 1))] ?? null;
+  const visibility = resolveVisibilityForSlice(snapshot, sliceIndex);
+
+  const scopedCellIdSet =
+    scopeFilter && !scopeFilter.isUnscoped ? new Set(scopeFilter.scopedCommitmentCellIds) : null;
+
+  const recommendations = recordsOf(snapshot.recommendations);
+  const riskBoard = recordsOf(snapshot.riskBoard);
+  const evidence = recordsOf(snapshot.evidence);
+
+  const rows = recommendations
+    .map((rec) => {
+      const cell = riskBoard.find((c) => c.demand_signal_id === rec.demand_signal_id) ?? null;
+      const evidenceRecord = evidence.find((e) => e.source_record_id === rec.id) ?? null;
+      return {
+        id: rec.id,
+        status: rec.status,
+        category: rec.category,
+        created_at: rec.created_at,
+        demand_signal_id: rec.demand_signal_id,
+        cellId: cell ? cell.id : null,
+        customer: cell ? cell.customer : null,
+        item_number: cell ? cell.item_number : null,
+        required_date: cell ? cell.required_date : null,
+        revenue_at_risk: cell ? cell.revenue_at_risk : null,
+        currency: cell ? cell.currency : null,
+        risk_state: cell ? cell.risk_state : null,
+        visibleAtSlice: visibility.visibleRecommendationIds.includes(rec.id),
+        evidenceId: evidenceRecord ? evidenceRecord.id : null,
+        evidenceSummary: evidenceRecord ? evidenceRecord.evidence_summary : rec.evidence_summary,
+      };
+    })
+    .filter((row) => !scopedCellIdSet || (row.cellId && scopedCellIdSet.has(row.cellId)));
+
+  return {
+    sliceId: slice ? slice.id : null,
+    sliceLabel: slice ? slice.label : null,
+    rows,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // buildDashboardViewModel
 // ---------------------------------------------------------------------------
 

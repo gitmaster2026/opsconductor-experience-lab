@@ -29,10 +29,12 @@ Current allowed primary workspace lenses:
 - `risk_board`: commitment-level operational heatmap / board
 - `spider`: radar/axis view of a selected object's risk exposure across operational domains
 - `text`: structured, keyboard-navigable outline view of the same investigation
+- `workbench`: relationship-aware dataset builder over the same operational graph
+- `conductor_studio`: operational intelligence/governance workspace (Recommendation Review, Approval Queue, and 7 aspirational mockup panels - see §12 below for the scoped governance exception those mockup panels operate under)
 
 Future lenses may be added only if they are views of the same operational dataset.
 
-`spider` and `text` are added under this future-lens clause (docs/V5_DESIGN_SPEC.md §1.2/§4/§5): both are views of the same operational dataset already licensed by this file, introduce no new object types (rule #8) and no new source fields (rule #7).
+`spider` and `text` are added under this future-lens clause (docs/V5_DESIGN_SPEC.md §1.2/§4/§5): both are views of the same operational dataset already licensed by this file, introduce no new object types (rule #8) and no new source fields (rule #7). `workbench` (V5 Phase 4.5) is the same operational dataset re-joined/re-shaped by the user, no new fields. `conductor_studio` (V5 Phase 4.7) is added under the same clause for its Recommendation Review/Approval Queue panels (real `recommendations.json` data, no new fields); its 7 mockup panels are the subject of the explicit, scoped exception in §12.
 
 ## 4. Supported left panel modes
 
@@ -153,3 +155,53 @@ Instead:
 All visualization-specific information belongs either in derived datasets or runtime UI state.
 
 The objective is that the final production UI can replace the static JSON files with live API calls without changing the interaction model.
+
+## 12. Conductor Studio mock-panel exception (V5 Phase 4.7, scoped)
+
+Conductor Studio (`docs/V5_HANDOVER.md` §11) is a 6th workspace lens whose
+left nav has 9 sub-panels. Two are ordinary real-data panels under normal
+governance (Recommendation Review, Approval Queue - `recommendations.json`,
+joined to `risk-board.json`/`evidence.json` exactly as `derive.js` already
+joins them elsewhere; see `docs/field-map.md`'s Conductor Studio fields
+section).
+
+The remaining **7** sub-panels are aspirational UI mockups with no
+production-backed field, table, or object type behind them today, and are
+granted a narrow, explicit exception to rule #7 (Schema fidelity) and rule
+#8 (Object type) for these panels only:
+
+- Lessons Learned
+- Historical Parallels
+- Trends of Interest
+- Automations
+- Custom Agents
+- Knowledge Growth
+- Feedback History
+
+(`docs/V5_HANDOVER.md` §11.1 names 6 of these - it omits Knowledge Growth,
+present in that same document's own §11.2 nav list and phase-scope section.
+Treating all 7 as covered by this exception, rather than resolving the
+undercount by guessing which one doesn't count, is the safer reading.)
+
+Conditions of the exception:
+
+1. **Isolated module.** All 7 panels render exclusively from
+   `engine/conductor-studio-mock.js`. That module is never imported by
+   `derive.js` and never registers anything in `KNOWN_OUTPUT_FIELDS` -
+   `scripts/verify-field-map.mjs` has no reason to ever look at it, and its
+   passing unchanged is the proof this exception did not leak into real
+   governance.
+2. **Mandatory visual marking.** Every rendered instance of these 7 panels
+   (and every card within them) must display a visible "Future" badge, so
+   no viewer mistakes mocked content for a real backend capability. This is
+   non-negotiable, not a style preference.
+3. **No persistence, no invented actions with real consequences.** Any
+   "future action" button on these panels (Export Knowledge, Export
+   Lessons, Generate Executive Briefing, etc.) is a visible, disabled
+   placeholder - clicking it must not do anything beyond what a disabled
+   button already can't do.
+4. **Does not extend to the other 2 panels.** Recommendation Review and
+   Approval Queue, and the Scope/Time/Evidence/Related Objects/Jarvis
+   Summary right-panel context, are real data and remain fully subject to
+   rules #7/#8 and `scripts/verify-field-map.mjs` - this exception covers
+   only the 7 panels named above.

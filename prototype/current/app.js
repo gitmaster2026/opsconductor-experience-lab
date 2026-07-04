@@ -54,6 +54,7 @@ import { mountRiskBoardLens } from './lenses/risk-board.js';
 import { mountSpiderLens } from './lenses/spider.js';
 import { mountTextViewLens } from './lenses/text-view.js';
 import { mountWorkbenchLens } from './lenses/workbench.js';
+import { mountConductorStudioLens } from './lenses/conductor-studio.js';
 import { mountDashboardPanel } from './panels/dashboard.js';
 import { mountPassportPanel } from './panels/passport.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
@@ -72,6 +73,7 @@ const els = {
   lensSpiderBtn: document.getElementById('lensSpider'),
   lensTextBtn: document.getElementById('lensText'),
   lensWorkbenchBtn: document.getElementById('lensWorkbench'),
+  lensConductorStudioBtn: document.getElementById('lensConductorStudio'),
   panelDashboardBtn: document.getElementById('panelDashboard'),
   panelPassportBtn: document.getElementById('panelPassport'),
   zoomSlider: document.getElementById('zoom'),
@@ -85,6 +87,8 @@ const els = {
   spiderChartEl: document.getElementById('spiderChart'),
   textViewEl: document.getElementById('textView'),
   workbenchEl: document.getElementById('workbench'),
+  conductorStudioEl: document.getElementById('conductorStudio'),
+  mainLayout: document.getElementById('mainLayout'),
   scopeBar: document.getElementById('scopeBar'),
   scopeExplorer: document.getElementById('scopeExplorer'),
   navHistoryRail: document.getElementById('navHistoryRail'),
@@ -252,6 +256,17 @@ async function main() {
     onOpenSavedViewsManager: () => savedViewsManager.open(),
   });
 
+  // V5 Phase 4.7 (docs/V5_HANDOVER.md §11): Conductor Studio - the 6th
+  // workspace lens. Reads bundle.recommendationReview (added to
+  // timeline.js's DerivedBundle this phase) rather than the raw snapshot,
+  // same "lenses consume the bundle" pattern as Universe/Risk Board/Spider/
+  // Text above (Workbench is the one exception, since it needs the full
+  // graph for its own relationship-dataset joins).
+  const conductorStudioLens = mountConductorStudioLens(els.conductorStudioEl, {
+    getBundle: () => timeline.getDerivedBundle(),
+    onSelect: (id) => selectAndClearHighlight(id),
+  });
+
   // --- Panel mounting ------------------------------------------------------
   //
   // Dashboard KPI clicks are the entry point for the founder's required
@@ -319,6 +334,7 @@ async function main() {
   els.lensSpiderBtn.addEventListener('click', () => store.setLens('spider'));
   els.lensTextBtn.addEventListener('click', () => store.setLens('text'));
   els.lensWorkbenchBtn.addEventListener('click', () => store.setLens('workbench'));
+  els.lensConductorStudioBtn.addEventListener('click', () => store.setLens('conductor_studio'));
   els.panelDashboardBtn.addEventListener('click', () => store.setLeftPanel('dashboard'));
   els.panelPassportBtn.addEventListener('click', () => store.setLeftPanel('passport'));
 
@@ -341,6 +357,7 @@ async function main() {
     const isSpider = state.workspaceLens === 'spider';
     const isText = state.workspaceLens === 'text';
     const isWorkbench = state.workspaceLens === 'workbench';
+    const isConductorStudio = state.workspaceLens === 'conductor_studio';
     els.universeCanvas.classList.toggle('hidden', !isUniverse);
     els.riskBoardEl.classList.toggle('hidden', !isRiskBoard);
     els.spiderChartEl.classList.toggle('hidden', !isSpider);
@@ -351,6 +368,15 @@ async function main() {
     els.lensSpiderBtn.classList.toggle('active', isSpider);
     els.lensTextBtn.classList.toggle('active', isText);
     els.lensWorkbenchBtn.classList.toggle('active', isWorkbench);
+    els.lensConductorStudioBtn.classList.toggle('active', isConductorStudio);
+    // Conductor Studio (V5 Phase 4.7) is its own full-bleed workspace with
+    // its own left nav (9 sub-panels) and right panel (Scope/Time/Evidence/
+    // Related Objects/Jarvis Summary) - distinct from the standing Dashboard/
+    // Passport left panel and persistent Jarvis panel every other lens
+    // shares. So it swaps out the whole `#mainLayout` grid rather than
+    // slotting into one of that grid's three columns the way Workbench does.
+    els.mainLayout.classList.toggle('hidden', isConductorStudio);
+    els.conductorStudioEl.classList.toggle('hidden', !isConductorStudio);
     // Resize/re-render whichever lens just became visible - a canvas (and
     // an absolutely-positioned DOM layout) both need a fresh
     // measurement/redraw after being un-hidden, since a hidden element's
@@ -365,6 +391,8 @@ async function main() {
       textViewLens.resize();
     } else if (isWorkbench) {
       workbenchLens.resize();
+    } else if (isConductorStudio) {
+      conductorStudioLens.resize();
     }
   }
 
@@ -418,6 +446,7 @@ async function main() {
     spiderLens.render();
     textViewLens.render();
     workbenchLens.render();
+    conductorStudioLens.render();
   }
 
   timeline.onUpdate(() => renderAll());
@@ -431,6 +460,7 @@ async function main() {
     spiderLens.resize();
     textViewLens.resize();
     workbenchLens.resize();
+    conductorStudioLens.resize();
   });
 }
 
