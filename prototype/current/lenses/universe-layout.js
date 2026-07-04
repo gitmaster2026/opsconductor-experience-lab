@@ -1052,3 +1052,94 @@ export function focusModeVisibleNodeIds(params = {}) {
   }
   return new Set();
 }
+
+// ---------------------------------------------------------------------------
+// V5 Phase 2.7.1 (docs/V5_HANDOVER.md §10.2 item H): Collection collapsed <->
+// expanded rendering. Phase 2.7 (above) already built the EXPANDED sub-scene
+// (computeCollectionStreamAngles, focusModeVisibleNodeIds's 'collection'
+// mode) on the assumption that a Collection scope becoming active was
+// itself the expand gesture. Item H splits that into two distinct states: a
+// Collection starts COLLAPSED (a single aggregate glyph, sized by member
+// count) right after "Build Collection," and only becomes the flight/orbit
+// focus target - i.e. reaches the already-built expanded rendering above -
+// once the user explicitly clicks that glyph.
+// ---------------------------------------------------------------------------
+
+/** Collapsed aggregate glyph radius bounds (world/layout px) - see collectionGlyphRadius() below. */
+const COLLECTION_GLYPH_MIN_RADIUS = 14;
+const COLLECTION_GLYPH_MAX_RADIUS = 40;
+/** Per-member radius growth factor, sqrt-scaled - see collectionGlyphRadius() below for why. */
+const COLLECTION_GLYPH_GROWTH_PER_SQRT_MEMBER = 6;
+
+/**
+ * Radius (world/layout px, pre camera-scale) for a Collection's COLLAPSED
+ * aggregate glyph - docs/V5_HANDOVER.md §10.2 item H: "Size encodes member
+ * count (reuse existing §4.2 Rule 2 magnitude-encoding)." §4.2 Rule 2 itself
+ * (revenue_at_risk-driven per-node sizing) was never actually wired into
+ * lenses/universe.js's rendering (every real node currently sizes off a
+ * fixed per-type BASE_NODE_RADIUS band, not a live magnitude value) - there
+ * is no existing runtime rule to literally reuse. What IS reused is Rule 2's
+ * STATED PRINCIPLE ("size encodes a magnitude"), applied here to the one
+ * magnitude a Collection actually carries: how many real objects it
+ * aggregates. Sqrt-scaled (not linear) so a large Collection reads as
+ * "bigger" without the on-screen area scaling linearly with membership -
+ * the same size-compression intent BASE_NODE_RADIUS's fixed bands already
+ * express between "small" and "large" node types.
+ *
+ * Pure and deterministic: same memberCount always yields the exact same
+ * radius, independent of which real objects are actually members - the
+ * "Collection glyph size scales with member count, deterministic" invariant
+ * this phase's own report calls for.
+ *
+ * @param {number} memberCount
+ * @returns {number} radius in world/layout px, 0 for a non-positive/invalid
+ *   count (nothing to render), otherwise clamped to
+ *   [COLLECTION_GLYPH_MIN_RADIUS, COLLECTION_GLYPH_MAX_RADIUS].
+ */
+export function collectionGlyphRadius(memberCount) {
+  const count = Number.isFinite(memberCount) && memberCount > 0 ? memberCount : 0;
+  if (count === 0) return 0;
+  const raw = COLLECTION_GLYPH_MIN_RADIUS + Math.sqrt(count) * COLLECTION_GLYPH_GROWTH_PER_SQRT_MEMBER;
+  return Math.min(Math.max(raw, COLLECTION_GLYPH_MIN_RADIUS), COLLECTION_GLYPH_MAX_RADIUS);
+}
+
+/**
+ * Decide whether an active Collection scope is currently EXPANDED (the
+ * three-phase flight has been triggered and its member sub-scene should
+ * render, per computeCollectionStreamAngles() above) or still COLLAPSED (the
+ * default state - a single aggregate glyph, no camera movement, per this
+ * phase's brief: "clicking the Collection point triggers the SAME
+ * three-phase flight already built for object selection").
+ *
+ * "Expanded" is defined as: a Collection scope is active AND the
+ * Collection's OWN id (scopeContext.id) is the current selectedObjectId -
+ * i.e. the user clicked the collapsed glyph, which (lenses/universe.js's
+ * hit-test) calls the exact same selectObject(id) a real node click already
+ * goes through. Zero new state fields: this reuses engine/state.js's
+ * existing selectedObjectId/scopeContext exactly as they already exist,
+ * per this phase's "zero new state/camera machinery" constraint - it just
+ * defines what combination of their values counts as "expanded."
+ *
+ * Collapsing back (docs/V5_HANDOVER.md §10.2 item H: "standard popFocus()")
+ * needs no separate handling here: popFocus() restores whatever
+ * selectedObjectId preceded the glyph click, which - by definition - is not
+ * the Collection's own id, so the very next call to this function with the
+ * restored selectedObjectId naturally reports isExpanded: false again.
+ *
+ * @param {{ type: string, id: string, memberIds?: Array<Object> }|null} scopeContext -
+ *   engine/state.js's raw scopeContext (NOT the resolved buildScopeFilter()
+ *   output - same distinction Phase 2.7's isCollectionFocus logic already
+ *   relies on).
+ * @param {string|null} selectedId - engine/state.js's selectedObjectId.
+ * @returns {{ isCollectionScopeActive: boolean, isExpanded: boolean }}
+ */
+export function resolveCollectionExpansion(scopeContext, selectedId) {
+  const isCollectionScopeActive = Boolean(
+    scopeContext &&
+      scopeContext.type === 'collection' &&
+      Array.isArray(scopeContext.memberIds) &&
+      scopeContext.memberIds.length > 0
+  );
+  const isExpanded = isCollectionScopeActive && selectedId !== null && selectedId === scopeContext.id;
+  return { isCollectionScopeActive, isExpanded };
+}

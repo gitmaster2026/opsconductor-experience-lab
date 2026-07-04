@@ -47,6 +47,8 @@ import {
   computeCollectionStreamAngles,
   resolveFocusTransition,
   focusModeVisibleNodeIds,
+  collectionGlyphRadius,
+  resolveCollectionExpansion,
 } from './universe-layout.js';
 import { depthFilter, assignStratum, computeCameraFrame, naturalZoomIndexForNode, DEPTH_STRATA } from '../engine/camera.js';
 import { computeLabelPlan, shortCodeForNode } from '../engine/labels.js';
@@ -223,6 +225,21 @@ const FOCUS_MODE_FADE_MS_REDUCED = 90;
 
 /** Reduced-motion equivalent of FLIGHT_PHASE_DURATIONS_MS - a fast cross-fade rather than a full cinematic flight, still advancing through the same depart/travel/arrive states so every callback/derived-progress computation still fires correctly. */
 const FLIGHT_PHASE_DURATIONS_MS_REDUCED = Object.freeze({ depart: 40, travel: 80, arrive: 80 });
+
+// --- V5 Phase 2.7.1 additions (docs/V5_HANDOVER.md §10.2 item H) ------------
+//
+// A Collection scope no longer auto-expands the instant it becomes active -
+// it renders COLLAPSED (this glyph) until the user clicks it, at which point
+// it becomes the COLLECTION_FOCUS_PSEUDO_ID flight target above (unchanged).
+// See universe-layout.js's resolveCollectionExpansion()/collectionGlyphRadius()
+// for the pure decision/sizing logic this module only renders and hit-tests.
+
+/** Hit-test/visual padding added to a Collection glyph's radius, matching nodeRadiusFor()'s own +4px hit-area padding for real nodes. */
+const COLLECTION_GLYPH_HIT_PADDING = 4;
+/** Offset (fraction of glyph radius) of each of the 3 overlapping "cluster" circles from the glyph center - see draw()'s showCollectionGlyph block. */
+const COLLECTION_GLYPH_CLUSTER_OFFSET_FACTOR = 0.32;
+/** Radius (fraction of the glyph's own radius) of each of the 3 overlapping "cluster" circles. */
+const COLLECTION_GLYPH_CLUSTER_CIRCLE_FACTOR = 0.62;
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -888,12 +905,13 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   const focusModeState = { active: false, since: 0 };
 
   /**
-   * V5 Phase 2.7 (docs/V5_HANDOVER.md §13/§15): resolve everything about
-   * the current focus/orbit/Focus-Mode state for THIS frame, shared by
-   * BOTH draw() and hitTestAt() so clicks land where things are actually
-   * drawn (same reason the Phase 2 per-frame position resolution below is
-   * shared, just widened to cover the focus target itself now that it can
-   * be a real object OR a Collection OR mid-reversal).
+   * V5 Phase 2.7/2.7.1 (docs/V5_HANDOVER.md §13/§15/§10.2 item H): resolve
+   * everything about the current focus/orbit/Focus-Mode/Collection-glyph
+   * state for THIS frame, shared by BOTH draw() and hitTestAt() so clicks
+   * land where things are actually drawn (same reason the Phase 2 per-frame
+   * position resolution below is shared, just widened to cover the focus
+   * target itself now that it can be a real object OR an EXPANDED Collection
+   * OR mid-reversal, plus - item H - a COLLAPSED Collection's own glyph).
    *
    * @param {number} now
    * @returns {{
@@ -905,25 +923,45 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
    *   orbitCenter: {x:number,y:number}|null,
    *   orbitMemberById: Map<string,{angle:number,radius:number}>,
    *   orbitIdsForStratum: string[],
+   *   collectionGlyph: { id: string, x: number, y: number, radius: number, memberIds: string[] }|null,
    * }}
    */
   function resolveFocusPresentation(now) {
     const selectedId = typeof getSelectedId === 'function' ? getSelectedId() : null;
 
     const scopeContext = typeof getScopeContext === 'function' ? getScopeContext() : null;
-    const isCollectionScopeActive =
-      Boolean(scopeContext && scopeContext.type === 'collection' && Array.isArray(scopeContext.memberIds) && scopeContext.memberIds.length > 0);
+    const { isCollectionScopeActive, isExpanded: isCollectionExpanded } = resolveCollectionExpansion(scopeContext, selectedId);
     if (isCollectionScopeActive) {
       const scope = typeof getScope === 'function' ? getScope() : null;
       const resolvedIds = Array.isArray(scope?.scopedNodeIds) ? scope.scopedNodeIds : [];
       lastCollectionMemberIds = resolvedIds.filter((id) => layoutById.has(id));
     }
 
-    // A Collection (an explicit, deliberate multi-select) takes priority
-    // over an ambient single selectedObjectId as the flight/orbit target -
-    // §15.1 frames these as alternatives ("single object OR Collection"),
-    // not a simultaneous pair.
-    const focusTargetId = isCollectionScopeActive ? COLLECTION_FOCUS_PSEUDO_ID : selectedId;
+    // V5 Phase 2.7.1 (item H): the collapsed glyph's own position/size -
+    // computed whenever a Collection scope is active, independent of
+    // expand/collapse (draw()/hitTestAt() only actually use this when NOT
+    // expanded - see isCollectionFocus below - but resolving it here keeps
+    // ALL per-frame derived state in this one shared function).
+    let collectionGlyph = null;
+    if (isCollectionScopeActive && scopeContext) {
+      const memberIds = lastCollectionMemberIds;
+      const positions = memberIds.map((id) => layoutById.get(id)).filter(Boolean);
+      if (positions.length > 0) {
+        const center = centroidOf(positions);
+        collectionGlyph = { id: scopeContext.id, x: center.x, y: center.y, radius: collectionGlyphRadius(memberIds.length), memberIds };
+      }
+    }
+
+    // A Collection only becomes the flight/orbit target once EXPANDED
+    // (item H) - a merely-active-but-collapsed Collection scope must NOT
+    // trigger the camera flight, matching a real, un-selected node. An
+    // ordinary single-object selectedId only drives the flight if it is
+    // still a real, currently-rendered node - guards against a stale
+    // selectedObjectId left over from a Collection's own synthetic id (set
+    // by clicking its glyph) after the scope has since changed away from
+    // that Collection without going through popFocus().
+    const isSelectedIdRealNode = selectedId !== null && currentNodes.some((n) => n.id === selectedId);
+    const focusTargetId = isCollectionExpanded ? COLLECTION_FOCUS_PSEUDO_ID : isSelectedIdRealNode ? selectedId : null;
     const { anchorId, progress } = updateFocusTiming(focusTargetId, now);
     const isCollectionFocus = anchorId === COLLECTION_FOCUS_PSEUDO_ID;
 
@@ -941,7 +979,19 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       const orbitMemberById = new Map(
         memberIds.map((id) => [id, { angle: stream.angleById.get(id) ?? 0, radius: COLLECTION_RING_RADIUS_PX }])
       );
-      return { selectedId, focusTargetId, anchorId, progress, isCollectionFocus, orbitCenter, orbitMemberById, orbitIdsForStratum: memberIds };
+      // Expanded: the glyph itself never renders alongside its own open
+      // sub-scene - see draw()'s showCollectionGlyph gating.
+      return {
+        selectedId,
+        focusTargetId,
+        anchorId,
+        progress,
+        isCollectionFocus,
+        orbitCenter,
+        orbitMemberById,
+        orbitIdsForStratum: memberIds,
+        collectionGlyph,
+      };
     }
 
     if (anchorId !== null) {
@@ -964,6 +1014,7 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
         orbitCenter,
         orbitMemberById,
         orbitIdsForStratum: [anchorId, ...orbit.orbitIds],
+        collectionGlyph,
       };
     }
 
@@ -975,6 +1026,7 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       isCollectionFocus: false,
       orbitCenter: null,
       orbitMemberById: new Map(),
+      collectionGlyph,
       orbitIdsForStratum: [],
     };
   }
@@ -1059,12 +1111,29 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     const world = screenToWorld(screenX, screenY);
     const zoomLevel = typeof getZoomLevel === 'function' ? getZoomLevel() : 0;
     const focusTrail = typeof getFocusTrail === 'function' ? getFocusTrail() : [];
-    const { selectedId, orbitCenter, orbitMemberById, orbitIdsForStratum, progress } = resolveFocusPresentation(performance.now());
+    const { selectedId, orbitCenter, orbitMemberById, orbitIdsForStratum, progress, isCollectionFocus, collectionGlyph } =
+      resolveFocusPresentation(performance.now());
     const stratumById = new Map(
       currentNodes.map((n) => [n.id, assignStratum(n, { selectedObjectId: selectedId, focusTrail, zoomLevel, orbitIds: orbitIdsForStratum })])
     );
     const currentZoomIndex = zoomLevel;
     const { positions, collapsedInto } = computeEffectivePositions(orbitCenter, orbitMemberById, stratumById, currentZoomIndex, progress);
+
+    // V5 Phase 2.7.1 (item H): a COLLAPSED Collection (glyph present, not
+    // currently expanded) draws its glyph on top of everything else (see
+    // draw()) and hides its real member nodes - so the glyph is checked
+    // FIRST here (matching "topmost-drawn wins on overlap" below) and its
+    // members are excluded from the ordinary per-node loop entirely.
+    const showCollectionGlyph = collectionGlyph !== null && !isCollectionFocus;
+    if (showCollectionGlyph) {
+      const r = collectionGlyph.radius + COLLECTION_GLYPH_HIT_PADDING;
+      const dx = world.x - collectionGlyph.x;
+      const dy = world.y - collectionGlyph.y;
+      if (dx * dx + dy * dy <= r * r) {
+        return collectionGlyph.id;
+      }
+    }
+    const hiddenByCollectionGlyph = showCollectionGlyph ? new Set(collectionGlyph.memberIds) : null;
 
     // Iterate in reverse draw order so the topmost-drawn (last-drawn) node
     // wins on overlap, matching natural pointer expectations. Collapsed
@@ -1074,6 +1143,7 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     for (let i = currentNodes.length - 1; i >= 0; i -= 1) {
       const node = currentNodes[i];
       if (collapsedInto.has(node.id)) continue;
+      if (hiddenByCollectionGlyph && hiddenByCollectionGlyph.has(node.id)) continue;
       const pos = positions.get(node.id);
       if (!pos) continue;
       const depth = depthFilter(zoomLevel, node);
@@ -1108,8 +1178,18 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // none), advancing both the camera flight and the independent reverse-
     // dissolve timer as a side effect - see resolveFocusPresentation()'s
     // own header doc. ---
-    const { selectedId, focusTargetId, orbitCenter, orbitMemberById, orbitIdsForStratum, progress: orbitProgress } =
+    const { selectedId, focusTargetId, orbitCenter, orbitMemberById, orbitIdsForStratum, progress: orbitProgress, isCollectionFocus, collectionGlyph } =
       resolveFocusPresentation(now);
+
+    // V5 Phase 2.7.1 (item H): a COLLAPSED Collection (glyph present, not
+    // currently the expanded flight/orbit target) hides its real member
+    // nodes/edges entirely - only the aggregate glyph (drawn after the main
+    // node loop below) represents them, matching "the Collection renders as
+    // ONE aggregate point." The instant it's expanded (isCollectionFocus),
+    // this is false and members render normally via the orbit machinery
+    // above, exactly like a real object's 1-hop neighbors.
+    const showCollectionGlyph = collectionGlyph !== null && !isCollectionFocus;
+    const hiddenByCollectionGlyph = showCollectionGlyph ? new Set(collectionGlyph.memberIds) : null;
 
     const stratumById = new Map(
       currentNodes.map((n) => [n.id, assignStratum(n, { selectedObjectId: selectedId, focusTrail, zoomLevel, orbitIds: orbitIdsForStratum })])
@@ -1275,6 +1355,10 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // no longer represents that node's own place in the graph. ---
     for (const edge of currentEdges) {
       if (collapsedInto.has(edge.from_id) || collapsedInto.has(edge.to_id)) continue;
+      // V5 Phase 2.7.1 (item H): a COLLAPSED Collection's member edges are
+      // subsumed into its aggregate glyph, same reasoning as the
+      // depth-collapse skip just above.
+      if (hiddenByCollectionGlyph && (hiddenByCollectionGlyph.has(edge.from_id) || hiddenByCollectionGlyph.has(edge.to_id))) continue;
       // V5 Phase 2.7 (§15): once Focus Mode is fully settled, an edge with
       // either endpoint outside the resolved focus set is not drawn at
       // all - "zero background rendering," not an opacity extreme.
@@ -1342,6 +1426,10 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // --- Nodes ---
     for (const node of currentNodes) {
       if (collapsedInto.has(node.id)) continue; // drawn as part of its parent's collapse badge instead
+      // V5 Phase 2.7.1 (item H): a COLLAPSED Collection's members render as
+      // its aggregate glyph instead (drawn separately below), not
+      // individually.
+      if (hiddenByCollectionGlyph && hiddenByCollectionGlyph.has(node.id)) continue;
       // V5 Phase 2.7 (§15): once Focus Mode is fully settled, no object
       // outside the resolved focus set renders at all.
       const isNodeInFocusSet = focusModeVisibleIds.has(node.id);
@@ -1468,6 +1556,68 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
         };
       }
 
+      ctx.globalAlpha = 1;
+    }
+
+    // V5 Phase 2.7.1 (docs/V5_HANDOVER.md §10.2 item H): the COLLAPSED
+    // Collection's own aggregate glyph - "overlapping/clustered circles or
+    // a ring... distinct from single-object shapes." Drawn last (on top of
+    // everything else this frame), matching hitTestAt()'s "topmost-drawn
+    // wins on overlap" convention. Never drawn while EXPANDED
+    // (showCollectionGlyph is false then - see its definition above), so
+    // this and the member sub-scene above are mutually exclusive, never
+    // simultaneous.
+    if (showCollectionGlyph) {
+      // Deliberately NOT effectiveCenterByStratum (the per-stratum parallax
+      // centers real nodes use) - the glyph isn't part of the stratum
+      // system at all (it never appears in stratumById), and hitTestAt()
+      // resolves clicks purely against camera.x/y (screenToWorld(), no
+      // parallax) - drawing it relative to camera.x/y directly keeps what's
+      // clicked and what's drawn exactly in sync.
+      const glyphX = collectionGlyph.x - camera.x;
+      const glyphY = collectionGlyph.y - camera.y;
+      const glyphAlpha = atmosphereFalloff(glyphX, glyphY);
+      // Colored by the worst risk bucket among its members - same signal a
+      // real node's fill color already carries (riskBucket()/RISK_COLOR_VAR),
+      // so a Collection containing a critical object still reads as
+      // critical even while collapsed.
+      const RISK_RANK = Object.freeze({ critical: 3, elevated: 2, watch: 1, neutral: 0 });
+      const worstBucket = currentNodes
+        .filter((n) => collectionGlyph.memberIds.includes(n.id))
+        .reduce((worst, n) => {
+          const bucket = riskBucket(n);
+          return (RISK_RANK[bucket] ?? 0) > (RISK_RANK[worst] ?? 0) ? bucket : worst;
+        }, 'neutral');
+      const glyphColor = resolveCssVar(canvasEl, RISK_COLOR_VAR[worstBucket] ?? RISK_COLOR_VAR.neutral, '#9aa7b5');
+      const accentColor = resolveCssVar(canvasEl, '--cyan-accent', '#5ad1ff');
+      const r = collectionGlyph.radius;
+      const isHoveredGlyph = hoveredId === collectionGlyph.id;
+
+      // Outer ring - the glyph's overall footprint, size-encoding member
+      // count (collectionGlyphRadius()) and giving it a boundary distinct
+      // from any single-object's plain filled circle.
+      ctx.globalAlpha = glyphAlpha;
+      ctx.beginPath();
+      ctx.arc(glyphX, glyphY, r, 0, Math.PI * 2);
+      ctx.strokeStyle = accentColor;
+      ctx.lineWidth = isHoveredGlyph ? 2.5 : 1.75;
+      ctx.shadowColor = accentColor;
+      ctx.shadowBlur = isHoveredGlyph ? 10 : 4;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Three overlapping "clustered circles" inside the ring - the
+      // "aggregate of many objects" read at a glance.
+      const offset = r * COLLECTION_GLYPH_CLUSTER_OFFSET_FACTOR;
+      const circleR = r * COLLECTION_GLYPH_CLUSTER_CIRCLE_FACTOR;
+      ctx.fillStyle = glyphColor;
+      for (let i = 0; i < 3; i += 1) {
+        const angle = -Math.PI / 2 + (i / 3) * Math.PI * 2;
+        ctx.globalAlpha = glyphAlpha * 0.55;
+        ctx.beginPath();
+        ctx.arc(glyphX + Math.cos(angle) * offset, glyphY + Math.sin(angle) * offset, circleR, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     }
 
