@@ -129,7 +129,12 @@ async function main() {
     initialTimeSliceId: firstSliceId,
     resolveCommitmentForObject: (id) => derive.resolveCommitmentForObject(snapshot, id),
     initialZoomLevel: 0,
-    initialLens: 'universe',
+    // Land on Risk Board (commitment-level lens), not Universe - Universe/
+    // Spider/Text/Workbench/Conductor Studio are investigation lenses the
+    // user jumps into deliberately (docs/UX_ARCHITECTURE.md's "Universe/
+    // Risk Board ... not pages" plus the NorthRiver V1 traversal chain's
+    // Executive Signal -> Commitment ordering), not the default landing view.
+    initialLens: 'risk_board',
     initialLeftPanel: 'dashboard',
   });
 

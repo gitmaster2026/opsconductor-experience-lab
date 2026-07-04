@@ -277,6 +277,15 @@ export function buildUniverseGraph(snapshot) {
   /** @type {Array<Object>} */
   const edges = [];
   let edgeSeq = 0;
+  // Keyed by `${from_id}->${to_id}::${relationship_type}`, populated by every
+  // addEdge() call below AND consulted by the relationships.json loop further
+  // down - some relationships.json rows (e.g. rel-rb-mps-to-rec) restate a
+  // has_recommendation edge this function already synthesizes per-commitment
+  // (see the loop above), which used to render as a literal duplicate
+  // relationship row in Passport/Universe for the same two objects. Same
+  // dedup key format the passport-derived synthesis block below already used
+  // for its own duplicate-guard - extended here to cover this earlier gap.
+  const seenEdgeKeys = new Set();
 
   function addNode(node) {
     if (nodes.has(node.id)) {
@@ -298,6 +307,7 @@ export function buildUniverseGraph(snapshot) {
       relationship_type: relationshipType,
       ...extra,
     });
+    seenEdgeKeys.add(`${fromId}->${toId}::${relationshipType}`);
   }
 
   // --- (a) Organization + Plant anchors ------------------------------------
@@ -620,6 +630,16 @@ export function buildUniverseGraph(snapshot) {
         `buildUniverseGraph: relationship "${rel.id}" references missing node(s) (from=${rel.from_id}, to=${rel.to_id})`
       );
     }
+    const dedupeKey = `${rel.from_id}->${rel.to_id}::${rel.relationship_type}`;
+    if (seenEdgeKeys.has(dedupeKey)) {
+      // This exact (from, to, relationship_type) triple was already
+      // synthesized above (e.g. rel-rb-mps-to-rec restates the
+      // has_recommendation edge the per-commitment loop already derives for
+      // RB-MPS-FRONTIER) - skip so Passport/Universe don't show the same
+      // relationship twice for the same object pair.
+      seenRelationshipEdgeKeys.add(`${rel.from_id}->${rel.to_id}`);
+      continue;
+    }
     edgeSeq += 1;
     edges.push({
       id: rel.id,
@@ -628,6 +648,7 @@ export function buildUniverseGraph(snapshot) {
       relationship_type: rel.relationship_type,
       sourceTable: 'operational_domain_object_links',
     });
+    seenEdgeKeys.add(dedupeKey);
     seenRelationshipEdgeKeys.add(`${rel.from_id}->${rel.to_id}`);
   }
 

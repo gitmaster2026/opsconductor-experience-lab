@@ -173,6 +173,14 @@ body {
   color: var(--cyan-accent);
 }
 
+.lens-group-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .spacer {
   flex: 1;
 }

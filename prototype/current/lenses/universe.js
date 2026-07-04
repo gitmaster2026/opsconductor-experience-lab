@@ -1097,6 +1097,57 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     return { positions, collapsedInto, collapseCounts };
   }
 
+  /**
+   * Per-stratum effective camera center, for parallax separation (§2.2):
+   * each stratum's rendered position is offset relative to a center that
+   * lags the true camera by (1 - parallaxFactor) during a flight. Shared by
+   * BOTH draw() and hitTestAt() so a click lands in the exact same
+   * reference frame a node is actually drawn in - this used to be computed
+   * inline in draw() only, and hitTestAt() compared against camera.x/y
+   * instead (correct only when camera.x/y happens to coincide with the
+   * graph's centroid `home`, which idle/no-flight state never guarantees -
+   * see hitTestAt()'s own comment for the bug this fixes).
+   *
+   * Read-only: does NOT assign camera.x/y/scale (that mutation stays
+   * draw()'s job, once per animation frame) - only needs `frame.strataOffsets`,
+   * which computeCameraFrame() derives without side effects.
+   *
+   * @param {number} now
+   * @param {string|null} focusTargetId
+   * @param {{x:number,y:number}|null} orbitCenter
+   * @returns {Record<string, {x:number,y:number}>}
+   */
+  function computeEffectiveCentersByStratum(now, focusTargetId, orbitCenter) {
+    const positionsForCamera = currentNodes
+      .map((n) => {
+        const p = layoutById.get(n.id);
+        return p ? { id: n.id, x: p.x, y: p.y } : null;
+      })
+      .filter(Boolean);
+    if (focusTargetId === COLLECTION_FOCUS_PSEUDO_ID && orbitCenter) {
+      positionsForCamera.push({ id: COLLECTION_FOCUS_PSEUDO_ID, x: orbitCenter.x, y: orbitCenter.y });
+    }
+    const zoomLevel = typeof getZoomLevel === 'function' ? getZoomLevel() : 0;
+    // flightT(now) is already 0 whenever flight.phase === 'idle', so this
+    // one call covers both of draw()'s branches (in-flight and idle)
+    // without needing draw()'s own camera.x/y/scale-mutating branch logic.
+    const frame = computeCameraFrame({
+      nodes: positionsForCamera,
+      selectedObjectId: focusTargetId,
+      zoomLevel,
+      cameraPhase: flight.phase,
+      t: flightT(now),
+    });
+    const home = centroidOf(positionsForCamera);
+    const target = positionsForCamera.find((p) => p.id === focusTargetId) ?? home;
+    const effectiveCenterByStratum = {};
+    DEPTH_STRATA.forEach((stratum, i) => {
+      const parallaxProgress = frame.strataOffsets[i] ?? 0;
+      effectiveCenterByStratum[stratum.key] = { x: lerp(home.x, target.x, parallaxProgress), y: lerp(home.y, target.y, parallaxProgress) };
+    });
+    return effectiveCenterByStratum;
+  }
+
   // --- Hit testing -------------------------------------------------------
 
   function nodeRadiusFor(node, depth) {
@@ -1108,16 +1159,32 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   }
 
   function hitTestAt(screenX, screenY) {
+    // world/screenToWorld (camera.x/y-relative) is ONLY correct for the
+    // Collection glyph below, which is deliberately drawn camera-relative
+    // (see draw()'s own comment on collectionGlyph). Ordinary nodes are
+    // NOT drawn camera-relative - draw() positions every real node
+    // relative to its own stratum's effectiveCenterByStratum (which tracks
+    // the graph's centroid `home`, not camera.x/y - see computeEffectiveCentersByStratum()'s
+    // header doc). Using `world` for ordinary-node hit-testing made clicks
+    // land wherever camera.x/y happened to be (canvas center at idle)
+    // instead of where nodes are actually drawn (offset from centroid),
+    // silently missing every node whenever the graph's centroid isn't
+    // exactly at the canvas's visual center - i.e. almost always. Fixed by
+    // testing each node in ITS OWN stratum's reference frame below,
+    // matching draw()'s localFor() exactly (minus the intentionally-
+    // excluded cosmetic idle drift/rotation, per this function's prior
+    // stable-hit-target design note).
     const world = screenToWorld(screenX, screenY);
     const zoomLevel = typeof getZoomLevel === 'function' ? getZoomLevel() : 0;
     const focusTrail = typeof getFocusTrail === 'function' ? getFocusTrail() : [];
-    const { selectedId, orbitCenter, orbitMemberById, orbitIdsForStratum, progress, isCollectionFocus, collectionGlyph } =
+    const { selectedId, focusTargetId, orbitCenter, orbitMemberById, orbitIdsForStratum, progress, isCollectionFocus, collectionGlyph } =
       resolveFocusPresentation(performance.now());
     const stratumById = new Map(
       currentNodes.map((n) => [n.id, assignStratum(n, { selectedObjectId: selectedId, focusTrail, zoomLevel, orbitIds: orbitIdsForStratum })])
     );
     const currentZoomIndex = zoomLevel;
     const { positions, collapsedInto } = computeEffectivePositions(orbitCenter, orbitMemberById, stratumById, currentZoomIndex, progress);
+    const centersByStratum = computeEffectiveCentersByStratum(performance.now(), focusTargetId, orbitCenter);
 
     // V5 Phase 2.7.1 (item H): a COLLAPSED Collection (glyph present, not
     // currently expanded) draws its glyph on top of everything else (see
@@ -1146,10 +1213,16 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       if (hiddenByCollectionGlyph && hiddenByCollectionGlyph.has(node.id)) continue;
       const pos = positions.get(node.id);
       if (!pos) continue;
+      const stratum = stratumById.get(node.id) ?? 'midground';
+      const center = centersByStratum[stratum] ?? centersByStratum.midground;
+      // Same conversion draw()'s localFor()+ctx transform performs, in
+      // reverse: screen -> this node's stratum-relative world coordinate.
+      const nodeWorldX = (screenX - layoutWidth / 2) / camera.scale + center.x;
+      const nodeWorldY = (screenY - layoutHeight / 2) / camera.scale + center.y;
       const depth = depthFilter(zoomLevel, node);
       const r = nodeRadiusFor(node, depth) + 4; // small hit-area padding
-      const dx = world.x - pos.x;
-      const dy = world.y - pos.y;
+      const dx = nodeWorldX - pos.x;
+      const dy = nodeWorldY - pos.y;
       if (dx * dx + dy * dy <= r * r) {
         return node.id;
       }
