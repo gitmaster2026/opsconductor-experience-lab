@@ -52,6 +52,12 @@
  *   Collection, consumed by panels/passport.js as a fallback when no single
  *   object is selected. Null when scope is not a Collection, or the
  *   Collection has no resolvable members.
+ * @property {{ sliceId: string, sliceLabel: string, rows: Array<Object> }} recommendationReview -
+ *   V5 Phase 4.7 (docs/V5_HANDOVER.md §11): engine/derive.js's
+ *   buildRecommendationReviewViewModel() output, consumed by
+ *   lenses/conductor-studio.js's Recommendation Review / Approval Queue
+ *   panels (the latter is a client-side filter of these same rows, not a
+ *   separate bundle field - see that derive.js function's own header).
  */
 
 /**
@@ -152,6 +158,7 @@ export function initTimeline({ store, getSnapshot, derive }) {
       state.scopeContext ?? null,
       sliceIndex
     );
+    const recommendationReview = derive.buildRecommendationReviewViewModel(snapshot, sliceIndex, scope);
 
     /** @type {DerivedBundle} */
     const bundle = {
@@ -170,6 +177,7 @@ export function initTimeline({ store, getSnapshot, derive }) {
       hierarchyPath,
       spider,
       collectionPassport,
+      recommendationReview,
     };
 
     lastBundle = bundle;

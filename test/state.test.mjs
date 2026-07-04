@@ -255,11 +255,11 @@ test('calling store functions before initState throws a clear error', () => {
 // §1.2-§1.3 invariants).
 // ---------------------------------------------------------------------------
 
-test('WORKSPACE_LENS_VALUES includes all 5 lenses (4 from docs/RULES.md #3, plus V5 Phase 4.5\'s "workbench")', () => {
-  assert.deepEqual(WORKSPACE_LENS_VALUES, ['universe', 'risk_board', 'spider', 'text', 'workbench']);
+test('WORKSPACE_LENS_VALUES includes all 6 lenses (4 from docs/RULES.md #3, plus V5 Phase 4.5\'s "workbench" and V5 Phase 4.7\'s "conductor_studio")', () => {
+  assert.deepEqual(WORKSPACE_LENS_VALUES, ['universe', 'risk_board', 'spider', 'text', 'workbench', 'conductor_studio']);
 });
 
-test('setLens: switching between all 5 lens values preserves selectedObjectId, focusTrail, timeSliceId, zoomLevel', () => {
+test('setLens: switching between all 6 lens values preserves selectedObjectId, focusTrail, timeSliceId, zoomLevel', () => {
   initState({
     resolveCommitmentForObject: (id) => (id === 'obj-1' ? 'commitment-1' : null),
     initialTimeSliceId: 't1',

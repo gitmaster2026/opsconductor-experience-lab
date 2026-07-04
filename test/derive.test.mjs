@@ -20,6 +20,7 @@ import {
   buildJarvisViewModel,
   resolveCommitmentForObject,
   riskTrajectory,
+  buildRecommendationReviewViewModel,
   buildScopeHierarchy,
   buildScopeFilter,
   buildHierarchyPathForObject,
@@ -295,6 +296,107 @@ test('riskTrajectory: is deterministic (calling twice yields identical output)',
   const a = riskTrajectory(snapshot, 'RB-MPS-FRONTIER');
   const b = riskTrajectory(snapshot, 'RB-MPS-FRONTIER');
   assert.deepEqual(a, b);
+});
+
+// ---------------------------------------------------------------------------
+// buildRecommendationReviewViewModel (V5 Phase 4.7, docs/V5_HANDOVER.md §11)
+// ---------------------------------------------------------------------------
+
+test('buildRecommendationReviewViewModel: one row per recommendations.json record, real fields pass through exactly', () => {
+  const viewModel = buildRecommendationReviewViewModel(snapshot, 2);
+  assert.equal(viewModel.rows.length, snapshot.recommendations.records.length);
+  for (const rec of snapshot.recommendations.records) {
+    const row = viewModel.rows.find((r) => r.id === rec.id);
+    assert.ok(row, `row missing for recommendation ${rec.id}`);
+    assert.equal(row.status, rec.status);
+    assert.equal(row.category, rec.category);
+    assert.equal(row.created_at, rec.created_at);
+    assert.equal(row.demand_signal_id, rec.demand_signal_id);
+  }
+});
+
+test('buildRecommendationReviewViewModel: joins the correct risk-board cell (customer/item/revenue/risk_state) via demand_signal_id', () => {
+  const viewModel = buildRecommendationReviewViewModel(snapshot, 2);
+  for (const row of viewModel.rows) {
+    const cell = snapshot.riskBoard.records.find((c) => c.demand_signal_id === row.demand_signal_id);
+    assert.ok(cell, `no risk-board cell for demand_signal_id ${row.demand_signal_id}`);
+    assert.equal(row.cellId, cell.id);
+    assert.equal(row.customer, cell.customer);
+    assert.equal(row.item_number, cell.item_number);
+    assert.equal(row.required_date, cell.required_date);
+    assert.equal(row.revenue_at_risk, cell.revenue_at_risk);
+    assert.equal(row.currency, cell.currency);
+    assert.equal(row.risk_state, cell.risk_state);
+  }
+});
+
+test('buildRecommendationReviewViewModel: joins the correct evidence record via source_record_id, matching buildRiskBoardViewModel\'s own evidence join', () => {
+  const reviewViewModel = buildRecommendationReviewViewModel(snapshot, 2);
+  const riskBoardViewModel = buildRiskBoardViewModel(snapshot, 2);
+  for (const row of reviewViewModel.rows) {
+    const cell = riskBoardViewModel.cells.find((c) => c.recommendationId === row.id);
+    assert.ok(cell, `no risk-board cell recommends ${row.id}`);
+    assert.equal(row.evidenceId, cell.evidenceId);
+  }
+});
+
+test('buildRecommendationReviewViewModel: visibleAtSlice matches resolveVisibilityForSlice exactly at every slice', () => {
+  for (let sliceIndex = 0; sliceIndex < snapshot.timeSlices.records.length; sliceIndex += 1) {
+    const viewModel = buildRecommendationReviewViewModel(snapshot, sliceIndex);
+    const visibility = resolveVisibilityForSlice(snapshot, sliceIndex);
+    for (const row of viewModel.rows) {
+      assert.equal(row.visibleAtSlice, visibility.visibleRecommendationIds.includes(row.id));
+    }
+  }
+});
+
+test('buildRecommendationReviewViewModel: echoes the correct sliceId/sliceLabel', () => {
+  const viewModel = buildRecommendationReviewViewModel(snapshot, 1);
+  assert.equal(viewModel.sliceId, snapshot.timeSlices.records[1].id);
+  assert.equal(viewModel.sliceLabel, snapshot.timeSlices.records[1].label);
+});
+
+test('buildRecommendationReviewViewModel: whole-org scope filter is equivalent to omitting scope entirely (regression, all rows present)', () => {
+  const unscopedFilter = buildScopeFilter(snapshot, null);
+  const withFilter = buildRecommendationReviewViewModel(snapshot, 2, unscopedFilter);
+  const withoutFilter = buildRecommendationReviewViewModel(snapshot, 2);
+  assert.deepEqual(withFilter, withoutFilter);
+});
+
+test('buildRecommendationReviewViewModel: a narrowed scope filters rows to the scoped commitment\'s recommendation only', () => {
+  const filter = buildScopeFilter(snapshot, {
+    type: 'customer',
+    id: 'customer:Horizon LNG Partners',
+    label: 'Horizon LNG Partners',
+  });
+  const viewModel = buildRecommendationReviewViewModel(snapshot, 2, filter);
+  assert.equal(viewModel.rows.length, 1);
+  assert.equal(viewModel.rows[0].cellId, 'RB-CPP-HORIZON');
+});
+
+test('buildRecommendationReviewViewModel: introduces no field name outside raw src/data/*.json fields or KNOWN_OUTPUT_FIELDS (governance proof)', () => {
+  const rawFieldNames = new Set();
+  const collect = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(collect);
+    } else if (value && typeof value === 'object') {
+      for (const key of Object.keys(value)) {
+        rawFieldNames.add(key);
+        collect(value[key]);
+      }
+    }
+  };
+  Object.values(snapshot).forEach(collect);
+
+  const viewModel = buildRecommendationReviewViewModel(snapshot, 2);
+  for (const row of viewModel.rows) {
+    for (const key of Object.keys(row)) {
+      assert.ok(
+        rawFieldNames.has(key) || Object.prototype.hasOwnProperty.call(KNOWN_OUTPUT_FIELDS, key),
+        `row field "${key}" is neither a raw snapshot field nor documented in KNOWN_OUTPUT_FIELDS`
+      );
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------

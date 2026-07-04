@@ -16,6 +16,7 @@
         <button id="lensSpider">Spider</button>
         <button id="lensText">Text</button>
         <button id="lensWorkbench">Workbench</button>
+        <button id="lensConductorStudio">Conductor Studio</button>
       </div>
       <div class="control-group" role="group" aria-label="Left panel">
         <button id="panelDashboard" class="active">Dashboard</button>
@@ -34,7 +35,7 @@
       </label>
       <div id="timeLabel" class="time-label">All recommendations generated</div>
     </header>
-    <main class="layout">
+    <main id="mainLayout" class="layout">
       <aside id="leftPanel" class="panel left-panel"></aside>
       <section class="workspace">
         <div id="scopeBar" class="scope-bar"></div>
@@ -47,6 +48,7 @@
       </section>
       <aside id="jarvisPanel" class="panel jarvis-panel"></aside>
     </main>
+    <div id="conductorStudio" class="conductor-studio hidden"></div>
     <div id="scopeExplorer" class="scope-explorer-overlay hidden"></div>
     <div id="savedViewsManager" class="saved-views-overlay hidden"></div>
   </div>

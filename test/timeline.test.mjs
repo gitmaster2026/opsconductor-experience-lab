@@ -281,6 +281,22 @@ test('initTimeline: selecting an object populates hierarchyPath (ending at that 
   timeline.dispose();
 });
 
+// ---------------------------------------------------------------------------
+// V5 Phase 4.7: bundle.recommendationReview
+// ---------------------------------------------------------------------------
+
+test('initTimeline: bundle includes recommendationReview matching engine/derive.js\'s buildRecommendationReviewViewModel exactly', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+  const bundle = timeline.getDerivedBundle();
+
+  const expected = derive.buildRecommendationReviewViewModel(snapshot, bundle.timeline.sliceIndex, bundle.scope);
+  assert.deepEqual(bundle.recommendationReview, expected);
+  assert.equal(bundle.recommendationReview.rows.length, snapshot.recommendations.records.length);
+
+  timeline.dispose();
+});
+
 test('initTimeline: building a Collection scope populates collectionPassport with the real members', () => {
   const store = freshStore();
   const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
@@ -324,6 +340,7 @@ test('initTimeline: switching every workspace lens preserves hierarchyPath, spid
     assert.deepEqual(after.hierarchyPath, before.hierarchyPath, `setLens('${lens}') must preserve hierarchyPath`);
     assert.deepEqual(after.spider, before.spider, `setLens('${lens}') must preserve spider`);
     assert.deepEqual(after.collectionPassport, before.collectionPassport, `setLens('${lens}') must preserve collectionPassport`);
+    assert.deepEqual(after.recommendationReview, before.recommendationReview, `setLens('${lens}') must preserve recommendationReview`);
   }
 
   timeline.dispose();

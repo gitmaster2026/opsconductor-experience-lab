@@ -108,6 +108,24 @@ Jarvis responses in this lab must be deterministic.
 | Suggested Next Step | deterministic recommendation/risk/evidence state | derived_supported |
 | Evidence Reference | evidence/source record fields | supported |
 
+## Conductor Studio fields
+
+Conductor Studio (V5 Phase 4.7, `docs/V5_HANDOVER.md` §11) is a 6th
+workspace lens. Two of its nine left-nav panels are real-data, under normal
+governance; the other 7 are aspirational UI mockups covered by the scoped
+exception in `docs/RULES.md` §12 and are intentionally **not** listed here -
+they never touch `derive.js`/`KNOWN_OUTPUT_FIELDS` and are exempt from this
+file's contract by design.
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Recommendation Review row | `recommendations.json` record, joined to its `risk-board.json` cell (via `demand_signal_id`) and `evidence.json` record (via `source_record_id`) - the same joins `derive.js`'s `buildRiskBoardViewModel`/`buildPassportViewModel` already perform | supported |
+| Approval Queue | client-side filter of Recommendation Review rows to `status === 'generated'` (this dataset's only "not yet resolved" status value) - not a separate derivation | derived_supported |
+| Recommendation action (Approve/Reject/Modify/Request More Evidence/Assign/Defer) + rationale | UI-only interaction capture, session-local, no persistence, no backend field | derived_supported |
+| Right panel: Scope / Time | echoes the existing Operational Scope / timeline fields below, no new concept | supported |
+| Right panel: Evidence / Related Objects | `bundle.passport.evidence` / `bundle.passport.relationships` (Passport fields above) for the currently selected object | supported |
+| Right panel: Jarvis Summary | `bundle.jarvis` (Jarvis fields above), condensed | derived_supported |
+
 ## Operational Scope fields
 
 Operational Scope (V5 Phase 3.5, `docs/V5_HANDOVER.md` §9.1) is a UI-first concept: "the current operational context being explored by the user." Every field below is a derived filter/label/tree-nesting concept over data that already has its own field-map.md row elsewhere (Commitment ID, Customer, Program, Risk State, Revenue Value) - Scope introduces no new backend concept, only a narrowing view and a browsing hierarchy over the existing ones.

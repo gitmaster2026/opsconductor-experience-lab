@@ -73,8 +73,9 @@ concept" and "did this invent a new entity type."
 | 3.5 — Operational Scope + global sync (4 surfaces) | ✅ Done, merged, live-validated | merged |
 | 2.6+ (consolidated) — label policy, centering fix/diagnose, contrast, click-detail, Nav History rail, Scope Explorer multi-select/collections | 🟡 **Prompt sent, outcome not yet logged in this doc — see §10 for scope** | pending |
 | 4 — Spider, Text View, Collection Passport | ✅ Done, PR opened | branch `claude/v5-phase-4-lenses-2vc9bp` |
-| 4.5 — Workbench | ⬜ Not started | — |
-| 4.6 — Saved Views/Reports/Action Bar (UI-only) | ⬜ Not started | — |
+| 4.5 — Workbench | ✅ Done, merged | PR #4 |
+| 4.6 — Saved Views/Reports/Action Bar (UI-only) | ✅ Done, merged | `7ec54c2` |
+| 4.7 — Conductor Studio | ✅ Done, PR opened | branch `claude/conductor-studio-phase-4-7-pjrkn8` |
 | 5 — Motion grammar + doc reconciliation | ⬜ Not started | — |
 | Mobile/responsive/touch | 🔶 Backlogged, out of scope — see §6 | — |
 
@@ -957,3 +958,32 @@ Phase 4 and 4.5, per §13.6.
   is active and nothing is individually selected. Confirmed PR #6 (Phase
   2.7) merged first per its no-dependency note — this phase never touches
   universe.js/universe-layout.js/camera.js.
+| +16 | Phase 4.7 (Conductor Studio) done, PR opened from
+  `claude/conductor-studio-phase-4-7-pjrkn8`. §11.1's BLOCKING governance
+  conflict resolved per this doc's own proposal: `engine/conductor-studio-mock.js`
+  is a new, isolated mock-data module (never imported by `derive.js`, never
+  in `KNOWN_OUTPUT_FIELDS`) backing the 7 aspirational panels (Lessons
+  Learned, Historical Parallels, Trends of Interest, Automations, Custom
+  Agents, Knowledge Growth, Feedback History — note: §11.1's table named
+  only 6, omitting Knowledge Growth already present in §11.2's own 9-item
+  nav list; treated all 7 as covered by the exception rather than guessing
+  which one didn't count, see `docs/RULES.md` §12 for the full carve-out).
+  Every mock card renders a mandatory "Future" badge (Playwright-verified
+  across all 7 panels). `derive.js` gains `buildRecommendationReviewViewModel()`
+  (recommendations.json joined to risk-board.json/evidence.json via the
+  exact same joins `buildRiskBoardViewModel` already performs — introduces
+  zero new field names, so `KNOWN_OUTPUT_FIELDS` needed no new entries and
+  `scripts/verify-field-map.mjs` passes unchanged), wired into
+  `timeline.js`'s bundle as `bundle.recommendationReview`. New lens
+  `lenses/conductor-studio.js` (left nav/dynamic center/right panel per
+  §11's layout) added to `WORKSPACE_LENSES` as `'conductor_studio'`;
+  Recommendation Review and Approval Queue both import and reuse
+  `engine/filterable-table.js` (Phase 4.5's reusable component, per §11.6 -
+  no second filter engine built) and route row clicks through
+  `store.selectObject()`, live-validated end-to-end (a recommendation
+  selected/actioned in Conductor Studio shows correctly selected in
+  Universe/Passport/Jarvis afterward). Recommendation actions (Approve/
+  Reject/Modify/Request More Evidence/Assign/Defer + optional rationale)
+  are session-local, non-persisted UI capture only, per the phase brief.
+  Item H (Collection nested-cluster rendering) explicitly NOT implemented
+  this phase, per its own held-pending status.
