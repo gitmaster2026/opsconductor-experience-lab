@@ -1,29 +1,55 @@
 {
-  "derived_from": ["shortage_recommendations", "risk-board"],
+  "v1a_alignment": {
+    "story": "Executive Signal -> Commitment -> Demand -> Shortage -> Recommendation -> Decision -> Evidence -> Operational Relationships -> Timeline -> Source Records",
+    "demo_system": "NorthRiver",
+    "flagship_investigation_id": "RB-CPP-HORIZON",
+    "truth_rule": "Timeline progression reveals depth in the same investigation; it must not switch demo stories or imply unimplemented workflows."
+  },
+  "derived_from": ["shortage_recommendations", "risk-board", "operational_domain_objects", "relationships"],
   "records": [
     {
       "id": "t0",
       "label": "Baseline",
       "date": "2026-07-01",
+      "depth_step": "Executive Signal",
+      "selected_story_object_id": "RB-CPP-HORIZON",
       "operational_health_score": 92,
       "revenue_at_risk": 0,
-      "commitments_at_risk": 0
+      "commitments_at_risk": 0,
+      "narrative": "NorthRiver operating baseline before the Horizon CPP-1000 shortage becomes an executive signal."
     },
     {
       "id": "t1",
       "label": "Supply pressure detected",
       "date": "2026-07-02T04:36:02Z",
+      "depth_step": "Shortage",
+      "selected_story_object_id": "RB-CPP-HORIZON",
       "operational_health_score": 78,
       "revenue_at_risk": 414000,
-      "commitments_at_risk": 2
+      "commitments_at_risk": 2,
+      "narrative": "The Horizon CPP-1000 commitment becomes critical as shortage coverage exposes revenue at risk."
     },
     {
       "id": "t2",
-      "label": "All recommendations generated",
+      "label": "Recommendation generated",
       "date": "2026-07-02T04:36:04Z",
+      "depth_step": "Recommendation",
+      "selected_story_object_id": "091ebb8d-c7d8-49aa-beda-3858e8eece5a",
       "operational_health_score": 64,
       "revenue_at_risk": 1304000,
-      "commitments_at_risk": 5
+      "commitments_at_risk": 5,
+      "narrative": "The flagship Horizon recommendation is generated from governed shortage evidence. Decision action remains honestly gated in the lab."
+    },
+    {
+      "id": "t3",
+      "label": "Operational relationships exposed",
+      "date": "2026-09-16T00:00:00Z",
+      "depth_step": "Operational Relationships",
+      "selected_story_object_id": "9a0aeed8-d434-4da0-a88a-21e605ea0554",
+      "operational_health_score": 61,
+      "revenue_at_risk": 1304000,
+      "commitments_at_risk": 5,
+      "narrative": "The Horizon investigation resolves into the CPP-1000 operational chain, ending in the customer escalation source record."
     }
   ]
 }
