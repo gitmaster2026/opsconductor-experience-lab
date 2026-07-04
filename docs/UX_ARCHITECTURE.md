@@ -4,6 +4,14 @@ This document is the Experience Lab constitution.
 
 OpsConductor is modeled as one persistent operational workspace, not a collection of pages.
 
+## V1-A Story Integrity alignment
+
+The lab's current UX reference story is the NorthRiver V1-A path:
+
+Executive Signal -> Commitment -> Demand -> Shortage -> Recommendation -> Decision -> Evidence -> Operational Relationships -> Timeline -> Source Records
+
+The flagship full-depth fixture is `RB-CPP-HORIZON`. Other NorthRiver risk rows may show real shortage and recommendation data with honest gated depth until equivalent relationship, timeline, and source-record fixtures exist.
+
 ## Core idea
 
 The user is always inside the same operational reality.
@@ -35,6 +43,8 @@ Current primary workspace lenses:
 
 These are not pages. They are synchronized visualizations of the same state.
 
+Graph and risk-anatomy views are investigation lenses, not primary navigation systems.
+
 ## Left panel modes
 
 Current left panel modes:
@@ -43,6 +53,8 @@ Current left panel modes:
 - Passport: selected object biography
 
 Dashboard and Passport do not replace the workspace.
+
+Passport is the universal selected-object experience.
 
 ## Shared state
 
@@ -69,13 +81,15 @@ Risk Board cells should change color over time.
 
 Universe risk halos, relationships, evidence, and recommendations should change over time.
 
+Timeline should reveal depth in the same investigation rather than becoming a generic activity feed.
+
 ## Zoom principle
 
 Zoom is not time.
 
 Zoom controls depth of operational understanding:
 
-Organization -> Site -> Customer -> Program -> Commitment -> Operational Object -> Evidence -> Source Record
+Organization -> Executive Signal -> Commitment -> Demand -> Shortage -> Recommendation -> Decision / Gated Decision -> Evidence -> Operational Relationships -> Timeline -> Source Record
 
 ## Selection principle
 
@@ -90,6 +104,8 @@ Clicking a Risk Board commitment and clicking the same commitment in Universe sh
 Evidence should appear wherever decisions are made.
 
 Recommendations must remain evidence-backed.
+
+If fixture data cannot support a decision or full narrative depth, show an honest gated state instead of a fake workflow.
 
 ## Implementation principle
 
