@@ -4,6 +4,25 @@ This file controls schema fidelity for the Experience Lab.
 
 The lab may use fake values, but every visible field must map to an existing production-backed field, view, canonical demo-data field, or documented derived concept.
 
+## V1-A Story Integrity additions
+
+The Experience Lab fixture files may include the following alignment-only fields to keep the HTML prototype synchronized with Sprint V1-A Demo Truth. These are frontend fixture annotations, not new production schema requirements.
+
+| UI / Fixture Field | Source / Derivation | Status |
+|---|---|---|
+| `v1a_alignment` | Documentation wrapper describing the canonical V1 story, NorthRiver-only rule, and flagship investigation id | derived_supported |
+| `v1a_role` | Fixture annotation identifying flagship path rows versus honest gated depth rows | derived_supported |
+| `story_step` | Fixture annotation mapping a displayed object to the canonical V1 path step | derived_supported |
+| `story_step_from` / `story_step_to` | Fixture relationship annotations for Depth Lens progression | derived_supported |
+| `flagship_investigation_id` | Canonical lab pointer to `RB-CPP-HORIZON` | derived_supported |
+| `decision_state` | Honest gated decision status for lab-only display; not a production approval workflow | derived_supported |
+| `root_cause_summary` | Derived investigation summary from shortage, recommendation, relationships, evidence, and timeline records | derived_supported |
+| `selected_story_object_id` | Timeline fixture pointer to the object currently emphasized by a slice | derived_supported |
+| `depth_step` | Timeline fixture label for canonical depth progression | derived_supported |
+| `narrative` | Deterministic lab copy derived from the fixture row and V1-A story step | derived_supported |
+
+These fields may be rendered only as explanatory or navigation-context aids. They must not be treated as backend fields or used to imply V1-B capabilities.
+
 ## Source authorities
 
 | Authority | Production repo path | Notes |
@@ -12,6 +31,7 @@ The lab may use fake values, but every visible field must map to an existing pro
 | NorthRiver Demo Data Map | `docs/living-factory/generated/NorthRiver_Demo_Data_Map.md` | Canonical demo objects, items, customers, plants, scenario sequence, revenue at risk |
 | Current State | `CURRENT_STATE.md` | Product state and current capability summary |
 | Memory State | `memory/state.md` | Milestone-level state and accepted architecture |
+| Sprint V1-A PR #145 | `gitmaster2026/OpsConductor#145` | Story Integrity / Demo Truth alignment source for the lab fixture pass |
 
 ## Global field rules
 
@@ -69,19 +89,19 @@ The Risk Board is a commitment-level lens over the same operational dataset.
 
 ## Spider fields
 
-The Spider lens is a radar view over the same operational dataset: axes are the `domain` values already assigned to every Universe node (docs/V5_DESIGN_SPEC.md §4).
+The Spider lens is a radar view over the same operational dataset: axes are the `domain` values already assigned to every Universe node.
 
 | UI Field | Source / Derivation | Status |
 |---|---|---|
-| Spider Axis Score | weighted count of ≤2-hop related objects per domain whose risk_state is critical (w=3) / elevated (w=2) / watch (w=1), normalized [0,1] per axis; derived from `relationships.json`, node `domain` fields, and `risk-board.json` per-slice risk states | derived_supported |
+| Spider Axis Score | weighted count of related objects per domain whose risk_state is critical/elevated/watch, normalized per axis; derived from `relationships.json`, node `domain` fields, and `risk-board.json` per-slice risk states | derived_supported |
 
 ## Text View fields
 
-The Text View lens (V5 Phase 4, docs/V5_DESIGN_SPEC.md §5) renders the same Passport fields (below) as a collapsible outline, plus one new presentation-only concept: the hierarchy path from the organization down to the selected object. No new backend fields - Hierarchy Path is a walk of the same joins Operational Scope's Scope Hierarchy already performs.
+The Text View lens renders the same Passport fields as a collapsible outline, plus one presentation-only hierarchy path. No new backend fields.
 
 | UI Field | Source / Derivation | Status |
 |---|---|---|
-| Hierarchy Path | org -> site -> customer -> program -> commitment -> selected object, walked from Operational Scope's Scope Hierarchy tree (see Operational Scope fields below), with the selected object appended as the trailing entry when it is more granular than the tree's own levels | derived_supported |
+| Hierarchy Path | org -> site -> customer -> program -> commitment -> selected object, walked from the same joins used by scope hierarchy, with the selected object appended as the trailing entry when more granular | derived_supported |
 
 ## Passport fields
 
@@ -95,8 +115,6 @@ The Text View lens (V5 Phase 4, docs/V5_DESIGN_SPEC.md §5) renders the same Pas
 | Operational History | timeline events + effective dating + activity log where available | derived_supported |
 | Source Records | source lineage fields and `recommendation_evidence.source_*` fields | supported |
 
-**Collection Passport (V5 Phase 4, docs/V5_HANDOVER.md §9.1/§10.2):** a Collection (a Scope Explorer multi-select, see Operational Scope fields below) gets the same seven sections above, aggregated across every member's own Passport (worst Current Risk, deduplicated Relationships/Recommendations/Evidence/Operational History/Source Records). No new fields - only multi-object aggregation of the rows above, plus two frontend-only summary fields (member count, per-member id/label/type/risk list).
-
 ## Jarvis fields
 
 Jarvis responses in this lab must be deterministic.
@@ -108,31 +126,13 @@ Jarvis responses in this lab must be deterministic.
 | Suggested Next Step | deterministic recommendation/risk/evidence state | derived_supported |
 | Evidence Reference | evidence/source record fields | supported |
 
-## Conductor Studio fields
-
-Conductor Studio (V5 Phase 4.7, `docs/V5_HANDOVER.md` §11) is a 6th
-workspace lens. Two of its nine left-nav panels are real-data, under normal
-governance; the other 7 are aspirational UI mockups covered by the scoped
-exception in `docs/RULES.md` §12 and are intentionally **not** listed here -
-they never touch `derive.js`/`KNOWN_OUTPUT_FIELDS` and are exempt from this
-file's contract by design.
-
-| UI Field | Source / Derivation | Status |
-|---|---|---|
-| Recommendation Review row | `recommendations.json` record, joined to its `risk-board.json` cell (via `demand_signal_id`) and `evidence.json` record (via `source_record_id`) - the same joins `derive.js`'s `buildRiskBoardViewModel`/`buildPassportViewModel` already perform | supported |
-| Approval Queue | client-side filter of Recommendation Review rows to `status === 'generated'` (this dataset's only "not yet resolved" status value) - not a separate derivation | derived_supported |
-| Recommendation action (Approve/Reject/Modify/Request More Evidence/Assign/Defer) + rationale | UI-only interaction capture, session-local, no persistence, no backend field | derived_supported |
-| Right panel: Scope / Time | echoes the existing Operational Scope / timeline fields below, no new concept | supported |
-| Right panel: Evidence / Related Objects | `bundle.passport.evidence` / `bundle.passport.relationships` (Passport fields above) for the currently selected object | supported |
-| Right panel: Jarvis Summary | `bundle.jarvis` (Jarvis fields above), condensed | derived_supported |
-
 ## Operational Scope fields
 
-Operational Scope (V5 Phase 3.5, `docs/V5_HANDOVER.md` §9.1) is a UI-first concept: "the current operational context being explored by the user." Every field below is a derived filter/label/tree-nesting concept over data that already has its own field-map.md row elsewhere (Commitment ID, Customer, Program, Risk State, Revenue Value) - Scope introduces no new backend concept, only a narrowing view and a browsing hierarchy over the existing ones.
+Operational Scope is a UI-first concept: the current operational context being explored by the user. Every field below is a derived filter/label/tree-nesting concept over data that already has its own field-map row elsewhere.
 
 | UI Field | Source / Derivation | Status |
 |---|---|---|
-| Scope Hierarchy | organization/sites/commitments/demand_signals/operational-objects joins (the same joins Universe/RiskBoard already use) | derived_supported |
+| Scope Hierarchy | organization/sites/commitments/demand_signals/operational-objects joins | derived_supported |
 | Scope Filter | commitment/customer/site/program membership, derived from the same joins, applied to Universe node ids and risk-board cell ids | derived_supported |
 | Current Context (scope) | active scope's human-readable label, echoed alongside existing Jarvis Current Context fields | derived_supported |
 
