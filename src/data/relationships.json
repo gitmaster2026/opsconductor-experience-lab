@@ -1,15 +1,25 @@
 {
+  "v1a_alignment": {
+    "story": "Executive Signal -> Commitment -> Demand -> Shortage -> Recommendation -> Decision -> Evidence -> Operational Relationships -> Timeline -> Source Records",
+    "demo_system": "NorthRiver",
+    "flagship_investigation_id": "RB-CPP-HORIZON",
+    "truth_rule": "Relationships are an investigation lens over the selected operational object, not primary navigation or a separate demo story."
+  },
   "source_table": "operational_domain_object_links and derived relationships",
   "records": [
-    {"id":"rel-eco-to-wo1101","from_id":"4601e11d-f71a-4843-8fa8-781cbf87ea55","to_id":"1b90519c-e268-4ad0-90db-718ff7dc2078","relationship_type":"unblocks"},
-    {"id":"rel-wo1101-to-ncr231","from_id":"1b90519c-e268-4ad0-90db-718ff7dc2078","to_id":"3b8a22c4-f2cd-4a3a-9b4a-1510282fc8ee","relationship_type":"produced_quality_event"},
-    {"id":"rel-ncr231-to-capa047","from_id":"3b8a22c4-f2cd-4a3a-9b4a-1510282fc8ee","to_id":"b5f944d6-bdeb-4f57-9a88-3be80add29b9","relationship_type":"requires_corrective_action"},
-    {"id":"rel-capa047-to-fat3002","from_id":"b5f944d6-bdeb-4f57-9a88-3be80add29b9","to_id":"a69f50f1-a694-48b0-933b-0cc237334117","relationship_type":"gates"},
-    {"id":"rel-fat3002-to-shp7011","from_id":"a69f50f1-a694-48b0-933b-0cc237334117","to_id":"68936e38-e7c3-49a6-a699-7cce577a623a","relationship_type":"gates"},
-    {"id":"rel-shp7011-to-war021","from_id":"68936e38-e7c3-49a6-a699-7cce577a623a","to_id":"6567e6c5-dd58-427e-b58a-16b849ceeee3","relationship_type":"precedes"},
-    {"id":"rel-war021-to-cesc014","from_id":"6567e6c5-dd58-427e-b58a-16b849ceeee3","to_id":"9a0aeed8-d434-4da0-a88a-21e605ea0554","relationship_type":"escalates_to"},
-    {"id":"rel-rb-cpp-to-rec","from_id":"RB-CPP-HORIZON","to_id":"091ebb8d-c7d8-49aa-beda-3858e8eece5a","relationship_type":"has_recommendation"},
-    {"id":"rel-rb-lcm-to-rec","from_id":"RB-LCM-ATLAS","to_id":"0e55ded9-85c0-45b6-8a7f-5afbdddeb937","relationship_type":"has_recommendation"},
-    {"id":"rel-rb-mps-to-rec","from_id":"RB-MPS-FRONTIER","to_id":"5cd7fbc1-46e3-4b3b-9e72-fe3e6f8c829b","relationship_type":"has_recommendation"}
+    {"id":"rel-rb-cpp-to-rec","source_system":"NorthRiver","v1a_role":"golden_path","from_id":"RB-CPP-HORIZON","to_id":"091ebb8d-c7d8-49aa-beda-3858e8eece5a","relationship_type":"has_recommendation","story_step_from":"Shortage","story_step_to":"Recommendation"},
+    {"id":"rel-rec-cpp-to-evidence","source_system":"NorthRiver","v1a_role":"golden_path","from_id":"091ebb8d-c7d8-49aa-beda-3858e8eece5a","to_id":"evidence-shortage-cpp","relationship_type":"supported_by_evidence","story_step_from":"Recommendation","story_step_to":"Evidence"},
+    {"id":"rel-cpp-evidence-to-source","source_system":"NorthRiver","v1a_role":"golden_path","from_id":"evidence-horizon-escalation","to_id":"9a0aeed8-d434-4da0-a88a-21e605ea0554","relationship_type":"cites_source_record","story_step_from":"Evidence","story_step_to":"Source Records"},
+    {"id":"rel-eco-to-wo1101","source_system":"NorthRiver","v1a_role":"flagship_operational_relationship","from_id":"4601e11d-f71a-4843-8fa8-781cbf87ea55","to_id":"1b90519c-e268-4ad0-90db-718ff7dc2078","relationship_type":"unblocks","story_step_from":"Operational Relationships","story_step_to":"Timeline"},
+    {"id":"rel-wo1101-to-ncr231","source_system":"NorthRiver","v1a_role":"flagship_operational_relationship","from_id":"1b90519c-e268-4ad0-90db-718ff7dc2078","to_id":"3b8a22c4-f2cd-4a3a-9b4a-1510282fc8ee","relationship_type":"produced_quality_event","story_step_from":"Operational Relationships","story_step_to":"Timeline"},
+    {"id":"rel-ncr231-to-capa047","source_system":"NorthRiver","v1a_role":"flagship_operational_relationship","from_id":"3b8a22c4-f2cd-4a3a-9b4a-1510282fc8ee","to_id":"b5f944d6-bdeb-4f57-9a88-3be80add29b9","relationship_type":"requires_corrective_action","story_step_from":"Operational Relationships","story_step_to":"Timeline"},
+    {"id":"rel-capa047-to-fat3002","source_system":"NorthRiver","v1a_role":"flagship_operational_relationship","from_id":"b5f944d6-bdeb-4f57-9a88-3be80add29b9","to_id":"a69f50f1-a694-48b0-933b-0cc237334117","relationship_type":"gates","story_step_from":"Operational Relationships","story_step_to":"Timeline"},
+    {"id":"rel-fat3002-to-shp7011","source_system":"NorthRiver","v1a_role":"flagship_operational_relationship","from_id":"a69f50f1-a694-48b0-933b-0cc237334117","to_id":"68936e38-e7c3-49a6-a699-7cce577a623a","relationship_type":"gates","story_step_from":"Operational Relationships","story_step_to":"Timeline"},
+    {"id":"rel-shp7011-to-war021","source_system":"NorthRiver","v1a_role":"flagship_operational_relationship","from_id":"68936e38-e7c3-49a6-a699-7cce577a623a","to_id":"6567e6c5-dd58-427e-b58a-16b849ceeee3","relationship_type":"precedes","story_step_from":"Operational Relationships","story_step_to":"Timeline"},
+    {"id":"rel-war021-to-cesc014","source_system":"NorthRiver","v1a_role":"flagship_operational_relationship","from_id":"6567e6c5-dd58-427e-b58a-16b849ceeee3","to_id":"9a0aeed8-d434-4da0-a88a-21e605ea0554","relationship_type":"escalates_to","story_step_from":"Timeline","story_step_to":"Source Records"},
+    {"id":"rel-rb-lcm-to-rec","source_system":"NorthRiver","v1a_role":"honest_gated_depth","from_id":"RB-LCM-ATLAS","to_id":"0e55ded9-85c0-45b6-8a7f-5afbdddeb937","relationship_type":"has_recommendation"},
+    {"id":"rel-rb-pps-to-rec","source_system":"NorthRiver","v1a_role":"honest_gated_depth","from_id":"RB-PPS-AQUAGRID","to_id":"967f356a-e3d2-4b49-9c83-24c214abbcf1","relationship_type":"has_recommendation"},
+    {"id":"rel-rb-mps-to-rec","source_system":"NorthRiver","v1a_role":"honest_gated_depth","from_id":"RB-MPS-FRONTIER","to_id":"5cd7fbc1-46e3-4b3b-9e72-fe3e6f8c829b","relationship_type":"has_recommendation"},
+    {"id":"rel-rb-cps-to-rec","source_system":"NorthRiver","v1a_role":"honest_gated_depth","from_id":"RB-CPS-CATALYST","to_id":"55a44639-be9e-4527-969c-452294231a7b","relationship_type":"has_recommendation"}
   ]
 }
