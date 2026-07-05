@@ -27,7 +27,7 @@ Current allowed primary workspace lenses:
 
 - `universe`: living operational graph
 - `risk_board`: commitment-level operational heatmap / board
-- `spider`: radar/axis view of a selected object's risk exposure across operational domains
+- `spider`: the Commitment Health Radar (V1-UX-1b) - a 9-axis radar (Customer Commitment, Planning, Supply Chain, Manufacturing, Inventory, Quality, Engineering, Logistics, Service) answering "how likely are we to successfully fulfill this customer commitment?" (module/state-value name `spider` unchanged from the prior generic domain-exposure radar to avoid unnecessary rename churn - see docs/LENS_SPECIFICATIONS.md)
 - `text`: structured, keyboard-navigable outline view of the same investigation
 - `workbench`: relationship-aware dataset builder over the same operational graph
 - `conductor_studio`: operational intelligence/governance workspace (Recommendation Review, Approval Queue, and 7 aspirational mockup panels - see §12 below for the scoped governance exception those mockup panels operate under)

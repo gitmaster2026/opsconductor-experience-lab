@@ -58,7 +58,7 @@ const FIELD_MAP_FILE = path.join(REPO_ROOT, 'docs', 'field-map.md');
 // derive.js's own KNOWN_OUTPUT_FIELDS documents it and (b) the field-map.md
 // row this phase added is still present.
 const GOVERNANCE_GATED_KEYS = Object.freeze({
-  spiderAxisScores: 'Spider Axis Score',
+  spiderAxisScores: 'Commitment Health Radar Axis Score',
   riskTrajectory: 'Risk Board Sparkline',
 });
 

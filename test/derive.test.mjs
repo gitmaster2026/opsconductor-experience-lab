@@ -921,108 +921,115 @@ test('buildHierarchyPathForObject: exactly one path entry has isSelected true, a
 });
 
 // ---------------------------------------------------------------------------
-// buildSpiderViewModel (V5 Phase 4) - hand-computed fixtures against the
-// REAL dataset (not synthetic data), for 2+ different selected objects, per
-// the phase's explicit invariant requirement. Each fixture's expected
-// numbers below were independently derived by hand-tracing
-// buildUniverseGraph()'s real nodes/edges out to 2 hops from the subject
-// and manually applying the field-map.md formula (critical=3/elevated=2/
-// watch=1, normalized against the max raw axis score) - see this test
-// file's accompanying phase notes for the full by-hand trace. This is not
-// "assert whatever the function returns" - the expected values are fixed,
-// independently-reasoned constants.
+// buildSpiderViewModel: the Commitment Health Radar (V1-UX-1b Task 1,
+// superseding the prior 7-axis generic domain-exposure Spider) - fixtures
+// against the REAL dataset (not synthetic data). Expected numbers below were
+// computed by running this already-reviewed implementation against the real
+// fixture (not independently hand-traced a second time, given portfolio
+// mode's summation across every commitment) and are pinned here as fixed
+// regression constants, cross-checked for internal consistency against the
+// PRIOR 7-axis formula's own hand-traced numbers (see git history) wherever
+// the same commitment/domain split allows a direct comparison - e.g. the old
+// "supply" axis raw score of 12 for the ITEM-NR-CPP-1000 commitment below
+// splits cleanly into this radar's "Supply Chain" (9) + "Inventory" (3),
+// 9 + 3 = 12, confirming the re-bucketing preserved the same underlying
+// weighted-risk counts.
 // ---------------------------------------------------------------------------
 
-test('SPIDER_AXES: exactly the 7 domain values documented in docs/field-map.md, in a fixed order', () => {
-  assert.deepEqual(SPIDER_AXES, ['commercial', 'supply', 'quality', 'engineering', 'manufacturing', 'logistics', 'customer']);
+test('SPIDER_AXES: exactly the 9 Commitment Health Radar axes, in a fixed order', () => {
+  assert.deepEqual(SPIDER_AXES, [
+    'Customer Commitment',
+    'Planning',
+    'Supply Chain',
+    'Manufacturing',
+    'Inventory',
+    'Quality',
+    'Engineering',
+    'Logistics',
+    'Service',
+  ]);
 });
 
-test('buildSpiderViewModel: fixture 1 - org-level (no selection), t2 (all revealed) - hand-computed against real commitments/risk-board data', () => {
-  // Hand trace: org's 2-hop neighborhood at t2 is exactly the 5 real
-  // commitment nodes (org -> 2 plants -> 5 commitments). Each commitment
-  // node's own risk_state (already joined from its risk-board cell in
-  // buildUniverseGraph, all visible/non-dormant at t2) is, in commitments.json
-  // order: critical(3) + elevated(2) + watch(1) + elevated(2) + critical(3)
-  // = 11 weighted commercial points (commitments are domain='commercial').
-  // No other domain has ANY 2-hop neighbor from the org node in this
-  // dataset (items/demand_signals/etc. are 3+ hops away), so every other
-  // axis is exactly 0.
+test('buildSpiderViewModel: fixture 1 - portfolio mode (no selection), t2 (all revealed) - real commitments/risk-board data summed across all 5 commitments', () => {
   const spider = buildSpiderViewModel(snapshot, null, 2);
 
-  assert.equal(spider.isOrgLevel, true);
-  assert.equal(spider.subjectId, REAL_ORG_ID);
+  assert.equal(spider.isPortfolioLevel, true);
+  assert.equal(spider.subjectId, null);
+  assert.equal(spider.subjectLabel, 'All Commitments (Portfolio)');
   assert.equal(spider.sliceId, 't2');
-  assert.equal(spider.spiderAxisScores.length, 7);
-  assert.deepEqual(spider.spiderAxisScores.map((a) => a.domain), SPIDER_AXES);
+  assert.equal(spider.spiderAxisScores.length, 9);
+  assert.deepEqual(spider.spiderAxisScores.map((a) => a.axis), SPIDER_AXES);
 
-  const commercial = spider.spiderAxisScores.find((a) => a.domain === 'commercial');
-  assert.equal(commercial.rawScore, 11);
-  assert.equal(commercial.score, 1);
-  assert.equal(commercial.worstObjectId, '43f187a7-5e39-48d4-9524-ce7004b3649d');
-  assert.equal(commercial.worstRiskState, 'critical');
+  const commitmentAxis = spider.spiderAxisScores.find((a) => a.axis === 'Customer Commitment');
+  assert.equal(commitmentAxis.rawScore, 42);
+  assert.equal(commitmentAxis.score, 1);
+  assert.equal(commitmentAxis.worstRiskState, 'critical');
 
-  for (const axis of spider.spiderAxisScores) {
-    if (axis.domain === 'commercial') continue;
-    assert.equal(axis.rawScore, 0, `axis "${axis.domain}" expected rawScore 0`);
-    assert.equal(axis.score, 0, `axis "${axis.domain}" expected score 0`);
+  const supplyChain = spider.spiderAxisScores.find((a) => a.axis === 'Supply Chain');
+  assert.equal(supplyChain.rawScore, 33);
+
+  const inventory = spider.spiderAxisScores.find((a) => a.axis === 'Inventory');
+  assert.equal(inventory.rawScore, 11);
+
+  for (const axisName of ['Planning', 'Manufacturing', 'Quality', 'Engineering', 'Logistics', 'Service']) {
+    const axis = spider.spiderAxisScores.find((a) => a.axis === axisName);
+    assert.equal(axis.rawScore, 0, `axis "${axisName}" expected rawScore 0 (no NorthRiver flagship object reaches these axes within 2 hops of any commitment)`);
     assert.equal(axis.worstObjectId, null);
   }
 });
 
-test('buildSpiderViewModel: fixture 2 - a specific commitment (ITEM-NR-CPP-1000, Horizon LNG), t2 - hand-computed against real supply-chain joins', () => {
-  // Hand trace (see this commitment's full 1-hop/2-hop neighborhood):
-  //   commercial axis: RB-CPP-HORIZON risk cell (critical=3, 1 hop)
-  //     + sibling commitment ITEM-NR-PPS-2000 (elevated=2, 2 hops)
-  //     + customer:Horizon LNG Partners (neutral=0, 2 hops)
-  //     + expedite_supply recommendation (critical=3 via its commitment's
-  //       cell, 2 hops) + shortage_coverage evidence (critical=3, 2 hops)
-  //     = 3+2+0+3+3 = 11
-  //   supply axis: item node (neutral=0, 1 hop) + demand_signal (critical=3,
-  //     1 hop) + allocation (critical=3, 1 hop) + inventory (critical=3, 2
-  //     hops) + shortage_exception (critical=3, 2 hops) = 0+3+3+3+3 = 12
-  //   max raw = 12 -> commercial normalizes to 11/12, supply to 12/12 = 1
+test('buildSpiderViewModel: fixture 2 - a specific commitment (ITEM-NR-CPP-1000, Horizon LNG), t2 - real supply-chain joins, re-bucketed into the 9 radar axes', () => {
   const spider = buildSpiderViewModel(snapshot, 'e6bc8583-d191-417b-9284-01303238ddfc', 2);
 
-  assert.equal(spider.isOrgLevel, false);
+  assert.equal(spider.isPortfolioLevel, false);
   assert.equal(spider.subjectId, 'e6bc8583-d191-417b-9284-01303238ddfc');
+  assert.equal(spider.subjectLabel, 'ITEM-NR-CPP-1000 commitment (PLT-200)');
 
-  const commercial = spider.spiderAxisScores.find((a) => a.domain === 'commercial');
-  assert.equal(commercial.rawScore, 11);
-  assert.equal(commercial.score, 11 / 12);
-  assert.equal(commercial.worstObjectId, '091ebb8d-c7d8-49aa-beda-3858e8eece5a');
-  assert.equal(commercial.worstRiskState, 'critical');
+  const commitmentAxis = spider.spiderAxisScores.find((a) => a.axis === 'Customer Commitment');
+  assert.equal(commitmentAxis.rawScore, 11);
+  assert.equal(commitmentAxis.score, 1);
+  assert.equal(commitmentAxis.worstObjectId, '091ebb8d-c7d8-49aa-beda-3858e8eece5a');
+  assert.equal(commitmentAxis.worstRiskState, 'critical');
 
-  const supply = spider.spiderAxisScores.find((a) => a.domain === 'supply');
-  assert.equal(supply.rawScore, 12);
-  assert.equal(supply.score, 1);
-  assert.equal(supply.worstObjectId, '0224567c-5ce5-4119-8fd5-5144c4488cec');
-  assert.equal(supply.worstRiskState, 'critical');
+  const supplyChain = spider.spiderAxisScores.find((a) => a.axis === 'Supply Chain');
+  assert.equal(supplyChain.rawScore, 9);
+  assert.equal(supplyChain.worstRiskState, 'critical');
 
-  for (const axis of spider.spiderAxisScores) {
-    if (axis.domain === 'commercial' || axis.domain === 'supply') continue;
-    assert.equal(axis.rawScore, 0, `axis "${axis.domain}" expected rawScore 0`);
+  const inventory = spider.spiderAxisScores.find((a) => a.axis === 'Inventory');
+  assert.equal(inventory.rawScore, 3);
+  assert.equal(inventory.worstObjectId, '0224567c-5ce5-4119-8fd5-5144c4488cec');
+
+  // Cross-check against the prior 7-axis formula's own hand-traced "supply"
+  // total of 12 for this exact commitment: Supply Chain (9) + Inventory (3).
+  assert.equal(supplyChain.rawScore + inventory.rawScore, 12);
+
+  for (const axisName of ['Planning', 'Manufacturing', 'Quality', 'Engineering', 'Logistics', 'Service']) {
+    const axis = spider.spiderAxisScores.find((a) => a.axis === axisName);
+    assert.equal(axis.rawScore, 0, `axis "${axisName}" expected rawScore 0`);
   }
 });
 
-test('buildSpiderViewModel: time-gating - the same org-level radar is all-zero at t0 (nothing revealed yet) but non-zero at t2', () => {
+test('buildSpiderViewModel: time-gating - the same portfolio-mode radar is all-zero at t0 (nothing revealed yet) but non-zero at t2', () => {
   const atT0 = buildSpiderViewModel(snapshot, null, 0);
   for (const axis of atT0.spiderAxisScores) {
-    assert.equal(axis.rawScore, 0, `axis "${axis.domain}" expected rawScore 0 at t0 (nothing revealed)`);
+    assert.equal(axis.rawScore, 0, `axis "${axis.axis}" expected rawScore 0 at t0 (nothing revealed)`);
   }
   const atT2 = buildSpiderViewModel(snapshot, null, 2);
-  const commercialAtT2 = atT2.spiderAxisScores.find((a) => a.domain === 'commercial');
-  assert.ok(commercialAtT2.rawScore > 0, 't2 (all revealed) must show non-zero commercial exposure');
+  const commitmentAxisAtT2 = atT2.spiderAxisScores.find((a) => a.axis === 'Customer Commitment');
+  assert.ok(commitmentAxisAtT2.rawScore > 0, 't2 (all revealed) must show non-zero Customer Commitment exposure');
 });
 
-test('buildSpiderViewModel: an unrecognized selectedObjectId returns a total-zero result without throwing', () => {
+test('buildSpiderViewModel: a selection that does not trace to any commitment (an unrecognized id, or a non-commitment node) falls back to the portfolio rollup rather than a blank radar', () => {
   const spider = buildSpiderViewModel(snapshot, 'not-a-real-object-id', 2);
+  assert.equal(spider.isPortfolioLevel, true);
   assert.equal(spider.subjectId, null);
-  assert.equal(spider.subjectLabel, null);
-  assert.equal(spider.spiderAxisScores.length, 7);
-  for (const axis of spider.spiderAxisScores) {
-    assert.equal(axis.rawScore, 0);
-    assert.equal(axis.score, 0);
-  }
+  assert.equal(spider.subjectLabel, 'All Commitments (Portfolio)');
+  assert.equal(spider.spiderAxisScores.length, 9);
+  // Same real portfolio numbers as fixture 1 above - a non-commitment
+  // selection is not a "less real" or "blank" state, it is the portfolio
+  // view, so the radar always shows something meaningful.
+  const commitmentAxis = spider.spiderAxisScores.find((a) => a.axis === 'Customer Commitment');
+  assert.equal(commitmentAxis.rawScore, 42);
 });
 
 // ---------------------------------------------------------------------------

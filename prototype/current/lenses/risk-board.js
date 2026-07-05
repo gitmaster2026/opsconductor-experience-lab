@@ -160,13 +160,17 @@ function bandForSparklineState(riskState) {
  *   KPI "focus objects" cross-lens highlight set (see app.js's
  *   highlightedIds). Purely additive: omitting this callback preserves
  *   prior rendering behavior.
+ * @param {(cellId: string) => void} [callbacks.onProbe] - V1-UX-1b Task 3:
+ *   the expanded (selected) card's "Probe Commitment in Universe" CTA -
+ *   takes the user into the Depth Lens, distinct from the plain card click
+ *   (onSelect above), which only selects the cell in place.
  * @returns {{ render: () => void, resize: () => void, destroy: () => void }}
  */
 export function mountRiskBoardLens(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountRiskBoardLens: containerEl must be a DOM element');
   }
-  const { getBundle, onSelect, onHover, getSelectedId, getHighlightIds } = callbacks;
+  const { getBundle, onSelect, onHover, getSelectedId, getHighlightIds, onProbe } = callbacks;
   if (typeof getBundle !== 'function') {
     throw new Error('mountRiskBoardLens: callbacks.getBundle is required');
   }
@@ -224,7 +228,16 @@ export function mountRiskBoardLens(containerEl, callbacks) {
     el.className = 'risk-card';
     el.dataset.cellId = cellId;
 
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (ev) => {
+      // V1-UX-1b Task 3: the expanded card's Probe button is nested inside
+      // this same clickable <button>-as-card element - intercept its click
+      // first so Probing doesn't ALSO re-fire a redundant onSelect (the
+      // card is already selected/expanded for the Probe button to exist).
+      if (ev.target.closest('.risk-card-probe-btn')) {
+        ev.stopPropagation();
+        if (typeof onProbe === 'function') onProbe(cellId);
+        return;
+      }
       if (typeof onSelect === 'function') onSelect(cellId);
     });
     el.addEventListener('mouseenter', () => {
@@ -461,6 +474,7 @@ export function mountRiskBoardLens(containerEl, callbacks) {
               </div>`
             : ''
         }
+        <button type="button" class="risk-card-probe-btn passport-probe-btn">Probe Commitment in Universe →</button>
       </div>
     `;
   }

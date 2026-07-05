@@ -72,6 +72,8 @@ These fields may be rendered only as explanatory or navigation-context aids. The
 | Risk Intensity | risks / shortage state / recommendation state / derived visualization state | derived_supported |
 | Evidence Link | `recommendation_evidence` or source lineage | supported |
 | Timeline Visibility | timeline events / effective dating | derived_supported |
+| Relationship Visual Class | `relationshipVisualClass()` derived category (causes / depends_on / affects / evidences / resolves / blocks / ships / changes / escalates / structural) folded from the real `relationship_type` value, so Universe can render relationship types as visually distinguishable per V1-UX-1b Task 4 | derived_supported |
+| Node Materiality | `materiality`, normalized [0,1] from the node type's own real magnitude field (`revenue_at_risk` / `quantity` / `allocated_qty` / `quantity_on_hand` / `impact_score`), min/max-enforced by the [0,1] normalization itself, per V1-UX-1b Task 5 | derived_supported |
 
 ## Risk Board fields
 
@@ -89,13 +91,58 @@ The Risk Board is a commitment-level lens over the same operational dataset.
 | Root Cause Summary | related purchase order, inventory, allocation, engineering change, quality event, or evidence summary | derived_supported |
 | Risk Board Sparkline | per-commitment risk_state sequence across all time_slices, derived from `risk-board.json` risk_state at each `time-slices.json` slice | derived_supported |
 
-## Spider fields
+## Commitment Health Radar fields
 
-The Spider lens is a radar view over the same operational dataset: axes are the `domain` values already assigned to every Universe node.
+The Commitment Health Radar (V1-UX-1b Task 1; superseded the prior generic
+domain-exposure "Spider" lens - `engine/derive.js`'s exported function name
+`buildSpiderViewModel` and bundle key `spider` are unchanged to avoid
+unnecessary rename churn, but the lens's purpose, axes, and formula below
+are new) answers "how likely are we to successfully fulfill THIS customer
+commitment?" Its 9 axes group the `domain` values already assigned to every
+Universe node (see `radarAxisForNode()`).
 
 | UI Field | Source / Derivation | Status |
 |---|---|---|
-| Spider Axis Score | weighted count of related objects per domain whose risk_state is critical/elevated/watch, normalized per axis; derived from `relationships.json`, node `domain` fields, and `risk-board.json` per-slice risk states | derived_supported |
+| Radar Subject | the commitment the radar is computed for, resolved via `resolveCommitmentForObject()` from the current selection; falls back to a whole-portfolio rollup across every `commitments.json` row when the selection does not trace to a commitment | derived_supported |
+| Commitment Health Radar Axis Score | weighted count of <=2-hop related objects per axis whose risk_state is critical/elevated/watch, normalized per axis; derived from `relationships.json` / `nr04-canonical-universe.json` links, node `domain` fields (grouped into the 9 named axes), and `risk-board.json` per-slice risk states | derived_supported |
+
+## Hover Passport Preview fields
+
+The Hover Passport Preview (V1-UX-1b Task 2) is a compact subset of the same
+data buildPassportViewModel() joins, returned by the new
+`buildHoverPreviewViewModel()`. Hover shows this preview; it never opens the
+full Passport (that remains a Select action). `owner_name` / `owner_role` /
+`business_impact_summary` / `next_action_summary` are real
+nr04-canonical-universe.json columns (production's own `domainObjects`
+export shape) that existed in the data since V1-UX-1a but were not
+previously surfaced anywhere in this app.
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Object Identity / Type | `id`/`object_type` passthrough, same as Universe: Node ID / Node Type | supported |
+| Status / Health | `status` / `risk_state` passthrough, same as Passport: Current Risk | supported |
+| Owner | `owner_name` / `owner_role`, real nr04-canonical-universe.json columns, null on the 9 pre-existing curated records that predate this column | supported |
+| Operational Impact | `business_impact_summary`, real nr04-canonical-universe.json column | supported |
+| Affected Commitment | `resolveCommitmentForObject()` join, same as Spider/Passport | derived_supported |
+| Relationship Counts | count of incident Universe graph edges (`relationshipCount`), and the subset whose other endpoint is an evidence node (`evidenceCount`) | derived_supported |
+| Timeline Position | most recent `timeline-events.json` row for the object, or its own `occurred_at` if it has no timeline events | derived_supported |
+| Source/Evidence Indicator | `evidenceCount > 0`, `sourceTable`/`sourceRecordId` passthrough | derived_supported |
+| Recommended Next Action | `next_action_summary`, real nr04-canonical-universe.json column | supported |
+
+## Representative Drilldown fields
+
+V1-UX-1b Task 7: a small, explicit allowlist of flagship Golden Story
+objects (`engine/derive.js`'s `REPRESENTATIVE_DRILLDOWN_CATEGORIES` -
+identical list to `docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md`) gets a
+compact "Demo-derived Detail" Passport section. Every field is a raw
+passthrough of the anchor object's own real `detail` column
+(nr04-canonical-universe.json), never fabricated - but the section is always
+visibly badged "Demo-derived" so it is never mistaken for a general,
+production-backed drilldown mechanism.
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Demo-derived Detail fields | raw passthrough of the anchor object's `detail` column (a real nr04-canonical-universe.json field - see `scripts/build-nr04-snapshot.mjs`), only ever shown for the 6 explicit anchor ids in `REPRESENTATIVE_DRILLDOWN_CATEGORIES` / the Representative Drilldown Manifest | demo_derived_detail |
 
 ## Text View fields
 

@@ -76,14 +76,30 @@ Risk color states:
 - red: critical
 - gray: no current data
 
-## Spider / Risk Anatomy Lens
+## Commitment Health Radar Lens (formerly "Spider")
 
-Purpose: reveal the anatomy of the selected risk by domain and relationship concentration.
+V1-UX-1b superseded the prior generic domain-exposure Spider with the
+Commitment Health Radar. Module/state-value name (`spider`) is unchanged to
+avoid unnecessary rename churn across engine/timeline.js and app.js; the UI
+itself now presents this as "Commitment Health Radar."
+
+Purpose: answer "how likely are we to successfully fulfill THIS customer
+commitment?" - not a generic KPI chart.
+
+9 axes, derived from canonical NR04 domain data (engine/derive.js's
+`radarAxisForNode()`): Customer Commitment, Planning, Supply Chain,
+Manufacturing, Inventory, Quality, Engineering, Logistics, Service.
 
 Required behavior:
 
-- operate from the selected object / focused commitment
-- visualize risk anatomy over the same NorthRiver data
+- the radar's subject is always a commitment: resolved from the current
+  selection via `resolveCommitmentForObject()`, or a whole-portfolio rollup
+  across every real commitment when the selection does not trace to one
+- every spoke is derived from canonical NR04 data where possible
+- every spoke is clickable/Probeable and evidence-backed: clicking a weak
+  spoke Probes that axis's worst-risk object, which focuses the related
+  evidence and relationship chain in Universe (Task 4's relationship focus
+  mode) and opens its Passport
 - preserve Passport and timeline context
 - never become an alternate navigation system
 - never create independent demo objects or copy

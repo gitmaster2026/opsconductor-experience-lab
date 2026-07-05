@@ -45,6 +45,26 @@
   --edge-color: rgba(150, 180, 210, 0.35);
   --label-color: rgba(230, 240, 250, 0.92);
 
+  /* V1-UX-1b Task 4: relationship-type visual vocabulary - one color per
+     semantic category (causes/depends_on/affects/evidences/resolves/
+     blocks/ships/changes/escalates), plus a neutral --edge-color-*
+     fallback for graph-scaffolding 'structural' edges (unchanged from the
+     prior single edge color, so the merged graph's org/commitment/item
+     joins don't visually compete with the semantic categories). See
+     engine/derive.js's relationshipVisualClass() for the raw
+     relationship_type -> category mapping, and
+     docs/INTERACTION_MODEL_NOTES.md for the full documented rationale. */
+  --rel-causes: #ef5350;
+  --rel-depends_on: #5ad1ff;
+  --rel-affects: #b39dff;
+  --rel-evidences: #35d48a;
+  --rel-resolves: #4ac6a6;
+  --rel-blocks: #f0904a;
+  --rel-ships: #4a90d9;
+  --rel-changes: #e8c34a;
+  --rel-escalates: #ef5da0;
+  --rel-structural: rgba(150, 180, 210, 0.35);
+
   /* Phase 3: Jarvis's own distinct accent (a soft violet blended with the
      shared cyan) - gives the persistent copilot readout a visually
      distinct identity from Dashboard/Passport (which use the standard
@@ -1387,6 +1407,84 @@ body {
   color: var(--text-secondary);
 }
 
+/* V1-UX-1b Task 3: the canonical Probe CTA, reused by the Passport Overview
+   header and the Hover Passport Preview (.hover-preview-probe-btn) - same
+   cyan-accent "investigative action" look, distinct from the neutral
+   .view-action-btn used for non-investigative view/report actions. */
+.passport-probe-btn {
+  appearance: none;
+  align-self: flex-start;
+  margin-top: 10px;
+  border: 1px solid var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.1);
+  color: var(--cyan-accent);
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.passport-probe-btn:hover {
+  background: rgba(90, 209, 255, 0.22);
+}
+
+/* V1-UX-1b Task 7: the "Demo-derived Detail" section + its always-visible
+   badge - a distinct amber/warning tint (not the cyan Probe/investigative
+   color, not a risk color) so it reads as its own honest classification,
+   never mistaken for real governed data or a risk signal. */
+.demo-derived-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #f0904a;
+  background: rgba(240, 144, 74, 0.14);
+  border: 1px solid rgba(240, 144, 74, 0.4);
+  vertical-align: middle;
+  cursor: help;
+}
+
+.passport-drilldown-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+  opacity: 0.85;
+}
+
+.passport-drilldown-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px 16px;
+  margin: 4px 0 0;
+}
+
+.passport-drilldown-fields div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.passport-drilldown-fields dt {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.passport-drilldown-fields dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .passport-section {
   display: flex;
   flex-direction: column;
@@ -2382,6 +2480,105 @@ body {
 }
 
 /* ---------------------------------------------------------------------
+   Hover Passport Preview (V1-UX-1b Task 2) - a compact, cross-lens popover
+   that follows the pointer. Deliberately reuses .node-tooltip's visual
+   language (panel-bg/blur/border/shadow, .node-tooltip-risk/-type/-hint
+   element classes) so it reads as the same family of surface, just with
+   its own richer content + a Probe CTA the click-for-detail tooltip does
+   not have.
+   --------------------------------------------------------------------- */
+
+.hover-preview {
+  position: fixed;
+  z-index: 30;
+  max-width: 280px;
+  padding: 12px 14px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  /* Interactive (not the plain pointer-events:none of .node-tooltip) - it
+     carries a real Probe button, and needs mouseenter/mouseleave to pin
+     itself open while the cursor travels from the source lens onto it (see
+     panels/hover-preview.js's HIDE_GRACE_MS). */
+  pointer-events: auto;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.hover-preview.hidden {
+  display: none;
+}
+
+.hover-preview-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.hover-preview-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.hover-preview-line {
+  margin: 4px 0;
+  line-height: 1.4;
+}
+
+.hover-preview-line strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.hover-preview-impact {
+  color: var(--text-primary);
+  font-style: italic;
+  opacity: 0.9;
+}
+
+.hover-preview-counts {
+  display: flex;
+  gap: 12px;
+  font-size: 10.5px;
+  opacity: 0.85;
+}
+
+.hover-preview-next-action {
+  border-top: 1px solid var(--panel-border);
+  padding-top: 6px;
+  margin-top: 8px;
+}
+
+.hover-preview-probe-btn {
+  pointer-events: auto;
+  appearance: none;
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.1);
+  color: var(--cyan-accent);
+  padding: 6px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.18s ease;
+}
+
+.hover-preview-probe-btn:hover {
+  background: rgba(90, 209, 255, 0.22);
+}
+
+/* ---------------------------------------------------------------------
    "Manage Saved Views" modal (V5 Phase 4.6, engine/saved-views.js) -
    same visual pattern as the Scope Explorer modal above (backdrop +
    centered dialog), kept as its own namespace rather than sharing the
@@ -2562,6 +2759,13 @@ body {
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.01em;
+}
+
+.spider-subtitle {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  opacity: 0.85;
 }
 
 .spider-slice {

@@ -78,3 +78,75 @@ export function shortCodeForNode(node) {
   const trimmed = label.trim();
   return trimmed.length > 10 ? `${trimmed.slice(0, 9)}…` : trimmed;
 }
+
+// ---------------------------------------------------------------------------
+// Probe interaction language (V1-UX-1b Task 3)
+// ---------------------------------------------------------------------------
+//
+// docs/UX_ARCHITECTURE.md: "Probe" is the one canonical investigative verb
+// across the app (Probe Commitment, Probe Supplier, Probe ECO, Probe NCR,
+// Probe Recommendation, Probe Timeline) - generic labels (View/Open/Details/
+// Expand/Inspect) are not used. This is the single place that maps a raw
+// Universe graph node `type` to the human noun every Probe affordance
+// (Hover Passport Preview, Passport relationship rows, Risk Board cells)
+// uses, so the wording is identical everywhere rather than each caller
+// inventing its own.
+
+const OBJECT_TYPE_NOUNS = Object.freeze({
+  organization: 'Organization',
+  plant: 'Site',
+  customer: 'Customer',
+  commitment: 'Commitment',
+  commitment_risk_cell: 'Commitment',
+  item: 'Item',
+  demand_signal: 'Demand Signal',
+  allocation: 'Allocation',
+  inventory: 'Inventory Position',
+  shortage_exception: 'Shortage Exception',
+  recommendation: 'Recommendation',
+  evidence: 'Evidence',
+  work_order: 'Work Order',
+  eco: 'ECO',
+  ncr: 'NCR',
+  mrb: 'MRB',
+  capa: 'CAPA',
+  validation_plan: 'Validation Plan',
+  shipment: 'Shipment',
+  premium_freight: 'Logistics Event',
+  customer_complaint: 'Customer Complaint',
+  customer_escalation: 'Customer Escalation',
+  contract_milestone: 'Contract Milestone',
+  supplier_advisory: 'Supplier Advisory',
+  revenue_exposure: 'Revenue Exposure',
+});
+
+/**
+ * The human noun for a Probe affordance's object type ("Supplier" for a
+ * supplier_advisory node, "ECO" for an eco node, etc). Falls back to a
+ * title-cased version of the raw type string (e.g. `other` -> "Other") so
+ * every node type - including NR04-canonical `other`-typed governance/
+ * program/asset objects with no dedicated noun above - still gets a
+ * readable, non-empty Probe label rather than a blank one.
+ *
+ * @param {string|null|undefined} objectType
+ * @returns {string}
+ */
+export function objectTypeNoun(objectType) {
+  if (typeof objectType !== 'string' || objectType.length === 0) return 'Object';
+  if (OBJECT_TYPE_NOUNS[objectType]) return OBJECT_TYPE_NOUNS[objectType];
+  return objectType
+    .split('_')
+    .map((part) => (part.length > 0 ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(' ');
+}
+
+/**
+ * "Probe {noun}" - the canonical investigative CTA label for a given object
+ * type, per docs/UX_ARCHITECTURE.md's Probe interaction language.
+ *
+ * @param {string|null|undefined} objectType
+ * @returns {string}
+ */
+export function probeLabel(objectType) {
+  return `Probe ${objectTypeNoun(objectType)}`;
+}
