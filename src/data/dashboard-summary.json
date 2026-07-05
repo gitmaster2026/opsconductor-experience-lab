@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "Rolled up from risk-board.json/recommendations.json, which are themselves pre-NR04 planner-narrative data, not a live NR04 executiveOperationalHealthSummary/executiveRevenueSummary export. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "derived_from": ["risk-board", "shortage_recommendations", "demand_signal_values"],
   "records": [
     {

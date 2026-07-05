@@ -1,6 +1,22 @@
 # Scripts
 
-## `export-supabase-snapshot.sql`
+## `build-nr04-snapshot.mjs` (Sprint V1-UX-1a - current canonical pipeline)
+
+Generates `src/data/nr04-golden-operational-universe.snapshot.json` (the
+Operational Snapshot Export Contract envelope) and
+`src/data/nr04-canonical-universe.json` (the Universe-merge-ready
+reshaping) from a mechanical transcription of production's real NR04
+scenario source. Run with `node scripts/build-nr04-snapshot.mjs`. See
+`docs/SNAPSHOT_CONSUMPTION_NOTES.md` for the full pipeline and honest status
+(no live `ops export snapshot` run exists yet - this script is a stand-in
+for the input-side sections only).
+
+## `export-supabase-snapshot.sql` (superseded predecessor)
+
+Manual, pre-V1-UX-1a mechanism - see `docs/SNAPSHOT_CONSUMPTION_NOTES.md`
+"Predecessor mechanism" for why `build-nr04-snapshot.mjs` above is now the
+current path. Kept for historical reference and for any file this sprint
+did not touch.
 
 Creates a static JSON snapshot from the connected OpsConductor Supabase schema.
 

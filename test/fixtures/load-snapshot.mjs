@@ -25,6 +25,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mergeCanonicalObjects, mergeCanonicalLinks } from '../../prototype/current/engine/snapshot-adapter.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -54,6 +55,8 @@ const FILES = {
   timeSlices: 'time-slices.json',
   dashboardSummary: 'dashboard-summary.json',
   operationalGraphSnapshot: 'operational-graph-snapshot.json',
+  operationalSnapshot: 'nr04-golden-operational-universe.snapshot.json',
+  nr04CanonicalUniverse: 'nr04-canonical-universe.json',
 };
 
 function deepFreeze(value) {
@@ -77,6 +80,11 @@ export function loadTestSnapshot() {
     const filePath = path.join(DATA_DIR, filename);
     snapshot[key] = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   }
+  // Mirror data-repository.js's canonical-snapshot merge (Sprint V1-UX-1a)
+  // so tests exercise the same enlarged operationalObjects/relationships
+  // arrays the real runtime loader produces.
+  snapshot.operationalObjects = mergeCanonicalObjects(snapshot.operationalObjects, snapshot.nr04CanonicalUniverse);
+  snapshot.relationships = mergeCanonicalLinks(snapshot.relationships, snapshot.nr04CanonicalUniverse);
   deepFreeze(snapshot);
   return snapshot;
 }

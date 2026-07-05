@@ -22,6 +22,23 @@
 // Caching: loadAll() caches its result in a module-level variable. Repeat
 // calls resolve immediately from cache without re-fetching. Use
 // resetCache() (tests only, generally) to force a fresh load.
+//
+// Canonical snapshot binding (Sprint V1-UX-1a, docs/SNAPSHOT_CONSUMPTION_NOTES.md):
+// this loader also fetches nr04-golden-operational-universe.snapshot.json
+// (the Operational Snapshot Export Contract envelope, transcribed from
+// production's own NR04 scenario source - see scripts/build-nr04-snapshot.mjs)
+// and nr04-canonical-universe.json (the same domain objects/links reshaped
+// for this Lab's operational-objects.json/relationships.json record shape).
+// After loading, engine/snapshot-adapter.js merges the real NR04 canonical
+// objects/links into `operationalObjects`/`relationships` so Universe, Text
+// View, and Workbench render genuine canonical data alongside (not instead
+// of) the existing curated V1-A narrative fixture. Every merged-in record
+// carries `provenance: "nr04_canonical_snapshot"`; every pre-existing record
+// is retro-annotated `provenance: "demo_derived_detail"` if it did not
+// already declare a provenance. This merge is additive only - see
+// snapshot-adapter.js's own header for why ids are not renamed/replaced.
+
+import { mergeCanonicalObjects, mergeCanonicalLinks } from './snapshot-adapter.js';
 
 /**
  * Map of snapshot key -> filename under the base URL. This is the
@@ -67,6 +84,8 @@ const FILES = Object.freeze({
   timeSlices: 'time-slices.json',
   dashboardSummary: 'dashboard-summary.json',
   operationalGraphSnapshot: 'operational-graph-snapshot.json',
+  operationalSnapshot: 'nr04-golden-operational-universe.snapshot.json',
+  nr04CanonicalUniverse: 'nr04-canonical-universe.json',
 });
 
 // Module-relative path from prototype/current/engine/data-repository.js to
@@ -144,6 +163,18 @@ export function loadAll(baseUrl = DEFAULT_BASE_URL) {
     keys.forEach((key, index) => {
       snapshot[key] = results[index];
     });
+
+    // Canonical snapshot binding (Sprint V1-UX-1a): merge the real NR04
+    // domain objects/links into operationalObjects/relationships before
+    // freezing. See this file's header comment and engine/snapshot-adapter.js.
+    snapshot.operationalObjects = mergeCanonicalObjects(
+      snapshot.operationalObjects,
+      snapshot.nr04CanonicalUniverse
+    );
+    snapshot.relationships = mergeCanonicalLinks(
+      snapshot.relationships,
+      snapshot.nr04CanonicalUniverse
+    );
 
     deepFreeze(snapshot);
     return snapshot;

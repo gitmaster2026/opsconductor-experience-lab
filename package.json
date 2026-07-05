@@ -12,6 +12,7 @@
     "check": "node scripts/check-syntax.mjs",
     "lint": "node scripts/lint.mjs",
     "verify-data": "node scripts/verify-field-map.mjs",
+    "build-nr04-snapshot": "node scripts/build-nr04-snapshot.mjs",
     "build": "npm run check && npm run verify-data && npm run test",
     "serve": "node scripts/serve.mjs",
     "start": "npm run serve"

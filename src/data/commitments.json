@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "Mirrors NR01 foundation commitment rows (PO-NR-FOUND-*), not NR04. The real NR04 commitments (PO-NR-GOU-*) are transcribed in src/data/nr04-golden-operational-universe.snapshot.json's 'commitments' section but are not yet wired into engine/derive.js's hardcoded commitment/item/allocation join (buildUniverseGraph). See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "source_table": "commitments",
   "records": [
     {"id":"e6bc8583-d191-417b-9284-01303238ddfc","org_id":"063e32af-9c3a-41c2-86e1-ac15da4a865b","site_id":"92a1df38-08b7-4152-a8a5-098f789599e1","commitment_type":"customer_order_line","customer_or_owner":"PLT-200","item_or_service":"ITEM-NR-CPP-1000","item_id":"94cadabb-e129-47e4-8f6c-25e85818d8e3","quantity":4,"required_date":"2026-09-15","priority":"medium","status":"committed","source_system":"csv","source_record_id":"PO-NR-FOUND-CPP-001","is_current":true},

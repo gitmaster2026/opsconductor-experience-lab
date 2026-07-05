@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "Derived from recommendations.json's pre-NR04 planner-narrative rows, not a live NR04 shortageRecommendationEvents export. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "derived_from": ["shortage_recommendations", "operational_domain_objects"],
   "records": [
     {"id":"tl-2026-07-01-baseline","object_id":"dashboard-current","event_type":"state_snapshot","occurred_at":"2026-07-01T00:00:00Z","title":"Baseline operational state","summary":"No shortage recommendations visible in baseline slice.","source_table":"derived_time_slice","source_record_id":"t0"},

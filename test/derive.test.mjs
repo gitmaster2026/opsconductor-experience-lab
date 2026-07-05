@@ -167,16 +167,31 @@ test('buildUniverseGraph: excludes SUP-APEX and PO-4611 (no real supplier/purcha
   assert.ok(!ids.has('PO-4611'), 'illustrative purchase-order node must not appear in the real merged graph');
 });
 
-test('buildUniverseGraph: includes all 5 real commitments, all 6 real customers, and all 9 real operational objects', () => {
+test('buildUniverseGraph: includes all 5 real commitments, all 6 real customers, all 9 curated V1-A narrative objects, and the merged NR04 canonical objects (Sprint V1-UX-1a)', () => {
   const graph = buildUniverseGraph(snapshot);
   const commitmentNodes = graph.nodes.filter((n) => n.type === 'commitment');
   const customerNodes = graph.nodes.filter((n) => n.type === 'customer');
-  const narrativeObjectIds = new Set(snapshot.operationalObjects.records.map((o) => o.id));
-  const narrativeNodesFound = graph.nodes.filter((n) => narrativeObjectIds.has(n.id));
+  const allOperationalObjectRecords = snapshot.operationalObjects.records;
+  const curatedIds = new Set(
+    allOperationalObjectRecords.filter((o) => o.provenance !== 'nr04_canonical_snapshot').map((o) => o.id)
+  );
+  const canonicalIds = new Set(
+    allOperationalObjectRecords.filter((o) => o.provenance === 'nr04_canonical_snapshot').map((o) => o.id)
+  );
+  const curatedNodesFound = graph.nodes.filter((n) => curatedIds.has(n.id));
+  const canonicalNodesFound = graph.nodes.filter((n) => canonicalIds.has(n.id));
 
   assert.equal(commitmentNodes.length, 5);
   assert.equal(customerNodes.length, 6);
-  assert.equal(narrativeNodesFound.length, 9);
+  assert.equal(curatedNodesFound.length, 9);
+  // The real NR04 Golden Operational Universe domain objects (64), merged in
+  // by engine/snapshot-adapter.js from src/data/nr04-canonical-universe.json.
+  assert.equal(canonicalIds.size, 64);
+  assert.equal(canonicalNodesFound.length, 64);
+  // Sample a couple of real NR04 object ids to confirm this is genuinely
+  // canonical-snapshot data, not just a count coincidence.
+  assert.ok(graph.nodes.some((n) => n.id === 'nr04:signal:EXEC-NR-GOU-001'));
+  assert.ok(graph.nodes.some((n) => n.id === 'nr04:commitment:CUST-HORIZON-CPP-2026-09'));
 });
 
 test('buildUniverseGraph: derives a has_recommendation-equivalent edge (has_risk_state -> recommendation chain) for all 5 risk-board cells, including the 2 missing explicit relationships.json rows', () => {

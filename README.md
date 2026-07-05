@@ -43,12 +43,23 @@ Current source authorities:
 - `gitmaster2026/OpsConductor:docs/living-factory/generated/NorthRiver_Demo_Data_Map.md`
 - `gitmaster2026/OpsConductor:memory/state.md`
 - `gitmaster2026/OpsConductor:CURRENT_STATE.md`
+- `gitmaster2026/OpsConductor:docs/Strategy/OPERATIONAL_SNAPSHOT_EXPORT_CONTRACT.md` (PR #147) - the canonical snapshot pipeline; see `docs/SNAPSHOT_CONSUMPTION_NOTES.md` for how this Lab consumes it
+- `gitmaster2026/OpsConductor:docs/living-factory/generated/Snapshot_Mapping_Manifest.md` / `Snapshot_Coverage_Report.md`
+
+## Canonical snapshot
+
+The Experience Lab consumes a generated NR04 Golden Operational Universe
+snapshot as its source of operational truth, per production's Operational
+Snapshot Export Contract. It does not hand-maintain a duplicate operational
+database. See `docs/SNAPSHOT_CONSUMPTION_NOTES.md` for the full pipeline,
+current binding status per surface, and an honest accounting of what is
+snapshot-bound versus still a temporary compatibility adapter.
 
 ## Workflow
 
-No PR workflow is required for this repo unless explicitly requested.
-
-Iterate directly on `main`.
+This repository has used a PR-per-phase workflow (reviewed and merged by the
+repo owner between phases) since Phase 3. Open a draft PR against `main` for
+new work; do not commit directly.
 
 Archive meaningful HTML experiments only.
 

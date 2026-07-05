@@ -125,7 +125,9 @@ Suggested paths:
 - `prototype/archive/v1/`
 - `prototype/archive/v2/`
 
-Direct commits to `main` are acceptable unless the user explicitly asks for PRs.
+This repo has used a PR-per-phase workflow (reviewed and merged by the repo
+owner between phases) since Phase 3 - open a draft PR against `main` rather
+than committing directly.
 
 ## 11. Immutable Source Data Rule
 

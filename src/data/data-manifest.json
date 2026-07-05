@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "compatibility_adapter", "note": "table_counts below reflect the pre-NR04 fixture set this manifest predates. See src/data/nr04-golden-operational-universe.snapshot.json's envelope.recordCounts for the NR04 transcription's own counts, and docs/SNAPSHOT_CONSUMPTION_NOTES.md for the full pipeline status."},
   "version": "2026-07-02-data-layer-v1",
   "source": {
     "kind": "static_snapshot",

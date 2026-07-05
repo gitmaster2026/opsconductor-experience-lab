@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "Close to NR01/NR04 inventory values but not an exact NR04 transcription (NR04's own as_of date and CPS-3000=0 on-hand differ). Real NR04 inventory is transcribed in src/data/nr04-golden-operational-universe.snapshot.json's 'inventoryPositions' section but is not yet wired into derive.js. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "source_table": "inventory_positions",
   "records": [
     {"id":"0224567c-5ce5-4119-8fd5-5144c4488cec","org_id":"063e32af-9c3a-41c2-86e1-ac15da4a865b","site_id":"92a1df38-08b7-4152-a8a5-098f789599e1","item_number":"ITEM-NR-CPP-1000","item_id":"94cadabb-e129-47e4-8f6c-25e85818d8e3","location_code":"PLT-200","quantity_on_hand":1,"quantity_available":1,"uom":"EA","source_system":"csv","source_as_of":"2026-07-01"},

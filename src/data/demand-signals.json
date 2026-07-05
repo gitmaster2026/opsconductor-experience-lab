@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "Mirrors an earlier NR00 planner-demand narrative (demand_key DMD-NR-PLANNER-*), not NR04. The real NR04 demand signals (DMD-NR-GOU-*) are transcribed in src/data/nr04-golden-operational-universe.snapshot.json's 'demandSignals' section but are not yet wired into engine/derive.js's hardcoded commitment/demand-signal join (buildUniverseGraph). See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "source_table": "demand_signals",
   "records": [
     {"id":"1052ae04-053c-4652-8cf1-7f4610a0128f","org_id":"063e32af-9c3a-41c2-86e1-ac15da4a865b","site_id":"92a1df38-08b7-4152-a8a5-098f789599e1","demand_key":"DMD-NR-PLANNER-LCM-ATLAS-DATACENTER","signal_type":"sales_order","customer":"Atlas Data Infrastructure","item_number":"ITEM-NR-LCM-5000","item_id":"9b9cca04-697b-440c-b9dd-f08d96488fba","quantity":7,"required_date":"2026-09-10","priority":"high","site":"PLT-300","source_system":"csv"},

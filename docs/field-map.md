@@ -32,6 +32,8 @@ These fields may be rendered only as explanatory or navigation-context aids. The
 | Current State | `CURRENT_STATE.md` | Product state and current capability summary |
 | Memory State | `memory/state.md` | Milestone-level state and accepted architecture |
 | Sprint V1-A PR #145 | `gitmaster2026/OpsConductor#145` | Story Integrity / Demo Truth alignment source for the lab fixture pass |
+| Golden Operational Universe Foundation PR #146 | `gitmaster2026/OpsConductor#146` | NR04 scenario source (`NR04-golden-operational-universe.ts`), Sprint V1-DATA-1 |
+| Operational Snapshot Export Contract PR #147 | `gitmaster2026/OpsConductor#147` | `docs/Strategy/OPERATIONAL_SNAPSHOT_EXPORT_CONTRACT.md`, `Snapshot_Mapping_Manifest.md`, `Snapshot_Coverage_Report.md` - the canonical snapshot pipeline this sprint (V1-UX-1a) binds to; see `docs/SNAPSHOT_CONSUMPTION_NOTES.md` |
 
 ## Global field rules
 
@@ -135,6 +137,31 @@ Operational Scope is a UI-first concept: the current operational context being e
 | Scope Hierarchy | organization/sites/commitments/demand_signals/operational-objects joins | derived_supported |
 | Scope Filter | commitment/customer/site/program membership, derived from the same joins, applied to Universe node ids and risk-board cell ids | derived_supported |
 | Current Context (scope) | active scope's human-readable label, echoed alongside existing Jarvis Current Context fields | derived_supported |
+
+## V1-UX-1a canonical snapshot binding additions
+
+Sprint V1-UX-1a (see `docs/SNAPSHOT_CONSUMPTION_NOTES.md` for full detail)
+adds a real canonical snapshot artifact and merges its domain objects/links
+into Universe/Text View/Workbench. These fields are new to the fixture layer
+this sprint; none are fabricated backend fields - each is either a direct
+transcription of a real production scenario column, or an explicitly-labeled
+Lab-side traceability annotation.
+
+| UI / Fixture Field | Source / Derivation | Status |
+|---|---|---|
+| `provenance` (on operational-objects.json / relationships.json records) | Lab-added classification annotation distinguishing `nr04_canonical_snapshot` (real, snapshot-bound) from `demo_derived_detail` (pre-existing curated fixture) records within the same merged array | derived_supported |
+| `nr04_object_key` | Direct passthrough of the real NR04 `operational_domain_objects.object_key` column (see `OPERATIONAL_SNAPSHOT_EXPORT_CONTRACT.md`'s `domainObjects` SELECT list) | supported |
+| `snapshot_binding` (top-level key added to 16 `src/data/*.json` files) | Lab-added documentation annotation stating a file's classification (`demo_derived_detail` / `compatibility_adapter` / `unsupported_placeholder`) in-line, per this sprint's Task 1 requirement | derived_supported |
+| `nr04-golden-operational-universe.snapshot.json` envelope fields (`schemaVersion`, `generatedAt`, `orgId`, `domainObjectSourceSystems`, `contentHash`, `recordCounts`, `generator`) | Direct structural mirror of production's `SnapshotEnvelope` type (`src/lib/domain/snapshot/types.ts`) | supported |
+| `nr04-golden-operational-universe.snapshot.json` sections: `organization`, `sites`, `items`, `commitments`, `demandSignals`, `demandSignalValues`, `inventoryPositions`, `domainObjects`, `domainObjectLinks` | Direct transcription of real NR04/NR01 scenario source (see `scripts/build-nr04-snapshot.mjs`) | supported |
+| `nr04-golden-operational-universe.snapshot.json` sections: `itemAliases`, `shortageExceptions`, `shortageRecommendations`, `recommendationEvidence`, `shortageRecommendationEvents`, `decisionOutcomeObservations`, `demandRevenueAtRisk`, `executiveOperationalHealthSummary`, `executiveRevenueSummary`, `plannerWorkQueue` | Real production concepts with a documented section shape; empty pending a live `ops export snapshot` run (no such run exists in either repository - see `docs/SNAPSHOT_CONSUMPTION_NOTES.md` "Honest status") | missing_export |
+
+`missing_export` is a new status value for this table (alongside
+`supported` / `derived_supported` / `ux_hypothesis`): a real, named
+production concept with a defined export shape, not yet populated by any
+live run. It is distinct from `ux_hypothesis` (a desired-but-unapproved UI
+field) - these fields are already approved/contracted by production's own
+Export Contract, just not yet exercised.
 
 ## UX hypotheses
 
