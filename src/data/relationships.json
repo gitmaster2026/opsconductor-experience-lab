@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "These 13 records are the curated V1-A flagship narrative's relationship chain. Sprint V1-UX-1a merges 65 real NR04 canonical domain_object_links (nr04:* ids, provenance nr04_canonical_snapshot) into this array at load time - see engine/data-repository.js / engine/snapshot-adapter.js and src/data/nr04-canonical-universe.json."},
   "v1a_alignment": {
     "story": "Executive Signal -> Commitment -> Demand -> Shortage -> Recommendation -> Decision -> Evidence -> Operational Relationships -> Timeline -> Source Records",
     "demo_system": "NorthRiver",

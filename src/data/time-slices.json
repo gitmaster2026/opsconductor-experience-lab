@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "Authored narrative sequencing (per production's own Snapshot_Mapping_Manifest.md 'Story annotations' section: 'authored narrative copy... not a derivable aggregate of raw operational data'), not production-backed. revenue_at_risk/operational_health_score figures roll up the pre-NR04 planner-narrative fixtures. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "v1a_alignment": {
     "story": "Executive Signal -> Commitment -> Demand -> Shortage -> Recommendation -> Decision -> Evidence -> Operational Relationships -> Timeline -> Source Records",
     "demo_system": "NorthRiver",

@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "Shortage/coverage/revenue-at-risk figures are pre-NR04 planner-narrative numbers, not a live NR04 export - no live 'ops export snapshot' run exists in either repository as of this sprint. Customer/item pairings already line up with NR04's real demand rows (Horizon LNG/CPP-1000, Atlas/LCM-5000, AquaGrid/PPS-2000, Frontier Mining/MPS-4000, Catalyst Chemical/CPS-3000). See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "v1a_alignment": {
     "story": "Executive Signal -> Commitment -> Demand -> Shortage -> Recommendation -> Decision -> Evidence -> Operational Relationships -> Timeline -> Source Records",
     "demo_system": "NorthRiver",

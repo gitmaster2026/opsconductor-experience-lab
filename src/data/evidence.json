@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "demo_derived_detail", "note": "Governed evidence over the pre-NR04 planner narrative, not a live NR04 'recommendationEvidence' export. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "v1a_alignment": {
     "story": "Executive Signal -> Commitment -> Demand -> Shortage -> Recommendation -> Decision -> Evidence -> Operational Relationships -> Timeline -> Source Records",
     "demo_system": "NorthRiver",

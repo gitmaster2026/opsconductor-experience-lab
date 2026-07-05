@@ -1,0 +1,2350 @@
+{
+  "envelope": {
+    "schemaVersion": "1.0",
+    "generatedAt": "2026-07-05T00:00:00.000Z",
+    "orgId": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+    "domainObjectSourceSystems": [
+      "northriver-canon",
+      "northriver-golden-universe"
+    ],
+    "contentHash": "b4e003c15be482d317a51add696983fb0941a3081223e5a24cba119e1b4d10dc",
+    "recordCounts": {
+      "organization": 1,
+      "sites": 1,
+      "items": 8,
+      "itemAliases": 0,
+      "commitments": 6,
+      "demandSignals": 8,
+      "demandSignalValues": 8,
+      "inventoryPositions": 5,
+      "shortageExceptions": 0,
+      "shortageRecommendations": 0,
+      "recommendationEvidence": 0,
+      "shortageRecommendationEvents": 0,
+      "decisionOutcomeObservations": 0,
+      "domainObjects": 64,
+      "domainObjectLinks": 65,
+      "demandRevenueAtRisk": 0,
+      "executiveOperationalHealthSummary": 0,
+      "executiveRevenueSummary": 0,
+      "plannerWorkQueue": 0
+    },
+    "generator": "Experience Lab scripts/build-nr04-snapshot.mjs (Sprint V1-UX-1a) - mechanical transcription of gitmaster2026/OpsConductor@50eb502 apps/commitment-spine/src/lib/domain/scenario/scenarios/NR01-northriver-foundation.ts + NR04-golden-operational-universe.ts. NOT a live \"ops export snapshot\" run. Governed/computed sections are empty pending that real export - see docs/SNAPSHOT_CONSUMPTION_NOTES.md. Empty: no live \"ops export snapshot\" run exists in either repository as of this sprint (production Snapshot_Coverage_Report.md records NR04 as not yet executed live). See docs/SNAPSHOT_CONSUMPTION_NOTES.md \"Honest status\" for detail. Populating this section requires the production governance engine (allocation/shortage/recommendation/decision), which this Lab does not and must not re-implement (docs/RULES.md #9)."
+  },
+  "sections": {
+    "organization": [
+      {
+        "id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "name": "Demo Manufacturing Co",
+        "risk_window_days": 14,
+        "created_at": "2026-06-24T21:52:21.06663+00:00",
+        "updated_at": "2026-06-24T21:52:21.06663+00:00"
+      }
+    ],
+    "sites": [
+      {
+        "id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "name": "Plant 1",
+        "created_at": "2026-06-24T21:52:21.06663+00:00",
+        "updated_at": "2026-06-24T21:52:21.06663+00:00"
+      }
+    ],
+    "items": [
+      {
+        "id": "94cadabb-e129-47e4-8f6c-25e85818d8e3",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "canonical_item_number": "ITEM-NR-CPP-1000",
+        "description": "CPP-1000 Cryogenic pump package",
+        "category": "CPP",
+        "uom": "EA",
+        "active_flag": true
+      },
+      {
+        "id": "3ad0927a-5a1e-4148-992e-bdc2422cf8bd",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "canonical_item_number": "ITEM-NR-CPS-3000",
+        "description": "CPS-3000 Compressor package",
+        "category": "CPS",
+        "uom": "EA",
+        "active_flag": true
+      },
+      {
+        "id": "9b9cca04-697b-440c-b9dd-f08d96488fba",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "canonical_item_number": "ITEM-NR-LCM-5000",
+        "description": "LCM-5000 Liquid cooling module",
+        "category": "LCM",
+        "uom": "EA",
+        "active_flag": true
+      },
+      {
+        "id": "c7d65e0e-7c34-4195-8014-609ab165a541",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "canonical_item_number": "ITEM-NR-MPS-4000",
+        "description": "MPS-4000 Modular process skid",
+        "category": "MPS",
+        "uom": "EA",
+        "active_flag": true
+      },
+      {
+        "id": "70363879-031f-4191-93a2-e347b88dbcbe",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "canonical_item_number": "ITEM-NR-PPS-2000",
+        "description": "PPS-2000 Process pump system",
+        "category": "PPS",
+        "uom": "EA",
+        "active_flag": true
+      },
+      {
+        "id": "242790cd-845a-4040-95b9-39daa5195448",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "canonical_item_number": "ITEM-PUMP-ASSY-100",
+        "description": "Pump assembly",
+        "category": "COMPONENT",
+        "uom": "EA",
+        "active_flag": true
+      },
+      {
+        "id": "393ac042-a850-4684-8232-362db769b70f",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "canonical_item_number": "ITEM-SEAL-KIT-300",
+        "description": "Seal kit",
+        "category": "COMPONENT",
+        "uom": "EA",
+        "active_flag": true
+      },
+      {
+        "id": "d23730f8-701f-49c4-a7a8-86c6be31ba33",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "canonical_item_number": "ITEM-VALVE-CTRL-200",
+        "description": "Control valve",
+        "category": "COMPONENT",
+        "uom": "EA",
+        "active_flag": true
+      }
+    ],
+    "itemAliases": [],
+    "commitments": [
+      {
+        "id": "PO-NR-GOU-CPP-1000-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "commitment_type": "customer_order_line",
+        "item_or_service": "ITEM-NR-CPP-1000",
+        "item_id": "94cadabb-e129-47e4-8f6c-25e85818d8e3",
+        "quantity": 4,
+        "required_date": "2026-08-28",
+        "customer_or_owner": "PLT-200",
+        "priority": "high",
+        "status": "committed",
+        "source_system": "northriver-golden-universe",
+        "source_record_id": "PO-NR-GOU-CPP-1000-01",
+        "is_current": true
+      },
+      {
+        "id": "PO-NR-GOU-CPP-1000-02",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "commitment_type": "customer_order_line",
+        "item_or_service": "ITEM-NR-CPP-1000",
+        "item_id": "94cadabb-e129-47e4-8f6c-25e85818d8e3",
+        "quantity": 1,
+        "required_date": "2026-09-04",
+        "customer_or_owner": "PLT-200",
+        "priority": "medium",
+        "status": "committed",
+        "source_system": "northriver-golden-universe",
+        "source_record_id": "PO-NR-GOU-CPP-1000-02",
+        "is_current": true
+      },
+      {
+        "id": "PO-NR-GOU-CPS-3000-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "commitment_type": "customer_order_line",
+        "item_or_service": "ITEM-NR-CPS-3000",
+        "item_id": "3ad0927a-5a1e-4148-992e-bdc2422cf8bd",
+        "quantity": 2,
+        "required_date": "2026-08-30",
+        "customer_or_owner": "PLT-300",
+        "priority": "high",
+        "status": "committed",
+        "source_system": "northriver-golden-universe",
+        "source_record_id": "PO-NR-GOU-CPS-3000-01",
+        "is_current": true
+      },
+      {
+        "id": "PO-NR-GOU-MPS-4000-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "commitment_type": "customer_order_line",
+        "item_or_service": "ITEM-NR-MPS-4000",
+        "item_id": "c7d65e0e-7c34-4195-8014-609ab165a541",
+        "quantity": 2,
+        "required_date": "2026-09-03",
+        "customer_or_owner": "PLT-300",
+        "priority": "medium",
+        "status": "committed",
+        "source_system": "northriver-golden-universe",
+        "source_record_id": "PO-NR-GOU-MPS-4000-01",
+        "is_current": true
+      },
+      {
+        "id": "PO-NR-GOU-LCM-5000-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "commitment_type": "customer_order_line",
+        "item_or_service": "ITEM-NR-LCM-5000",
+        "item_id": "9b9cca04-697b-440c-b9dd-f08d96488fba",
+        "quantity": 3,
+        "required_date": "2026-09-05",
+        "customer_or_owner": "PLT-300",
+        "priority": "high",
+        "status": "committed",
+        "source_system": "northriver-golden-universe",
+        "source_record_id": "PO-NR-GOU-LCM-5000-01",
+        "is_current": true
+      },
+      {
+        "id": "PO-NR-GOU-PPS-2000-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "commitment_type": "customer_order_line",
+        "item_or_service": "ITEM-NR-PPS-2000",
+        "item_id": "70363879-031f-4191-93a2-e347b88dbcbe",
+        "quantity": 3,
+        "required_date": "2026-09-06",
+        "customer_or_owner": "PLT-200",
+        "priority": "medium",
+        "status": "committed",
+        "source_system": "northriver-golden-universe",
+        "source_record_id": "PO-NR-GOU-PPS-2000-01",
+        "is_current": true
+      }
+    ],
+    "demandSignals": [
+      {
+        "id": "DMD-NR-GOU-CPP-HORIZON-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_key": "DMD-NR-GOU-CPP-HORIZON-01",
+        "item_number": "ITEM-NR-CPP-1000",
+        "item_id": "94cadabb-e129-47e4-8f6c-25e85818d8e3",
+        "signal_type": "sales_order",
+        "quantity": 4,
+        "required_date": "2026-08-28",
+        "site": "PLT-200",
+        "customer": "Horizon LNG Partners",
+        "priority": "high",
+        "source_system": "northriver-golden-universe"
+      },
+      {
+        "id": "DMD-NR-GOU-CPP-HELIOS-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_key": "DMD-NR-GOU-CPP-HELIOS-01",
+        "item_number": "ITEM-NR-CPP-1000",
+        "item_id": "94cadabb-e129-47e4-8f6c-25e85818d8e3",
+        "signal_type": "sales_order",
+        "quantity": 3,
+        "required_date": "2026-09-02",
+        "site": "PLT-200",
+        "customer": "Helios Hydrogen",
+        "priority": "high",
+        "source_system": "northriver-golden-universe"
+      },
+      {
+        "id": "DMD-NR-GOU-CPS-CATALYST-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_key": "DMD-NR-GOU-CPS-CATALYST-01",
+        "item_number": "ITEM-NR-CPS-3000",
+        "item_id": "3ad0927a-5a1e-4148-992e-bdc2422cf8bd",
+        "signal_type": "sales_order",
+        "quantity": 3,
+        "required_date": "2026-08-30",
+        "site": "PLT-300",
+        "customer": "Catalyst Chemical",
+        "priority": "high",
+        "source_system": "northriver-golden-universe"
+      },
+      {
+        "id": "DMD-NR-GOU-MPS-FRONTIER-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_key": "DMD-NR-GOU-MPS-FRONTIER-01",
+        "item_number": "ITEM-NR-MPS-4000",
+        "item_id": "c7d65e0e-7c34-4195-8014-609ab165a541",
+        "signal_type": "sales_order",
+        "quantity": 2,
+        "required_date": "2026-09-03",
+        "site": "PLT-300",
+        "customer": "Frontier Mining",
+        "priority": "high",
+        "source_system": "northriver-golden-universe"
+      },
+      {
+        "id": "DMD-NR-GOU-LCM-ATLAS-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_key": "DMD-NR-GOU-LCM-ATLAS-01",
+        "item_number": "ITEM-NR-LCM-5000",
+        "item_id": "9b9cca04-697b-440c-b9dd-f08d96488fba",
+        "signal_type": "sales_order",
+        "quantity": 5,
+        "required_date": "2026-09-05",
+        "site": "PLT-300",
+        "customer": "Atlas Data Infrastructure",
+        "priority": "high",
+        "source_system": "northriver-golden-universe"
+      },
+      {
+        "id": "DMD-NR-GOU-PPS-AQUA-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_key": "DMD-NR-GOU-PPS-AQUA-01",
+        "item_number": "ITEM-NR-PPS-2000",
+        "item_id": "70363879-031f-4191-93a2-e347b88dbcbe",
+        "signal_type": "sales_order",
+        "quantity": 2,
+        "required_date": "2026-09-06",
+        "site": "PLT-200",
+        "customer": "AquaGrid Utilities",
+        "priority": "medium",
+        "source_system": "northriver-golden-universe"
+      },
+      {
+        "id": "DMD-NR-GOU-PPS-EVERGREEN-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_key": "DMD-NR-GOU-PPS-EVERGREEN-01",
+        "item_number": "ITEM-NR-PPS-2000",
+        "item_id": "70363879-031f-4191-93a2-e347b88dbcbe",
+        "signal_type": "forecast",
+        "quantity": 1,
+        "required_date": "2026-09-12",
+        "site": "PLT-200",
+        "customer": "Evergreen Water Solutions",
+        "priority": "low",
+        "source_system": "northriver-golden-universe"
+      },
+      {
+        "id": "DMD-NR-GOU-LCM-SUMMIT-01",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_key": "DMD-NR-GOU-LCM-SUMMIT-01",
+        "item_number": "ITEM-NR-LCM-5000",
+        "item_id": "9b9cca04-697b-440c-b9dd-f08d96488fba",
+        "signal_type": "forecast",
+        "quantity": 1,
+        "required_date": "2026-09-15",
+        "site": "PLT-300",
+        "customer": "Summit Energy Systems",
+        "priority": "medium",
+        "source_system": "northriver-golden-universe"
+      }
+    ],
+    "demandSignalValues": [
+      {
+        "id": "DMD-NR-GOU-CPP-HORIZON-01-value",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_signal_id": "DMD-NR-GOU-CPP-HORIZON-01",
+        "value_source": "erp_unit_price",
+        "currency": "USD",
+        "unit_value": 185000,
+        "extended_value": null,
+        "as_of": "2026-07-22"
+      },
+      {
+        "id": "DMD-NR-GOU-CPP-HELIOS-01-value",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_signal_id": "DMD-NR-GOU-CPP-HELIOS-01",
+        "value_source": "erp_unit_price",
+        "currency": "USD",
+        "unit_value": 185000,
+        "extended_value": null,
+        "as_of": "2026-07-22"
+      },
+      {
+        "id": "DMD-NR-GOU-CPS-CATALYST-01-value",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_signal_id": "DMD-NR-GOU-CPS-CATALYST-01",
+        "value_source": "erp_unit_price",
+        "currency": "USD",
+        "unit_value": 265000,
+        "extended_value": null,
+        "as_of": "2026-07-22"
+      },
+      {
+        "id": "DMD-NR-GOU-MPS-FRONTIER-01-value",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_signal_id": "DMD-NR-GOU-MPS-FRONTIER-01",
+        "value_source": "erp_unit_price",
+        "currency": "USD",
+        "unit_value": 310000,
+        "extended_value": null,
+        "as_of": "2026-07-22"
+      },
+      {
+        "id": "DMD-NR-GOU-LCM-ATLAS-01-value",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_signal_id": "DMD-NR-GOU-LCM-ATLAS-01",
+        "value_source": "erp_unit_price",
+        "currency": "USD",
+        "unit_value": 125000,
+        "extended_value": null,
+        "as_of": "2026-07-22"
+      },
+      {
+        "id": "DMD-NR-GOU-PPS-AQUA-01-value",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_signal_id": "DMD-NR-GOU-PPS-AQUA-01",
+        "value_source": "erp_unit_price",
+        "currency": "USD",
+        "unit_value": 145000,
+        "extended_value": null,
+        "as_of": "2026-07-22"
+      },
+      {
+        "id": "DMD-NR-GOU-PPS-EVERGREEN-01-value",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_signal_id": "DMD-NR-GOU-PPS-EVERGREEN-01",
+        "value_source": "planning",
+        "currency": "USD",
+        "unit_value": 145000,
+        "extended_value": null,
+        "as_of": "2026-07-22"
+      },
+      {
+        "id": "DMD-NR-GOU-LCM-SUMMIT-01-value",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "demand_signal_id": "DMD-NR-GOU-LCM-SUMMIT-01",
+        "value_source": "planning",
+        "currency": "USD",
+        "unit_value": 125000,
+        "extended_value": null,
+        "as_of": "2026-07-22"
+      }
+    ],
+    "inventoryPositions": [
+      {
+        "id": "PLT-200-ITEM-NR-CPP-1000-inv",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "location_code": "PLT-200",
+        "item_number": "ITEM-NR-CPP-1000",
+        "item_id": "94cadabb-e129-47e4-8f6c-25e85818d8e3",
+        "quantity_on_hand": 1,
+        "quantity_available": 1,
+        "uom": "EA",
+        "source_system": "northriver-golden-universe",
+        "source_as_of": "2026-07-22"
+      },
+      {
+        "id": "PLT-300-ITEM-NR-CPS-3000-inv",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "location_code": "PLT-300",
+        "item_number": "ITEM-NR-CPS-3000",
+        "item_id": "3ad0927a-5a1e-4148-992e-bdc2422cf8bd",
+        "quantity_on_hand": 0,
+        "quantity_available": 0,
+        "uom": "EA",
+        "source_system": "northriver-golden-universe",
+        "source_as_of": "2026-07-22"
+      },
+      {
+        "id": "PLT-300-ITEM-NR-MPS-4000-inv",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "location_code": "PLT-300",
+        "item_number": "ITEM-NR-MPS-4000",
+        "item_id": "c7d65e0e-7c34-4195-8014-609ab165a541",
+        "quantity_on_hand": 1,
+        "quantity_available": 1,
+        "uom": "EA",
+        "source_system": "northriver-golden-universe",
+        "source_as_of": "2026-07-22"
+      },
+      {
+        "id": "PLT-300-ITEM-NR-LCM-5000-inv",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "location_code": "PLT-300",
+        "item_number": "ITEM-NR-LCM-5000",
+        "item_id": "9b9cca04-697b-440c-b9dd-f08d96488fba",
+        "quantity_on_hand": 1,
+        "quantity_available": 1,
+        "uom": "EA",
+        "source_system": "northriver-golden-universe",
+        "source_as_of": "2026-07-22"
+      },
+      {
+        "id": "PLT-200-ITEM-NR-PPS-2000-inv",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "site_id": "92a1df38-08b7-4152-a8a5-098f789599e1",
+        "location_code": "PLT-200",
+        "item_number": "ITEM-NR-PPS-2000",
+        "item_id": "70363879-031f-4191-93a2-e347b88dbcbe",
+        "quantity_on_hand": 1,
+        "quantity_available": 1,
+        "uom": "EA",
+        "source_system": "northriver-golden-universe",
+        "source_as_of": "2026-07-22"
+      }
+    ],
+    "shortageExceptions": [],
+    "shortageRecommendations": [],
+    "recommendationEvidence": [],
+    "shortageRecommendationEvents": [],
+    "decisionOutcomeObservations": [],
+    "domainObjects": [
+      {
+        "id": "nr04:company:NIS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "company:NIS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "governance",
+        "title": "NorthRiver Industrial Systems",
+        "description": "Canonical reference enterprise for OpsConductor V1.",
+        "source_identifier": "docs/living-factory/generated/Living_Factory_Bible_v1.0.md#chapter-02",
+        "evidence_summary": "Living Factory Bible defines NorthRiver Industrial Systems as the canonical manufacturing enterprise for OpsConductor V1.",
+        "detail": {
+          "entity_type": "company",
+          "stable_key": "company:NIS",
+          "canonical_name": "NorthRiver Industrial Systems"
+        }
+      },
+      {
+        "id": "nr04:plant:PLT-100",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "plant:PLT-100",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "manufacturing",
+        "title": "PLT-100 — Denver Engineering Center",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#PLT-100",
+        "evidence_summary": "PLT-100 is listed in the NorthRiver plant directory as Engineering & Product Development Center.",
+        "detail": {
+          "entity_type": "plant",
+          "plant_code": "PLT-100",
+          "primary_role": "Engineering & Product Development Center",
+          "location": "Denver, CO"
+        }
+      },
+      {
+        "id": "nr04:plant:PLT-200",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "plant:PLT-200",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "manufacturing",
+        "title": "PLT-200 — Pueblo Manufacturing Campus",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#PLT-200",
+        "evidence_summary": "PLT-200 is listed in the NorthRiver plant directory as Core Manufacturing Campus.",
+        "detail": {
+          "entity_type": "plant",
+          "plant_code": "PLT-200",
+          "primary_role": "Core Manufacturing Campus",
+          "location": "Pueblo, CO"
+        }
+      },
+      {
+        "id": "nr04:plant:PLT-300",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "plant:PLT-300",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "manufacturing",
+        "title": "PLT-300 — Grand Junction Systems Integration",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#PLT-300",
+        "evidence_summary": "PLT-300 is listed in the NorthRiver plant directory as Systems Integration & Factory Acceptance Testing.",
+        "detail": {
+          "entity_type": "plant",
+          "plant_code": "PLT-300",
+          "primary_role": "Systems Integration & Factory Acceptance Testing",
+          "location": "Grand Junction, CO"
+        }
+      },
+      {
+        "id": "nr04:plant:SVC-400",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "plant:SVC-400",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "manufacturing",
+        "title": "SVC-400 — Houston Service Center",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#SVC-400",
+        "evidence_summary": "SVC-400 is listed in the NorthRiver plant directory as Service, Warranty & Spare Parts Operations.",
+        "detail": {
+          "entity_type": "plant",
+          "plant_code": "SVC-400",
+          "primary_role": "Service, Warranty & Spare Parts Operations",
+          "location": "Houston, TX"
+        }
+      },
+      {
+        "id": "nr04:work-center:PLT-100:ENG-VALIDATION",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "work-center:PLT-100:ENG-VALIDATION",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "engineering",
+        "title": "PLT-100 Engineering Validation Lab",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#PLT-100",
+        "evidence_summary": "Engineering Validation Lab is a NorthRiver foundation work center supporting Product validation and prototype assembly.",
+        "detail": {
+          "entity_type": "work_center",
+          "plant_code": "PLT-100",
+          "work_center_code": "ENG-VALIDATION",
+          "capability": "Product validation and prototype assembly"
+        }
+      },
+      {
+        "id": "nr04:work-center:PLT-200:MACHINING",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "work-center:PLT-200:MACHINING",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "manufacturing",
+        "title": "PLT-200 Large-Frame Machining",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#PLT-200",
+        "evidence_summary": "Large-Frame Machining is a NorthRiver foundation work center supporting Large-frame machining.",
+        "detail": {
+          "entity_type": "work_center",
+          "plant_code": "PLT-200",
+          "work_center_code": "MACHINING",
+          "capability": "Large-frame machining"
+        }
+      },
+      {
+        "id": "nr04:work-center:PLT-200:FAB-WELD",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "work-center:PLT-200:FAB-WELD",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "manufacturing",
+        "title": "PLT-200 Fabrication & Certified Welding",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#PLT-200",
+        "evidence_summary": "Fabrication & Certified Welding is a NorthRiver foundation work center supporting Fabrication and certified welding.",
+        "detail": {
+          "entity_type": "work_center",
+          "plant_code": "PLT-200",
+          "work_center_code": "FAB-WELD",
+          "capability": "Fabrication and certified welding"
+        }
+      },
+      {
+        "id": "nr04:work-center:PLT-300:FAT-BAY",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "work-center:PLT-300:FAT-BAY",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "manufacturing",
+        "title": "PLT-300 Factory Acceptance Test Bay",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#PLT-300",
+        "evidence_summary": "Factory Acceptance Test Bay is a NorthRiver foundation work center supporting Factory Acceptance Testing.",
+        "detail": {
+          "entity_type": "work_center",
+          "plant_code": "PLT-300",
+          "work_center_code": "FAT-BAY",
+          "capability": "Factory Acceptance Testing"
+        }
+      },
+      {
+        "id": "nr04:work-center:SVC-400:FIELD-SERVICE",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "work-center:SVC-400:FIELD-SERVICE",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "SVC-400 Field Service Coordination",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#SVC-400",
+        "evidence_summary": "Field Service Coordination is a NorthRiver foundation work center supporting Field service coordination.",
+        "detail": {
+          "entity_type": "work_center",
+          "plant_code": "SVC-400",
+          "work_center_code": "FIELD-SERVICE",
+          "capability": "Field service coordination"
+        }
+      },
+      {
+        "id": "nr04:product-family:CPP",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product-family:CPP",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "CPP — Cryogenic Pump Packages",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "CPP is a NorthRiver product family for Cryogenic Pump Packages using a Configure-to-Order strategy.",
+        "detail": {
+          "entity_type": "product_family",
+          "family_code": "CPP",
+          "description": "Cryogenic Pump Packages",
+          "strategy": "Configure-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product-family:PPS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product-family:PPS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "PPS — Process Pump Systems",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "PPS is a NorthRiver product family for Process Pump Systems using a Configure-to-Order strategy.",
+        "detail": {
+          "entity_type": "product_family",
+          "family_code": "PPS",
+          "description": "Process Pump Systems",
+          "strategy": "Configure-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product-family:CPS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product-family:CPS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "CPS — Compressor Packages",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "CPS is a NorthRiver product family for Compressor Packages using a Engineer-to-Order strategy.",
+        "detail": {
+          "entity_type": "product_family",
+          "family_code": "CPS",
+          "description": "Compressor Packages",
+          "strategy": "Engineer-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product-family:MPS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product-family:MPS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "MPS — Modular Process Skids",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "MPS is a NorthRiver product family for Modular Process Skids using a Engineer-to-Order strategy.",
+        "detail": {
+          "entity_type": "product_family",
+          "family_code": "MPS",
+          "description": "Modular Process Skids",
+          "strategy": "Engineer-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product-family:LCM",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product-family:LCM",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "LCM — Liquid Cooling Modules",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "LCM is a NorthRiver product family for Liquid Cooling Modules using a Make-to-Order strategy.",
+        "detail": {
+          "entity_type": "product_family",
+          "family_code": "LCM",
+          "description": "Liquid Cooling Modules",
+          "strategy": "Make-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product:ITEM-NR-CPP-1000",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product:ITEM-NR-CPP-1000",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "CPP-1000 Cryogenic pump package",
+        "item_number": "ITEM-NR-CPP-1000",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "CPP-1000 Cryogenic pump package belongs to the CPP Cryogenic Pump Packages product family.",
+        "detail": {
+          "entity_type": "product",
+          "product_code": "ITEM-NR-CPP-1000",
+          "family_code": "CPP",
+          "strategy": "Configure-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product:ITEM-NR-PPS-2000",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product:ITEM-NR-PPS-2000",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "PPS-2000 Process pump system",
+        "item_number": "ITEM-NR-PPS-2000",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "PPS-2000 Process pump system belongs to the PPS Process Pump Systems product family.",
+        "detail": {
+          "entity_type": "product",
+          "product_code": "ITEM-NR-PPS-2000",
+          "family_code": "PPS",
+          "strategy": "Configure-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product:ITEM-NR-CPS-3000",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product:ITEM-NR-CPS-3000",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "CPS-3000 Compressor package",
+        "item_number": "ITEM-NR-CPS-3000",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "CPS-3000 Compressor package belongs to the CPS Compressor Packages product family.",
+        "detail": {
+          "entity_type": "product",
+          "product_code": "ITEM-NR-CPS-3000",
+          "family_code": "CPS",
+          "strategy": "Engineer-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product:ITEM-NR-MPS-4000",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product:ITEM-NR-MPS-4000",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "MPS-4000 Modular process skid",
+        "item_number": "ITEM-NR-MPS-4000",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "MPS-4000 Modular process skid belongs to the MPS Modular Process Skids product family.",
+        "detail": {
+          "entity_type": "product",
+          "product_code": "ITEM-NR-MPS-4000",
+          "family_code": "MPS",
+          "strategy": "Engineer-to-Order"
+        }
+      },
+      {
+        "id": "nr04:product:ITEM-NR-LCM-5000",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "product:ITEM-NR-LCM-5000",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "LCM-5000 Liquid cooling module",
+        "item_number": "ITEM-NR-LCM-5000",
+        "source_identifier": "Chapter_05_Products_and_Engineering.md#product-portfolio",
+        "evidence_summary": "LCM-5000 Liquid cooling module belongs to the LCM Liquid Cooling Modules product family.",
+        "detail": {
+          "entity_type": "product",
+          "product_code": "ITEM-NR-LCM-5000",
+          "family_code": "LCM",
+          "strategy": "Make-to-Order"
+        }
+      },
+      {
+        "id": "nr04:supplier:APEX-FOUNDRY-GROUP",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:APEX-FOUNDRY-GROUP",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Apex Foundry Group",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Apex Foundry Group is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Apex Foundry Group",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Apex Foundry Group"
+        }
+      },
+      {
+        "id": "nr04:supplier:SUMMIT-FORGE-WORKS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:SUMMIT-FORGE-WORKS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Summit Forge Works",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Summit Forge Works is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Summit Forge Works",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Summit Forge Works"
+        }
+      },
+      {
+        "id": "nr04:supplier:DYNAMIC-SEAL-TECHNOLOGIES",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:DYNAMIC-SEAL-TECHNOLOGIES",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Dynamic Seal Technologies",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Dynamic Seal Technologies is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Dynamic Seal Technologies",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Dynamic Seal Technologies"
+        }
+      },
+      {
+        "id": "nr04:supplier:VECTOR-ELECTRIC-MOTORS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:VECTOR-ELECTRIC-MOTORS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Vector Electric Motors",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Vector Electric Motors is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Vector Electric Motors",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Vector Electric Motors"
+        }
+      },
+      {
+        "id": "nr04:supplier:QUANTUM-CONTROLS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:QUANTUM-CONTROLS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Quantum Controls",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Quantum Controls is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Quantum Controls",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Quantum Controls"
+        }
+      },
+      {
+        "id": "nr04:supplier:PRECISION-BEARING-SYSTEMS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:PRECISION-BEARING-SYSTEMS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Precision Bearing Systems",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Precision Bearing Systems is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Precision Bearing Systems",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Precision Bearing Systems"
+        }
+      },
+      {
+        "id": "nr04:supplier:ADVANCED-INSTRUMENTATION-PARTNERS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:ADVANCED-INSTRUMENTATION-PARTNERS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Advanced Instrumentation Partners",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Advanced Instrumentation Partners is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Advanced Instrumentation Partners",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Advanced Instrumentation Partners"
+        }
+      },
+      {
+        "id": "nr04:supplier:PRIME-COATING-SOLUTIONS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:PRIME-COATING-SOLUTIONS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Prime Coating Solutions",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Prime Coating Solutions is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Prime Coating Solutions",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Prime Coating Solutions"
+        }
+      },
+      {
+        "id": "nr04:supplier:ELITE-MACHINING-SERVICES",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:ELITE-MACHINING-SERVICES",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Elite Machining Services",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Elite Machining Services is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Elite Machining Services",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Elite Machining Services"
+        }
+      },
+      {
+        "id": "nr04:supplier:INDUSTRIAL-FASTENER-GROUP",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier:INDUSTRIAL-FASTENER-GROUP",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "supplier",
+        "title": "Industrial Fastener Group",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-supplier-directory",
+        "evidence_summary": "Industrial Fastener Group is listed as a representative strategic supplier in the NorthRiver Enterprise Directory.",
+        "supplier": "Industrial Fastener Group",
+        "detail": {
+          "entity_type": "supplier",
+          "supplier_name": "Industrial Fastener Group"
+        }
+      },
+      {
+        "id": "nr04:customer:HORIZON-LNG-PARTNERS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:HORIZON-LNG-PARTNERS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Horizon LNG Partners",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Horizon LNG Partners is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Horizon LNG Partners",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Horizon LNG Partners"
+        }
+      },
+      {
+        "id": "nr04:customer:AQUAGRID-UTILITIES",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:AQUAGRID-UTILITIES",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "AquaGrid Utilities",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "AquaGrid Utilities is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "AquaGrid Utilities",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "AquaGrid Utilities"
+        }
+      },
+      {
+        "id": "nr04:customer:HELIOS-HYDROGEN",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:HELIOS-HYDROGEN",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Helios Hydrogen",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Helios Hydrogen is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Helios Hydrogen",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Helios Hydrogen"
+        }
+      },
+      {
+        "id": "nr04:customer:CATALYST-CHEMICAL",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:CATALYST-CHEMICAL",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Catalyst Chemical",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Catalyst Chemical is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Catalyst Chemical",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Catalyst Chemical"
+        }
+      },
+      {
+        "id": "nr04:customer:ATLAS-DATA-INFRASTRUCTURE",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:ATLAS-DATA-INFRASTRUCTURE",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Atlas Data Infrastructure",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Atlas Data Infrastructure is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Atlas Data Infrastructure",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Atlas Data Infrastructure"
+        }
+      },
+      {
+        "id": "nr04:customer:FRONTIER-MINING",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:FRONTIER-MINING",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Frontier Mining",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Frontier Mining is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Frontier Mining",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Frontier Mining"
+        }
+      },
+      {
+        "id": "nr04:customer:SUMMIT-ENERGY-SYSTEMS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:SUMMIT-ENERGY-SYSTEMS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Summit Energy Systems",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Summit Energy Systems is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Summit Energy Systems",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Summit Energy Systems"
+        }
+      },
+      {
+        "id": "nr04:customer:CONTINENTAL-REFINING",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:CONTINENTAL-REFINING",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Continental Refining",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Continental Refining is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Continental Refining",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Continental Refining"
+        }
+      },
+      {
+        "id": "nr04:customer:EVERGREEN-WATER-SOLUTIONS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:EVERGREEN-WATER-SOLUTIONS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Evergreen Water Solutions",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Evergreen Water Solutions is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Evergreen Water Solutions",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Evergreen Water Solutions"
+        }
+      },
+      {
+        "id": "nr04:customer:TITAN-INDUSTRIAL-PROCESSING",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "customer:TITAN-INDUSTRIAL-PROCESSING",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "customer",
+        "title": "Titan Industrial Processing",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#strategic-customer-directory",
+        "evidence_summary": "Titan Industrial Processing is listed as a representative strategic customer in the NorthRiver Enterprise Directory.",
+        "customer": "Titan Industrial Processing",
+        "detail": {
+          "entity_type": "customer",
+          "customer_name": "Titan Industrial Processing"
+        }
+      },
+      {
+        "id": "nr04:employee:CEO",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "employee:CEO",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "governance",
+        "title": "Chief Executive Officer",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#executive-leadership",
+        "evidence_summary": "Chief Executive Officer is listed in the NorthRiver executive leadership directory with responsibility for Corporate strategy, governance, and capital allocation.",
+        "owner_name": "Chief Executive Officer",
+        "owner_role": "Chief Executive Officer",
+        "detail": {
+          "entity_type": "employee_role",
+          "role_code": "CEO",
+          "role": "Chief Executive Officer",
+          "responsibility": "Corporate strategy, governance, and capital allocation"
+        }
+      },
+      {
+        "id": "nr04:employee:COO",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "employee:COO",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "governance",
+        "title": "Chief Operating Officer",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#executive-leadership",
+        "evidence_summary": "Chief Operating Officer is listed in the NorthRiver executive leadership directory with responsibility for Manufacturing, supply chain, planning, and service.",
+        "owner_name": "Chief Operating Officer",
+        "owner_role": "Chief Operating Officer",
+        "detail": {
+          "entity_type": "employee_role",
+          "role_code": "COO",
+          "role": "Chief Operating Officer",
+          "responsibility": "Manufacturing, supply chain, planning, and service"
+        }
+      },
+      {
+        "id": "nr04:employee:CFO",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "employee:CFO",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "governance",
+        "title": "Chief Financial Officer",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#executive-leadership",
+        "evidence_summary": "Chief Financial Officer is listed in the NorthRiver executive leadership directory with responsibility for Financial performance, forecasting, and risk.",
+        "owner_name": "Chief Financial Officer",
+        "owner_role": "Chief Financial Officer",
+        "detail": {
+          "entity_type": "employee_role",
+          "role_code": "CFO",
+          "role": "Chief Financial Officer",
+          "responsibility": "Financial performance, forecasting, and risk"
+        }
+      },
+      {
+        "id": "nr04:employee:VP-ENGINEERING",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "employee:VP-ENGINEERING",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "governance",
+        "title": "VP Engineering",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#executive-leadership",
+        "evidence_summary": "VP Engineering is listed in the NorthRiver executive leadership directory with responsibility for Product development, configuration management, and technical standards.",
+        "owner_name": "VP Engineering",
+        "owner_role": "VP Engineering",
+        "detail": {
+          "entity_type": "employee_role",
+          "role_code": "VP-ENGINEERING",
+          "role": "VP Engineering",
+          "responsibility": "Product development, configuration management, and technical standards"
+        }
+      },
+      {
+        "id": "nr04:employee:VP-QUALITY",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "employee:VP-QUALITY",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "governance",
+        "title": "VP Quality & Operational Excellence",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#executive-leadership",
+        "evidence_summary": "VP Quality & Operational Excellence is listed in the NorthRiver executive leadership directory with responsibility for Quality management, reliability, and continuous improvement.",
+        "owner_name": "VP Quality & Operational Excellence",
+        "owner_role": "VP Quality & Operational Excellence",
+        "detail": {
+          "entity_type": "employee_role",
+          "role_code": "VP-QUALITY",
+          "role": "VP Quality & Operational Excellence",
+          "responsibility": "Quality management, reliability, and continuous improvement"
+        }
+      },
+      {
+        "id": "nr04:employee:VP-COMMERCIAL",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "employee:VP-COMMERCIAL",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "governance",
+        "title": "VP Commercial",
+        "source_identifier": "Appendix_C_Enterprise_Directory.md#executive-leadership",
+        "evidence_summary": "VP Commercial is listed in the NorthRiver executive leadership directory with responsibility for Sales, programs, and customer relationships.",
+        "owner_name": "VP Commercial",
+        "owner_role": "VP Commercial",
+        "detail": {
+          "entity_type": "employee_role",
+          "role_code": "VP-COMMERCIAL",
+          "role": "VP Commercial",
+          "responsibility": "Sales, programs, and customer relationships"
+        }
+      },
+      {
+        "id": "nr04:program:VALUE-STREAM",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "program:VALUE-STREAM",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "NorthRiver Customer Commitment Value Stream",
+        "description": "Customer Opportunity → Customer Commitment → Engineering → Planning → Procurement → Manufacturing → Quality → Shipment → Installation → Service Lifecycle",
+        "source_identifier": "Living_Factory_Bible_v1.0.md#enterprise-operating-model",
+        "evidence_summary": "The Living Factory Bible defines NorthRiver customer commitments as flowing from opportunity through service lifecycle.",
+        "program": "NorthRiver Customer Commitment Value Stream",
+        "detail": {
+          "entity_type": "program",
+          "program_code": "VALUE-STREAM"
+        }
+      },
+      {
+        "id": "nr04:program:SOP-CADENCE",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "program:SOP-CADENCE",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "program",
+        "title": "NorthRiver Enterprise Operating Cadence",
+        "description": "Daily production reviews, weekly planning and supplier reviews, monthly executive operating reviews, quarterly strategic business reviews, and annual operating planning.",
+        "source_identifier": "Living_Factory_Bible_v1.0.md#corporate-operating-rhythm",
+        "evidence_summary": "The Living Factory Bible defines NorthRiver operating cadence as daily, weekly, monthly, quarterly, and annual review cycles.",
+        "program": "NorthRiver Enterprise Operating Cadence",
+        "detail": {
+          "entity_type": "program",
+          "program_code": "SOP-CADENCE"
+        }
+      },
+      {
+        "id": "nr04:asset:PLT-200:LARGE-FRAME-MACHINING",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "asset:PLT-200:LARGE-FRAME-MACHINING",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "asset",
+        "title": "PLT-200 Large-Frame Machining Asset Group",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#capacity-management",
+        "evidence_summary": "Large-frame machining is identified as a critical NorthRiver capacity resource.",
+        "detail": {
+          "entity_type": "asset",
+          "plant_code": "PLT-200",
+          "asset_code": "LARGE-FRAME-MACHINING",
+          "capability": "Large-frame machining"
+        }
+      },
+      {
+        "id": "nr04:asset:PLT-200:CERTIFIED-WELDING",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "asset:PLT-200:CERTIFIED-WELDING",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "asset",
+        "title": "PLT-200 Certified Welding Asset Group",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#capacity-management",
+        "evidence_summary": "Certified welding is identified as a critical NorthRiver capacity resource.",
+        "detail": {
+          "entity_type": "asset",
+          "plant_code": "PLT-200",
+          "asset_code": "CERTIFIED-WELDING",
+          "capability": "Certified welding"
+        }
+      },
+      {
+        "id": "nr04:asset:PLT-300:FAT-BAYS",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "asset:PLT-300:FAT-BAYS",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "asset",
+        "title": "PLT-300 Factory Acceptance Test Bays",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#capacity-management",
+        "evidence_summary": "FAT bays is identified as a critical NorthRiver capacity resource.",
+        "detail": {
+          "entity_type": "asset",
+          "plant_code": "PLT-300",
+          "asset_code": "FAT-BAYS",
+          "capability": "FAT bays"
+        }
+      },
+      {
+        "id": "nr04:asset:PLT-300:CONTROLS-INTEGRATION",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "asset:PLT-300:CONTROLS-INTEGRATION",
+        "object_type": "other",
+        "status": "closed",
+        "severity": "info",
+        "source_system": "northriver-canon",
+        "occurred_at": "2026-07-01T00:00:00Z",
+        "domain": "asset",
+        "title": "PLT-300 Controls Integration Cells",
+        "source_identifier": "Chapter_04_Manufacturing_Enterprise.md#capacity-management",
+        "evidence_summary": "Controls integration is identified as a critical NorthRiver capacity resource.",
+        "detail": {
+          "entity_type": "asset",
+          "plant_code": "PLT-300",
+          "asset_code": "CONTROLS-INTEGRATION",
+          "capability": "Controls integration"
+        }
+      },
+      {
+        "id": "nr04:signal:EXEC-NR-GOU-001",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "signal:EXEC-NR-GOU-001",
+        "source_system": "northriver-golden-universe",
+        "domain": "governance",
+        "object_type": "other",
+        "status": "critical",
+        "severity": "critical",
+        "title": "Executive Signal — September customer commitment risk rising across CPP, CPS, and LCM programs",
+        "program": "NorthRiver Customer Commitment Value Stream",
+        "owner_name": "COO",
+        "owner_role": "Executive Operations",
+        "urgency_score": 95,
+        "impact_score": 94,
+        "confidence_score": 91,
+        "occurred_at": "2026-07-22T08:00:00Z",
+        "source_identifier": "EOR-2026-07-22-ACTION-03",
+        "evidence_summary": "Executive operating review recorded multi-program September commitment risk requiring cross-functional recovery plan.",
+        "business_impact_summary": "At-risk customer commitments total more than $1.8M across critical September shipments.",
+        "next_action_summary": "Open Golden Story investigation and validate shortage, supplier, engineering, quality, manufacturing, logistics, service, finance, recommendation, and decision evidence.",
+        "detail": {
+          "semantic_role": "executive_signal",
+          "affected_demands": [
+            "DMD-NR-GOU-CPP-HORIZON-01",
+            "DMD-NR-GOU-CPS-CATALYST-01",
+            "DMD-NR-GOU-LCM-ATLAS-01"
+          ]
+        }
+      },
+      {
+        "id": "nr04:commitment:CUST-HORIZON-CPP-2026-09",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "commitment:CUST-HORIZON-CPP-2026-09",
+        "source_system": "northriver-golden-universe",
+        "domain": "customer",
+        "object_type": "contract_milestone",
+        "status": "critical",
+        "severity": "critical",
+        "title": "Customer Commitment — Horizon LNG CPP-1000 September site-ready delivery",
+        "item_number": "ITEM-NR-CPP-1000",
+        "demand_key": "DMD-NR-GOU-CPP-HORIZON-01",
+        "customer": "Horizon LNG Partners",
+        "site_key": "PLT-200",
+        "owner_name": "VP Commercial",
+        "owner_role": "Commercial",
+        "urgency_score": 96,
+        "impact_score": 96,
+        "confidence_score": 93,
+        "occurred_at": "2026-07-22T09:00:00Z",
+        "due_at": "2026-08-28T00:00:00Z",
+        "source_identifier": "CUST-HORIZON-CPP-2026-09",
+        "evidence_summary": "Customer commitment record ties Horizon LNG September field installation date to CPP-1000 demand DMD-NR-GOU-CPP-HORIZON-01.",
+        "business_impact_summary": "Missed delivery risks outage-window loss, premium freight, and executive escalation.",
+        "next_action_summary": "Prioritize CPP-1000 casting, ECO, machining, quality disposition, FAT, and shipment recovery.",
+        "detail": {
+          "customer_po": "HLNG-PO-77421",
+          "outage_window_start": "2026-09-04"
+        }
+      },
+      {
+        "id": "nr04:supplier-advisory:SA-NR-2026-117",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "supplier-advisory:SA-NR-2026-117",
+        "source_system": "northriver-golden-universe",
+        "domain": "supplier",
+        "object_type": "supplier_advisory",
+        "status": "open",
+        "severity": "critical",
+        "title": "Supplier Advisory SA-NR-2026-117 — Apex Foundry CPP casting shipment slips five days",
+        "item_number": "ITEM-NR-CPP-1000",
+        "supplier": "Apex Foundry Group",
+        "site_key": "PLT-200",
+        "owner_name": "Strategic Buyer",
+        "owner_role": "Supply Chain",
+        "urgency_score": 92,
+        "impact_score": 93,
+        "confidence_score": 90,
+        "occurred_at": "2026-07-19T14:00:00Z",
+        "due_at": "2026-08-02T00:00:00Z",
+        "source_identifier": "SA-NR-2026-117",
+        "evidence_summary": "Apex Foundry Group notified NorthRiver that CPP-1000 casting shipment moves from 2026-07-28 to 2026-08-02 after furnace maintenance overrun.",
+        "detail": {
+          "original_promise_date": "2026-07-28",
+          "revised_promise_date": "2026-08-02",
+          "delay_reason": "furnace_maintenance_overrun",
+          "quantity_at_risk": 4
+        }
+      },
+      {
+        "id": "nr04:eco:ECO-NR-GOU-099",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "eco:ECO-NR-GOU-099",
+        "source_system": "northriver-golden-universe",
+        "domain": "engineering",
+        "object_type": "eco",
+        "status": "closed",
+        "severity": "attention",
+        "title": "ECO-NR-GOU-099 — CPP-1000 impeller clearance tolerance update",
+        "item_number": "ITEM-NR-CPP-1000",
+        "supplier": "Apex Foundry Group",
+        "site_key": "PLT-100",
+        "owner_name": "VP Engineering",
+        "owner_role": "Engineering",
+        "urgency_score": 80,
+        "impact_score": 85,
+        "confidence_score": 90,
+        "occurred_at": "2026-07-20T13:00:00Z",
+        "effective_at": "2026-07-25T00:00:00Z",
+        "source_identifier": "ECO-NR-GOU-099",
+        "evidence_summary": "Engineering released CPP-1000 impeller clearance update to allow contained rework on affected casting lot.",
+        "detail": {
+          "current_revision": "B",
+          "new_revision": "C",
+          "rework_required": true,
+          "validation_required": true
+        }
+      },
+      {
+        "id": "nr04:wo:WO-NR-GOU-2101",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "wo:WO-NR-GOU-2101",
+        "source_system": "northriver-golden-universe",
+        "domain": "manufacturing",
+        "object_type": "work_order",
+        "status": "constrained",
+        "severity": "critical",
+        "title": "WO-NR-GOU-2101 — CPP-1000 Pueblo recovery machining",
+        "item_number": "ITEM-NR-CPP-1000",
+        "demand_key": "DMD-NR-GOU-CPP-HORIZON-01",
+        "site_key": "PLT-200",
+        "customer": "Horizon LNG Partners",
+        "owner_name": "Production Manager",
+        "owner_role": "Manufacturing",
+        "urgency_score": 93,
+        "impact_score": 92,
+        "confidence_score": 89,
+        "occurred_at": "2026-07-24T07:00:00Z",
+        "due_at": "2026-08-14T00:00:00Z",
+        "source_identifier": "WO-NR-GOU-2101",
+        "evidence_summary": "Pueblo recovery machining work order requires partial receipt, ECO release, and MRB disposition before full release.",
+        "business_impact_summary": "Critical path for Horizon LNG CPP-1000 commitment.",
+        "detail": {
+          "work_center_key": "work-center:PLT-200:MACHINING",
+          "completion_pct": 45,
+          "bottleneck_flag": true,
+          "recovery_eta": "2026-08-16"
+        }
+      },
+      {
+        "id": "nr04:ncr:NCR-NR-GOU-301",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "ncr:NCR-NR-GOU-301",
+        "source_system": "northriver-golden-universe",
+        "domain": "quality",
+        "object_type": "ncr",
+        "status": "open",
+        "severity": "critical",
+        "title": "NCR-NR-GOU-301 — CPP-1000 casting dimensional nonconformance",
+        "item_number": "ITEM-NR-CPP-1000",
+        "supplier": "Apex Foundry Group",
+        "site_key": "PLT-200",
+        "owner_name": "Supplier Quality Manager",
+        "owner_role": "Quality",
+        "urgency_score": 90,
+        "impact_score": 91,
+        "confidence_score": 94,
+        "occurred_at": "2026-08-03T12:00:00Z",
+        "due_at": "2026-08-06T00:00:00Z",
+        "source_identifier": "NCR-NR-GOU-301",
+        "evidence_summary": "NCR records dimensional nonconformance on one received CPP-1000 casting set; MRB must decide rework versus replacement.",
+        "detail": {
+          "defect_code": "DIM-BORE-OVERSIZE",
+          "lot_number": "AFG-CPP-2026-0719",
+          "disposition": "mrb_pending",
+          "rework_qty": 1,
+          "scrap_qty": 0
+        }
+      },
+      {
+        "id": "nr04:mrb:MRB-NR-GOU-117",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "mrb:MRB-NR-GOU-117",
+        "source_system": "northriver-golden-universe",
+        "domain": "quality",
+        "object_type": "mrb",
+        "status": "closed",
+        "severity": "attention",
+        "title": "MRB-NR-GOU-117 — Use-as-is with engineering-approved rework traveler",
+        "item_number": "ITEM-NR-CPP-1000",
+        "site_key": "PLT-200",
+        "owner_name": "VP Quality & Operational Excellence",
+        "owner_role": "Quality",
+        "urgency_score": 84,
+        "impact_score": 88,
+        "confidence_score": 91,
+        "occurred_at": "2026-08-05T10:00:00Z",
+        "source_identifier": "MRB-NR-GOU-117",
+        "evidence_summary": "MRB approved controlled rework against ECO-NR-GOU-099 for the quarantined CPP-1000 casting set.",
+        "detail": {
+          "disposition": "use_as_is_with_rework",
+          "related_ncr": "NCR-NR-GOU-301",
+          "related_eco": "ECO-NR-GOU-099"
+        }
+      },
+      {
+        "id": "nr04:shipment:SHP-NR-GOU-6101",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "shipment:SHP-NR-GOU-6101",
+        "source_system": "northriver-golden-universe",
+        "domain": "logistics",
+        "object_type": "premium_freight",
+        "status": "watch",
+        "severity": "attention",
+        "title": "Shipment SHP-NR-GOU-6101 — Horizon LNG CPP-1000 premium freight reservation",
+        "item_number": "ITEM-NR-CPP-1000",
+        "demand_key": "DMD-NR-GOU-CPP-HORIZON-01",
+        "customer": "Horizon LNG Partners",
+        "site_key": "PLT-300",
+        "owner_name": "Logistics Coordinator",
+        "owner_role": "Logistics",
+        "urgency_score": 86,
+        "impact_score": 83,
+        "confidence_score": 90,
+        "occurred_at": "2026-08-08T14:00:00Z",
+        "due_at": "2026-08-24T00:00:00Z",
+        "source_identifier": "SHP-NR-GOU-6101",
+        "evidence_summary": "Premium freight reservation protects Horizon LNG outage-window delivery if CPP machining recovery finishes by 2026-08-20.",
+        "detail": {
+          "carrier": "FrontRange Expedite",
+          "mode": "team_truck",
+          "eta": "2026-08-27",
+          "premium_freight_cost_usd": 18500
+        }
+      },
+      {
+        "id": "nr04:finance:REV-RISK-NR-GOU-001",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "finance:REV-RISK-NR-GOU-001",
+        "source_system": "northriver-golden-universe",
+        "domain": "finance",
+        "object_type": "revenue_exposure",
+        "status": "open",
+        "severity": "critical",
+        "title": "Revenue Exposure — Horizon, Catalyst, and Atlas September commitments",
+        "owner_name": "CFO",
+        "owner_role": "Finance",
+        "urgency_score": 88,
+        "impact_score": 95,
+        "confidence_score": 86,
+        "occurred_at": "2026-07-22T17:00:00Z",
+        "source_identifier": "FIN-RISK-NR-GOU-WK30",
+        "evidence_summary": "Finance exposure rollup ties demand values, premium freight, penalty exposure, and margin erosion to the September recovery plan.",
+        "business_impact_summary": "At-risk revenue plus avoidable expedite and penalty exposure creates executive-level prioritization signal.",
+        "detail": {
+          "revenue_at_risk_usd": 1855000,
+          "premium_freight_usd": 38500,
+          "penalty_exposure_usd": 75000
+        }
+      },
+      {
+        "id": "nr04:service:RMA-NR-GOU-014",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "service:RMA-NR-GOU-014",
+        "source_system": "northriver-golden-universe",
+        "domain": "customer",
+        "object_type": "customer_complaint",
+        "status": "open",
+        "severity": "watch",
+        "title": "Service RMA-NR-GOU-014 — Helios CPP-1000 startup vibration evidence",
+        "item_number": "ITEM-NR-CPP-1000",
+        "demand_key": "DMD-NR-GOU-CPP-HELIOS-01",
+        "customer": "Helios Hydrogen",
+        "site_key": "SVC-400",
+        "owner_name": "Field Service Manager",
+        "owner_role": "Service Operations",
+        "urgency_score": 66,
+        "impact_score": 70,
+        "confidence_score": 80,
+        "occurred_at": "2026-07-23T10:00:00Z",
+        "due_at": "2026-08-12T00:00:00Z",
+        "source_identifier": "RMA-NR-GOU-014",
+        "evidence_summary": "Service case provides field evidence that CPP vibration issue may be related to the same impeller tolerance family as ECO-NR-GOU-099.",
+        "detail": {
+          "semantic_role": "rma",
+          "field_event": "startup_vibration",
+          "service_center_key": "plant:SVC-400"
+        }
+      },
+      {
+        "id": "nr04:recommendation-context:NR-GOU-CPP-RECOVERY",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "recommendation-context:NR-GOU-CPP-RECOVERY",
+        "source_system": "northriver-golden-universe",
+        "domain": "planning",
+        "object_type": "other",
+        "status": "watch",
+        "severity": "critical",
+        "title": "Recommendation Context — Protect Horizon CPP-1000 through recovery machining and premium freight",
+        "item_number": "ITEM-NR-CPP-1000",
+        "demand_key": "DMD-NR-GOU-CPP-HORIZON-01",
+        "customer": "Horizon LNG Partners",
+        "owner_name": "Planner",
+        "owner_role": "Planning",
+        "urgency_score": 92,
+        "impact_score": 93,
+        "confidence_score": 88,
+        "occurred_at": "2026-08-06T15:00:00Z",
+        "source_identifier": "RECCTX-NR-GOU-CPP-RECOVERY",
+        "evidence_summary": "Scenario context links shortage recommendation evidence to supplier delay, ECO, NCR, MRB, machining bottleneck, and shipment recovery actions.",
+        "detail": {
+          "semantic_role": "recommendation_context",
+          "expected_decision": "accept",
+          "protected_demand_key": "DMD-NR-GOU-CPP-HORIZON-01"
+        }
+      },
+      {
+        "id": "nr04:briefing:EXEC-BRIEF-NR-GOU-WK31",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "object_key": "briefing:EXEC-BRIEF-NR-GOU-WK31",
+        "source_system": "northriver-golden-universe",
+        "domain": "governance",
+        "object_type": "other",
+        "status": "watch",
+        "severity": "attention",
+        "title": "Executive Briefing Source — Week 31 commitment protection recovery plan",
+        "owner_name": "COO",
+        "owner_role": "Executive Operations",
+        "urgency_score": 70,
+        "impact_score": 85,
+        "confidence_score": 87,
+        "occurred_at": "2026-08-08T18:00:00Z",
+        "source_identifier": "EXEC-BRIEF-NR-GOU-WK31",
+        "evidence_summary": "Briefing source collects customer, supplier, quality, manufacturing, logistics, service, finance, recommendation, and decision evidence for executive review.",
+        "detail": {
+          "semantic_role": "executive_briefing_source",
+          "briefing_type": "commitment_recovery"
+        }
+      }
+    ],
+    "domainObjectLinks": [
+      {
+        "id": "nr04:link-1",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:plant:PLT-100",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "belongs_to"
+      },
+      {
+        "id": "nr04:link-2",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:plant:PLT-200",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "belongs_to"
+      },
+      {
+        "id": "nr04:link-3",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:plant:PLT-300",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "belongs_to"
+      },
+      {
+        "id": "nr04:link-4",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:plant:SVC-400",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "belongs_to"
+      },
+      {
+        "id": "nr04:link-5",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:work-center:PLT-100:ENG-VALIDATION",
+        "to_id": "nr04:plant:PLT-100",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-6",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:work-center:PLT-200:MACHINING",
+        "to_id": "nr04:plant:PLT-200",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-7",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:work-center:PLT-200:FAB-WELD",
+        "to_id": "nr04:plant:PLT-200",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-8",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:work-center:PLT-300:FAT-BAY",
+        "to_id": "nr04:plant:PLT-300",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-9",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:work-center:SVC-400:FIELD-SERVICE",
+        "to_id": "nr04:plant:SVC-400",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-10",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:product:ITEM-NR-CPP-1000",
+        "to_id": "nr04:product-family:CPP",
+        "relationship_type": "belongs_to_family"
+      },
+      {
+        "id": "nr04:link-11",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:product:ITEM-NR-PPS-2000",
+        "to_id": "nr04:product-family:PPS",
+        "relationship_type": "belongs_to_family"
+      },
+      {
+        "id": "nr04:link-12",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:product:ITEM-NR-CPS-3000",
+        "to_id": "nr04:product-family:CPS",
+        "relationship_type": "belongs_to_family"
+      },
+      {
+        "id": "nr04:link-13",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:product:ITEM-NR-MPS-4000",
+        "to_id": "nr04:product-family:MPS",
+        "relationship_type": "belongs_to_family"
+      },
+      {
+        "id": "nr04:link-14",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:product:ITEM-NR-LCM-5000",
+        "to_id": "nr04:product-family:LCM",
+        "relationship_type": "belongs_to_family"
+      },
+      {
+        "id": "nr04:link-15",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:APEX-FOUNDRY-GROUP",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-16",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:SUMMIT-FORGE-WORKS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-17",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:DYNAMIC-SEAL-TECHNOLOGIES",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-18",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:VECTOR-ELECTRIC-MOTORS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-19",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:QUANTUM-CONTROLS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-20",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:PRECISION-BEARING-SYSTEMS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-21",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:ADVANCED-INSTRUMENTATION-PARTNERS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-22",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:PRIME-COATING-SOLUTIONS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-23",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:ELITE-MACHINING-SERVICES",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-24",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier:INDUSTRIAL-FASTENER-GROUP",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_supplier_of"
+      },
+      {
+        "id": "nr04:link-25",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:HORIZON-LNG-PARTNERS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-26",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:AQUAGRID-UTILITIES",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-27",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:HELIOS-HYDROGEN",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-28",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:CATALYST-CHEMICAL",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-29",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:ATLAS-DATA-INFRASTRUCTURE",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-30",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:FRONTIER-MINING",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-31",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:SUMMIT-ENERGY-SYSTEMS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-32",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:CONTINENTAL-REFINING",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-33",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:EVERGREEN-WATER-SOLUTIONS",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-34",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:customer:TITAN-INDUSTRIAL-PROCESSING",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "strategic_customer_of"
+      },
+      {
+        "id": "nr04:link-35",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:asset:PLT-200:LARGE-FRAME-MACHINING",
+        "to_id": "nr04:plant:PLT-200",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-36",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:asset:PLT-200:CERTIFIED-WELDING",
+        "to_id": "nr04:plant:PLT-200",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-37",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:asset:PLT-300:FAT-BAYS",
+        "to_id": "nr04:plant:PLT-300",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-38",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:asset:PLT-300:CONTROLS-INTEGRATION",
+        "to_id": "nr04:plant:PLT-300",
+        "relationship_type": "located_at"
+      },
+      {
+        "id": "nr04:link-39",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:employee:CEO",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "leads"
+      },
+      {
+        "id": "nr04:link-40",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:employee:COO",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "leads"
+      },
+      {
+        "id": "nr04:link-41",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:employee:CFO",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "leads"
+      },
+      {
+        "id": "nr04:link-42",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:employee:VP-ENGINEERING",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "leads"
+      },
+      {
+        "id": "nr04:link-43",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:employee:VP-QUALITY",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "leads"
+      },
+      {
+        "id": "nr04:link-44",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:employee:VP-COMMERCIAL",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "leads"
+      },
+      {
+        "id": "nr04:link-45",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:program:VALUE-STREAM",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "belongs_to"
+      },
+      {
+        "id": "nr04:link-46",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:program:SOP-CADENCE",
+        "to_id": "nr04:company:NIS",
+        "relationship_type": "belongs_to"
+      },
+      {
+        "id": "nr04:link-47",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:signal:EXEC-NR-GOU-001",
+        "to_id": "nr04:commitment:CUST-HORIZON-CPP-2026-09",
+        "relationship_type": "highlights_commitment"
+      },
+      {
+        "id": "nr04:link-48",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:commitment:CUST-HORIZON-CPP-2026-09",
+        "to_id": "nr04:customer:HORIZON-LNG-PARTNERS",
+        "relationship_type": "owned_by_customer"
+      },
+      {
+        "id": "nr04:link-49",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:commitment:CUST-HORIZON-CPP-2026-09",
+        "to_id": "nr04:product:ITEM-NR-CPP-1000",
+        "relationship_type": "requires_product"
+      },
+      {
+        "id": "nr04:link-50",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier-advisory:SA-NR-2026-117",
+        "to_id": "nr04:supplier:APEX-FOUNDRY-GROUP",
+        "relationship_type": "issued_by"
+      },
+      {
+        "id": "nr04:link-51",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:supplier-advisory:SA-NR-2026-117",
+        "to_id": "nr04:product:ITEM-NR-CPP-1000",
+        "relationship_type": "constrains_product"
+      },
+      {
+        "id": "nr04:link-52",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:eco:ECO-NR-GOU-099",
+        "to_id": "nr04:product:ITEM-NR-CPP-1000",
+        "relationship_type": "affects_product"
+      },
+      {
+        "id": "nr04:link-53",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:wo:WO-NR-GOU-2101",
+        "to_id": "nr04:work-center:PLT-200:MACHINING",
+        "relationship_type": "uses_work_center"
+      },
+      {
+        "id": "nr04:link-54",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:wo:WO-NR-GOU-2101",
+        "to_id": "nr04:commitment:CUST-HORIZON-CPP-2026-09",
+        "relationship_type": "supports_commitment"
+      },
+      {
+        "id": "nr04:link-55",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:ncr:NCR-NR-GOU-301",
+        "to_id": "nr04:supplier:APEX-FOUNDRY-GROUP",
+        "relationship_type": "supplier_quality_issue_for"
+      },
+      {
+        "id": "nr04:link-56",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:mrb:MRB-NR-GOU-117",
+        "to_id": "nr04:ncr:NCR-NR-GOU-301",
+        "relationship_type": "dispositions"
+      },
+      {
+        "id": "nr04:link-57",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:mrb:MRB-NR-GOU-117",
+        "to_id": "nr04:eco:ECO-NR-GOU-099",
+        "relationship_type": "uses_engineering_disposition"
+      },
+      {
+        "id": "nr04:link-58",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:shipment:SHP-NR-GOU-6101",
+        "to_id": "nr04:commitment:CUST-HORIZON-CPP-2026-09",
+        "relationship_type": "protects_delivery"
+      },
+      {
+        "id": "nr04:link-59",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:finance:REV-RISK-NR-GOU-001",
+        "to_id": "nr04:signal:EXEC-NR-GOU-001",
+        "relationship_type": "quantifies_impact"
+      },
+      {
+        "id": "nr04:link-60",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:service:RMA-NR-GOU-014",
+        "to_id": "nr04:eco:ECO-NR-GOU-099",
+        "relationship_type": "provides_field_evidence_for"
+      },
+      {
+        "id": "nr04:link-61",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:recommendation-context:NR-GOU-CPP-RECOVERY",
+        "to_id": "nr04:supplier-advisory:SA-NR-2026-117",
+        "relationship_type": "uses_evidence"
+      },
+      {
+        "id": "nr04:link-62",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:recommendation-context:NR-GOU-CPP-RECOVERY",
+        "to_id": "nr04:ncr:NCR-NR-GOU-301",
+        "relationship_type": "uses_evidence"
+      },
+      {
+        "id": "nr04:link-63",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:recommendation-context:NR-GOU-CPP-RECOVERY",
+        "to_id": "nr04:mrb:MRB-NR-GOU-117",
+        "relationship_type": "uses_evidence"
+      },
+      {
+        "id": "nr04:link-64",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:recommendation-context:NR-GOU-CPP-RECOVERY",
+        "to_id": "nr04:shipment:SHP-NR-GOU-6101",
+        "relationship_type": "uses_evidence"
+      },
+      {
+        "id": "nr04:link-65",
+        "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",
+        "from_id": "nr04:briefing:EXEC-BRIEF-NR-GOU-WK31",
+        "to_id": "nr04:signal:EXEC-NR-GOU-001",
+        "relationship_type": "summarizes"
+      }
+    ],
+    "demandRevenueAtRisk": [],
+    "executiveOperationalHealthSummary": [],
+    "executiveRevenueSummary": [],
+    "plannerWorkQueue": []
+  }
+}

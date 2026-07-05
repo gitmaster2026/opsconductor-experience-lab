@@ -1,4 +1,5 @@
 {
+  "snapshot_binding": {"status": "unsupported_placeholder", "note": "Governed engine output over the NR00-planner-demand narrative, not NR04. Production's own Snapshot_Mapping_Manifest.md lists 'allocations'/'allocation_runs' as a Gap - not yet added as an export section even for a live NR04 run. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."},
   "source_table": "allocations",
   "records": [
     {"id":"8a52ca11-124d-4785-bb83-ad5c360aa105","org_id":"063e32af-9c3a-41c2-86e1-ac15da4a865b","site_id":"92a1df38-08b7-4152-a8a5-098f789599e1","allocation_run_id":"dfbb3b1f-9ee3-4a21-a37b-02dce7240ebc","commitment_id":"85d1a129-342b-4f1f-a2e6-a0a5d078d98d","demand_signal_id":"d262ff48-d27e-4784-9b5d-af940d2000d2","inventory_position_id":null,"item_number":"ITEM-NR-CPS-3000","allocated_qty":3,"supply_source":"commitment","allocation_method":"fifo_item_date"},

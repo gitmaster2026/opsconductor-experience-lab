@@ -155,11 +155,18 @@ export function resolveVisibilityForSlice(snapshot, sliceIndex) {
 
   // Narrative (Horizon LNG CPP-1000) chain: all operational-objects rows
   // whose title/customer ties them to the CPP-1000/Horizon thread. In this
-  // dataset that is simply every operational-objects.json record (all 9
-  // rows are part of this single narrative chain - see
+  // dataset that is simply every CURATED operational-objects.json record
+  // (all 9 rows are part of this single narrative chain - see
   // docs/V4_DATA_RECONCILIATION.md for why there is only one narrative
-  // chain in this checkpoint of the data).
-  const sortedNarrative = sortByDateAsc(operationalObjects, (o) => o.occurred_at);
+  // chain in this checkpoint of the data). Sprint V1-UX-1a merged the real
+  // NR04 canonical domain objects into this same array (provenance
+  // "nr04_canonical_snapshot", see engine/snapshot-adapter.js) so Universe
+  // can render them, but they are not part of the flagship V1-A narrative
+  // and must not affect its Timeline reveal gating (docs/TIMELINE_ENGINE.md:
+  // "reveal depth in the same investigation rather than becoming a generic
+  // activity feed") - excluded here by provenance.
+  const narrativeObjects = operationalObjects.filter((o) => o.provenance !== 'nr04_canonical_snapshot');
+  const sortedNarrative = sortByDateAsc(narrativeObjects, (o) => o.occurred_at);
   const narrativeRevealCount =
     index <= 0 ? 0 : index === 1 ? Math.floor(sortedNarrative.length / 3) : sortedNarrative.length;
   const visibleNarrativeObjectIds = sortedNarrative.slice(0, narrativeRevealCount).map((o) => o.id);
