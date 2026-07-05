@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "snapshot_bound",
+    "note": "Direct Supabase mirror of the sites table (1 row); unchanged by the V1-UX-1a NR04 binding pass, already matches production's sites snapshot section. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "source_table": "sites",
   "records": [
     {

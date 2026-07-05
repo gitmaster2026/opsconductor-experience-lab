@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "demo_derived_detail",
+    "note": "Derived from demand-signals.json's pre-NR04 planner-narrative customer/demand_signal_id pairings (related_demand_signal_id values resolve into demand-signals.json, not the NR04 canonical snapshot). Not a live NR04 export. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "derived_from": "operational_domain_objects.customer and demand_signals.customer",
   "records": [
     {"customer":"Atlas Data Infrastructure","source":"demand_signals","related_demand_signal_id":"1052ae04-053c-4652-8cf1-7f4610a0128f","primary_item_number":"ITEM-NR-LCM-5000"},

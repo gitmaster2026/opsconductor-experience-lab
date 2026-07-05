@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "unsupported_placeholder",
+    "note": "Dead file: not loaded by engine/data-repository.js (see its FILES map comment), superseded entirely by the nr04-golden-operational-universe.snapshot.json / nr04-canonical-universe.json pipeline (Sprint V1-UX-1a). Uses a non-UUID id scheme incompatible with the rest of the fixture set. Retained only for historical reference; see docs/living-factory/generated/Snapshot_Mapping_Manifest.md (main repo) 'No production equivalent' finding and docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "version": "2026-07-02-static-mirror-v1",
   "source": {
     "repo": "gitmaster2026/OpsConductor",

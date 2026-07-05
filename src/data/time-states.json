@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "unsupported_placeholder",
+    "note": "Stale/superseded: not loaded by engine/data-repository.js (deliberately excluded, see its FILES map comment and docs/V4_DATA_RECONCILIATION.md item 1). time-slices.json replaced this file as the timeline/depth-progression source because time-states.json used illustrative ids that cannot join to the real fixture set. Retained only for historical reference."
+  },
   "version": "2026-07-02-time-states-v1",
   "purpose": "Static time slices used by the Experience Lab timeline slider. Values are UX sample states derived from existing risk/shortage/recommendation/evidence concepts.",
   "timeSlices": [

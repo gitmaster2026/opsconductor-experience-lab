@@ -60,6 +60,86 @@ This is not a gap this sprint glosses over - it is the reason the governed/
 computed sections described below are shipped empty rather than filled with
 invented numbers.
 
+### Update (Sprint V1-UX-1A Cleanup): a real live run has since been observed, but is still not a consumable artifact
+
+While re-verifying the above during this cleanup sprint, a real live
+execution of the exact pipeline this document describes was found:
+GitHub Actions run **"Load Golden Demo" #25** (run id `28723809002`, job id
+`85177518702`) in `gitmaster2026/OpsConductor` completed successfully at
+**2026-07-05T00:02-00:03Z**, four minutes after PR #147 merged (head commit
+`50eb502`, the same commit this Lab's `nr04-golden-operational-universe.
+snapshot.json` was mechanically transcribed from). Its steps ran, in order,
+`scenario run NR04-golden-operational-universe`, `export snapshot`, and
+`export snapshot --json` against a live Supabase database, and every step
+reported success.
+
+**This is not a "no live export exists" situation anymore - a real one
+happened.** But it is also not yet a *consumable* artifact for three
+reasons, so this document's governed sections remain honestly empty rather
+than backfilled from it:
+
+1. The workflow has no `actions/upload-artifact` step, so the real export
+   JSON was never persisted anywhere - it only ever existed as stdout in a
+   CI job log.
+2. GitHub's job-log API truncates to a tail window; only the last ~211KB of
+   this run's log could be recovered, which happens to start partway
+   through the `domainObjects` array. The `organization`, `sites`, `items`,
+   `commitments`, `demandSignals`, `demandSignalValues`,
+   `inventoryPositions`, and the earlier ~40 of 64 `domainObjects` rows are
+   not recoverable from this log. Fabricating them to complete the picture
+   would violate this project's "do not fabricate" rule as surely as
+   inventing numbers from nothing would.
+3. CI job logs are not "in either repository" per this sprint's brief - they
+   are ephemeral platform history, not a committed artifact.
+
+What *was* recoverable from the log tail, and is real, governed, live
+production output (not projected, not fabricated) - recorded here as
+evidence for whoever does the follow-on capture, not merged into any Lab
+fixture this pass:
+
+- `demandRevenueAtRisk` (4 rows, all `value_source: erp_unit_price`):
+  Helios Hydrogen / ITEM-NR-CPP-1000 / PLT-200, short_qty 2,
+  revenue_at_risk $370,000; Catalyst Chemical / ITEM-NR-CPS-3000 / PLT-300,
+  short_qty 1, revenue_at_risk $265,000; Atlas Data Infrastructure /
+  ITEM-NR-LCM-5000 / PLT-300, short_qty 2, revenue_at_risk $250,000; Summit
+  Energy Systems / ITEM-NR-LCM-5000 / PLT-300, short_qty 1, revenue_at_risk
+  $125,000.
+- `executiveOperationalHealthSummary` (1 row): 8 total demand signals, 4
+  fully covered, 4 at risk, 21 required / 15 allocated / 6 short units,
+  71.43% coverage, 4 open shortage exceptions, 0 open recommendations
+  (all 4 already decided), 8 total work items.
+- `executiveRevenueSummary` (1 row): **total_revenue_at_risk = $1,010,000**
+  (not the curated `finance:REV-RISK-NR-GOU-001` object's hand-authored
+  $1,855,000, and not the V1-DATA-2A Coverage Report's $3.0-3.2M
+  *projection* - this is the real, governed number), across 4 impacted
+  customers / 3 impacted items / 2 impacted sites, 0 unvalued.
+- `plannerWorkQueue` (8 rows): the same 4 shortage exceptions above, plus 4
+  shortage recommendations with real decided statuses - **2 accepted, 2
+  rejected** (Helios/CPP-1000 accepted, Summit/LCM-5000 accepted,
+  Catalyst/CPS-3000 rejected, Atlas/LCM-5000 rejected).
+
+One nuance worth flagging plainly: the real governed run shows
+**Horizon LNG Partners' CPP-1000 demand line (`DMD-NR-GOU-CPP-HORIZON-01`)
+as fully covered, not at risk** - it does not appear in the real
+`demandRevenueAtRisk` rows above. The at-risk CPP-1000 demand in the real
+data belongs to Helios Hydrogen instead. This Lab's curated flagship
+narrative (`RB-CPP-HORIZON`, `docs/PANEL_SPECIFICATIONS.md` et al.) remains
+exactly what it has always been documented as - `demo_derived_detail`, not
+a claim about what the real NR04 governance engine would say about that
+same customer/item pairing. This is now a confirmed, not merely suspected,
+divergence.
+
+**Recommended next-sprint action** (not done this pass, per this cleanup's
+own scope boundary - see this file's "What a future pass should do when a
+real export lands"): add an `actions/upload-artifact` step to
+`.github/workflows/load-golden-demo.yml` (or equivalent), re-dispatch it,
+download the complete persisted JSON, and only then replace
+`nr04-golden-operational-universe.snapshot.json`'s governed sections and
+retire this document's "Honest status" framing. Until a complete artifact
+is captured this way, treating the partial log-tail data above as
+authoritative for anything beyond citation would reintroduce exactly the
+"UI-only operational truth" risk this whole pipeline exists to prevent.
+
 ## What this sprint built
 
 ### 1. `scripts/build-nr04-snapshot.mjs` and its two output artifacts
@@ -213,3 +293,56 @@ sprint did not touch.
    `time-slices.json`) stays Lab-authored or moves to a governed
    `recommendation-context`/`briefing` domain-object-backed model - NR04
    already has both object types, a first step in that direction.
+
+## File classification (Sprint V1-UX-1A Cleanup, Task 1)
+
+Every JSON fixture directly under `src/data/`, plus `src/data/supabase/`
+(one directory, classified collectively via its own `manifest.json`), now
+declares a top-level `snapshot_binding.status` field so no file is silently
+unclassified. `test/data-classification.test.mjs` enforces this
+mechanically (every file must declare a status from the closed vocabulary
+below, with a non-empty explanatory note). Vocabulary:
+
+- **`snapshot_bound`** - a direct, unchanged Supabase mirror; already
+  matches what a real production export would return.
+- **`mechanically_transcribed_canonical_nr04`** - transcribed from
+  production's real NR04 scenario TypeScript source (not a live `ops export
+  snapshot` run - see "Honest status" above), by `scripts/build-nr04-
+  snapshot.mjs`.
+- **`demo_derived_detail`** - pre-NR04 planner-narrative or curated V1-A
+  flagship-narrative content; real shape, not NR04-sourced values.
+- **`compatibility_adapter`** - a hand-authored reference/rollup file that
+  bridges old and new data shapes; still read at runtime.
+- **`unsupported_placeholder`** - dead, superseded, or otherwise not loaded
+  by `engine/data-repository.js` today; retained only for historical
+  reference.
+
+| File | Classification |
+|---|---|
+| `organization.json` | `snapshot_bound` |
+| `sites.json` | `snapshot_bound` |
+| `items.json` | `snapshot_bound` |
+| `customers.json` | `demo_derived_detail` |
+| `commitments.json` | `demo_derived_detail` |
+| `demand-signals.json` | `demo_derived_detail` |
+| `demand-values.json` | `demo_derived_detail` |
+| `inventory.json` | `demo_derived_detail` |
+| `allocations.json` | `unsupported_placeholder` |
+| `shortage-exceptions.json` | `demo_derived_detail` |
+| `recommendations.json` | `demo_derived_detail` |
+| `evidence.json` | `demo_derived_detail` |
+| `operational-objects.json` | `demo_derived_detail` (curated 9-row narrative; 64 real NR04 objects merged in at load time) |
+| `relationships.json` | `demo_derived_detail` (curated 13-row narrative; 65 real NR04 links merged in at load time) |
+| `operational-passports.json` | `demo_derived_detail` |
+| `risk-board.json` | `demo_derived_detail` |
+| `dashboard-summary.json` | `demo_derived_detail` |
+| `time-slices.json` | `demo_derived_detail` |
+| `timeline-events.json` | `demo_derived_detail` |
+| `data-manifest.json` | `compatibility_adapter` |
+| `schema-authority.json` | `compatibility_adapter` |
+| `nr04-golden-operational-universe.snapshot.json` | `mechanically_transcribed_canonical_nr04` |
+| `nr04-canonical-universe.json` | `mechanically_transcribed_canonical_nr04` |
+| `northriver-supabase-mirror.json` | `unsupported_placeholder` (dead; not loaded) |
+| `operational-graph-snapshot.json` | `unsupported_placeholder` (loaded but never read at runtime - see engine/derive.js's hardcoded PLT-200/PLT-300 labels) |
+| `time-states.json` | `unsupported_placeholder` (superseded by `time-slices.json`; not loaded) |
+| `src/data/supabase/*.json` (9 files + `manifest.json`) | `unsupported_placeholder` (entire directory; not loaded by `engine/data-repository.js` - an earlier, abandoned per-table-file attempt at this same snapshot mechanism) |

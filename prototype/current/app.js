@@ -131,12 +131,17 @@ async function main() {
     initialTimeSliceId: firstSliceId,
     resolveCommitmentForObject: (id) => derive.resolveCommitmentForObject(snapshot, id),
     initialZoomLevel: 0,
-    // Land on Risk Board (commitment-level lens), not Universe - Universe/
-    // Spider/Text/Workbench/Conductor Studio are investigation lenses the
-    // user jumps into deliberately (docs/UX_ARCHITECTURE.md's "Universe/
-    // Risk Board ... not pages" plus the NorthRiver V1 traversal chain's
-    // Executive Signal -> Commitment ordering), not the default landing view.
-    initialLens: 'risk_board',
+    // Land on Universe (Sprint V1-UX-1A Cleanup, Task 6 UI drift audit):
+    // the current product direction is "Operational Universe first" /
+    // "operational storytelling, not dashboard-first navigation" - landing
+    // on Risk Board with Dashboard as the initial left panel (this app's
+    // prior default) put a commitment-level lens and an executive KPI panel
+    // in front of the user before the operational graph itself. Dashboard
+    // remains available as a left-side executive context panel per
+    // README.md's "Product model" (initialLeftPanel below), and Risk Board/
+    // Text/Workbench/Conductor Studio remain lenses the user switches into
+    // deliberately - only which lens is selected by default changed here.
+    initialLens: 'universe',
     initialLeftPanel: 'dashboard',
   });
 

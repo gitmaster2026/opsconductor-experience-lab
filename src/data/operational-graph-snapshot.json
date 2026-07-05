@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "unsupported_placeholder",
+    "note": "Loaded by engine/data-repository.js but never read at runtime (engine/derive.js hardcodes the PLT-200/PLT-300 plant labels directly per docs/V4_DATA_RECONCILIATION.md item 3, rather than reading this file). Illustrative/historical source for those labels and for the ORG-NR/PLT-200/PLT-300 anchor concept; SUP-APEX and PO-4611 in this file have no backing data anywhere else in src/data and are explicitly excluded from the real merged graph. Not a live snapshot artifact. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "version": "2026-07-02-graph-snapshot-v1",
   "nodes": [
     { "id": "ORG-NR", "type": "Organization", "label": "NorthRiver Industrial Systems", "sourceRef": "organization.org_id" },

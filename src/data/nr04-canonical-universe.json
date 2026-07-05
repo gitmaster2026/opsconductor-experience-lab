@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "mechanically_transcribed_canonical_nr04",
+    "note": "Mechanical transcription of production's real NR04 domain objects/links, reshaped for this Lab's operational-objects.json / relationships.json record shape and merged in at load time by engine/snapshot-adapter.js. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "provenance": "nr04_canonical_snapshot",
   "source_note": "Real NR04 Golden Operational Universe domain objects/links, mechanically transcribed from production repo gitmaster2026/OpsConductor scenario source (NR01-northriver-foundation.ts + NR04-golden-operational-universe.ts, commit 50eb502). Namespaced with an \"nr04:\" id prefix so these merge into this Lab's existing curated V1-A narrative fixtures (operational-objects.json, relationships.json) with zero id collisions. See docs/SNAPSHOT_CONSUMPTION_NOTES.md.",
   "objects": [
