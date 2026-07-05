@@ -50,7 +50,7 @@ function pick(row, key) {
 
 function requireString(row, key, context) {
   const value = pick(row, key);
-  if (typeof value !== 'string' || value.trim() === '') {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`${context}: missing required string field ${key}`);
   }
   return value;
@@ -126,9 +126,47 @@ function canonicalObjectFromDomainObject(row) {
   };
 }
 
-function canonicalLinkFromDomainLink(row, index) {
-  const fromKey = requireString(row, 'fromKey', 'domainObjectLinks row');
-  const toKey = requireString(row, 'toKey', 'domainObjectLinks row');
+function buildObjectKeyByDatabaseId(domainObjects) {
+  const objectKeyByDatabaseId = new Map();
+  for (const row of domainObjects) {
+    const databaseId = requireString(row, 'id', 'domainObjects row');
+    const objectKey = requireString(row, 'objectKey', 'domainObjects row');
+    objectKeyByDatabaseId.set(databaseId, objectKey);
+  }
+  return objectKeyByDatabaseId;
+}
+
+function resolveLinkObjectKey(row, keyField, databaseIdField, objectKeyByDatabaseId, context) {
+  const directKey = pick(row, keyField);
+  if (typeof directKey === 'string' && directKey.trim().length > 0) {
+    return directKey;
+  }
+
+  const databaseId = pick(row, databaseIdField);
+  if (typeof databaseId === 'string' && databaseId.trim().length > 0) {
+    const objectKey = objectKeyByDatabaseId.get(databaseId);
+    if (objectKey) return objectKey;
+  }
+
+  throw new Error(`${context}: missing resolvable ${keyField}/${databaseIdField}`);
+}
+
+function canonicalLinkFromDomainLink(row, index, objectKeyByDatabaseId) {
+  const fromKey = resolveLinkObjectKey(
+    row,
+    'fromKey',
+    'fromDomainObjectId',
+    objectKeyByDatabaseId,
+    `domainObjectLinks row ${index + 1}`
+  );
+  const toKey = resolveLinkObjectKey(
+    row,
+    'toKey',
+    'toDomainObjectId',
+    objectKeyByDatabaseId,
+    `domainObjectLinks row ${index + 1}`
+  );
+
   return {
     id: `nr04:link-${index + 1}`,
     provenance: PROVENANCE,
@@ -141,8 +179,11 @@ function canonicalLinkFromDomainLink(row, index) {
 export function buildCanonicalUniverseFromSnapshot(snapshot) {
   validateOperationalSnapshot(snapshot);
 
+  const objectKeyByDatabaseId = buildObjectKeyByDatabaseId(snapshot.sections.domainObjects);
   const objects = snapshot.sections.domainObjects.map(canonicalObjectFromDomainObject);
-  const links = snapshot.sections.domainObjectLinks.map(canonicalLinkFromDomainLink);
+  const links = snapshot.sections.domainObjectLinks.map((row, index) =>
+    canonicalLinkFromDomainLink(row, index, objectKeyByDatabaseId)
+  );
 
   const objectIds = new Set();
   for (const object of objects) {
@@ -161,7 +202,7 @@ export function buildCanonicalUniverseFromSnapshot(snapshot) {
       note: 'Derived from the retained nr04-operational-snapshot GitHub Actions artifact. Domain objects and links are reshaped for this Lab and merged at load time by engine/snapshot-adapter.js.',
     },
     provenance: PROVENANCE,
-    source_note: `Real NR04 Golden Operational Universe domain objects/links imported from production snapshot contentHash=${snapshot.envelope.contentHash}. Namespaced with an \"nr04:\" id prefix so these merge into this Lab's existing curated V1-A narrative fixtures with zero id collisions.`,
+    source_note: `Real NR04 Golden Operational Universe domain objects/links imported from production snapshot contentHash=${snapshot.envelope.contentHash}. Namespaced with an "nr04:" id prefix so these merge into this Lab's existing curated V1-A narrative fixtures with zero id collisions.`,
     envelope: {
       schemaVersion: snapshot.envelope.schemaVersion,
       generatedAt: snapshot.envelope.generatedAt,
