@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "mechanically_transcribed_canonical_nr04",
+    "note": "Mechanical transcription of production's own NR04 scenario TypeScript source (not a live \"ops export snapshot\" run - see envelope.generator). Input sections (organization/sites/items/commitments/demandSignals/demandSignalValues/inventoryPositions/domainObjects/domainObjectLinks) are real. Governed/computed sections are empty pending a real export - see docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "envelope": {
     "schemaVersion": "1.0",
     "generatedAt": "2026-07-05T00:00:00.000Z",

@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "snapshot_bound",
+    "note": "Direct Supabase mirror of the item_master table (8 rows); unchanged by the V1-UX-1a NR04 binding pass, already matches production's items snapshot section. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "source_table": "item_master",
   "records": [
     {"id":"94cadabb-e129-47e4-8f6c-25e85818d8e3","org_id":"063e32af-9c3a-41c2-86e1-ac15da4a865b","canonical_item_number":"ITEM-NR-CPP-1000","description":"CPP-1000 Cryogenic pump package","category":"CPP","uom":"EA","active_flag":true},

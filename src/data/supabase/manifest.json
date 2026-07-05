@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "unsupported_placeholder",
+    "note": "This entire src/data/supabase/ directory (including this manifest and its 9 sibling files) is not loaded by engine/data-repository.js - confirmed by direct code read, its FILES map only fetches from src/data/*.json, never src/data/supabase/*. An earlier, abandoned per-table-file attempt at the same snapshot mechanism this Lab now gets from nr04-golden-operational-universe.snapshot.json / nr04-canonical-universe.json (Sprint V1-UX-1a). Superseded entirely; retained only for historical reference. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "snapshot_version": "2026-07-02-supabase-checkpoint-1",
   "project_id": "acdmxbjrbhnxztfpkjtt",
   "org_id": "063e32af-9c3a-41c2-86e1-ac15da4a865b",

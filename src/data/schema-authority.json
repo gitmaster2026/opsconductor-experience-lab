@@ -1,4 +1,8 @@
 {
+  "snapshot_binding": {
+    "status": "compatibility_adapter",
+    "note": "Actively used by engine/derive.js (canonicalDemoFacts.enterprise) to supply the Universe organization node's display label. A hand-authored schema/allowed-field reference, not a production table export; kept because it constrains which object types/fields the Lab may render. See docs/SNAPSHOT_CONSUMPTION_NOTES.md."
+  },
   "version": "2026-07-02-experience-lab-init",
   "purpose": "Static schema authority mirror for Experience Lab prototypes. Fake values are allowed; fake backend fields are not.",
   "productionSources": [

@@ -595,7 +595,19 @@ const envelope = {
     'docs/SNAPSHOT_CONSUMPTION_NOTES.md. ' + GOVERNED_SECTIONS_GAP_NOTE,
 };
 
-const snapshotDocument = { envelope, sections };
+const snapshotDocument = {
+  snapshot_binding: {
+    status: 'mechanically_transcribed_canonical_nr04',
+    note:
+      'Mechanical transcription of production\'s own NR04 scenario TypeScript source (not a live ' +
+      '"ops export snapshot" run - see envelope.generator). Input sections (organization/sites/items/' +
+      'commitments/demandSignals/demandSignalValues/inventoryPositions/domainObjects/domainObjectLinks) ' +
+      'are real. Governed/computed sections are empty pending a real export - see ' +
+      'docs/SNAPSHOT_CONSUMPTION_NOTES.md.',
+  },
+  envelope,
+  sections,
+};
 
 fs.writeFileSync(
   path.join(DATA_DIR, 'nr04-golden-operational-universe.snapshot.json'),
@@ -651,6 +663,13 @@ const canonicalLinks = domainObjectLinks.map((row) => ({
 for (const link of canonicalLinks) delete link.source_system;
 
 const canonicalUniverseDocument = {
+  snapshot_binding: {
+    status: 'mechanically_transcribed_canonical_nr04',
+    note:
+      'Mechanical transcription of production\'s real NR04 domain objects/links, reshaped for this ' +
+      'Lab\'s operational-objects.json / relationships.json record shape and merged in at load time by ' +
+      'engine/snapshot-adapter.js. See docs/SNAPSHOT_CONSUMPTION_NOTES.md.',
+  },
   provenance: 'nr04_canonical_snapshot',
   source_note:
     'Real NR04 Golden Operational Universe domain objects/links, mechanically transcribed from ' +

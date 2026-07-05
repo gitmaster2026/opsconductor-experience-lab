@@ -65,6 +65,26 @@ report" table for the full list - summarized here for completeness:
 | Revision HISTORY (multiple ECO revisions over time) vs. the single before/after `current_revision`/`new_revision` pair actually shown | **missing production capability** | No versioned revision-history export exists in the NR04 scenario source; only one snapshot per object. Timeline-aware revision/effectivity context (Task 6's "where supported") is therefore not supportable for ECOs beyond this static pair today. |
 | Work Order routing operations / hold reasons; Logistics carrier milestones / delay events (the sprint brief's fuller category descriptions) | **missing production capability** | The real NR04 `detail` column per anchor is flatter than the brief's illustrative category list (see the manifest's "why these 6 objects" section) - this pass surfaces exactly what's real, not an expanded/invented version |
 
+## Sprint V1-UX-1A Cleanup findings
+
+A synchronization-cleanup audit (not a new feature sprint) re-checked this
+app against the current product direction ("Operational Universe first",
+"operational storytelling, not dashboard-first navigation") and found one
+real drift, now fixed:
+
+| Finding | Classification | Resolution |
+|---|---|---|
+| `app.js` landed on the Risk Board lens (with Dashboard as the initial left panel) by default, not Universe | UI drift (fixed) | `initState()`'s `initialLens` changed from `'risk_board'` to `'universe'`; Dashboard remains available as the left-side executive context panel per README.md's Product model, unchanged. Verified via a headless-Chromium load: the app now renders the Universe canvas with the Universe tab active on first paint, zero console errors. |
+
+Every other product-direction item audited this pass (Probe as the
+investigation action, Evidence as the factual layer, Passport as
+selected-object detail, Commitment Health Radar as the commitment-health
+view, Focus Mode's logo-inspired transition, timeline-centric
+investigation, Source Records citing external tables/ids rather than
+duplicating documents) was already implemented by the V1-UX-1a/1b sprints
+and found unchanged/compliant - see docs/SNAPSHOT_CONSUMPTION_NOTES.md and
+docs/INTERACTION_MODEL_NOTES.md for where each was built.
+
 ## Remaining UX Backlog
 
 In priority order, none blocking this phase's PR:

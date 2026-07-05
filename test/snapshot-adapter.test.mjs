@@ -153,3 +153,27 @@ test('nr04-canonical-universe.json: does not collide with any curated operationa
   for (const obj of canonical.objects) assert.ok(!curatedIds.has(obj.id));
   for (const link of canonical.links) assert.ok(!curatedIds.has(link.id));
 });
+
+test('nr04-canonical-universe.json: no duplicate object ids and no duplicate link ids within the fixture itself', () => {
+  const canonical = loadJson('nr04-canonical-universe.json');
+  const objectIds = canonical.objects.map((o) => o.id);
+  const linkIds = canonical.links.map((l) => l.id);
+  assert.equal(new Set(objectIds).size, objectIds.length, 'every nr04 object id must be unique');
+  assert.equal(new Set(linkIds).size, linkIds.length, 'every nr04 link id must be unique');
+});
+
+test('mergeCanonicalObjects/mergeCanonicalLinks: merging the real fixture twice would be caller error, not silently deduplicated - guards against a future double-load regression', () => {
+  // engine/data-repository.js's loadAll() caches its result specifically so
+  // mergeCanonicalObjects/mergeCanonicalLinks run exactly once per page
+  // load (see its module header). This test documents and locks in the
+  // observable consequence if that caching were ever accidentally removed:
+  // calling merge twice on the same inputs doubles the canonical record
+  // count, it does not dedupe. Anyone changing data-repository.js's caching
+  // must keep this invariant in mind - the safety net is the cache, not the
+  // merge function.
+  const canonical = loadJson('nr04-canonical-universe.json');
+  const operationalObjects = loadJson('operational-objects.json');
+  const oncePass = mergeCanonicalObjects(operationalObjects, canonical);
+  const twicePass = mergeCanonicalObjects(oncePass, canonical);
+  assert.equal(twicePass.records.length, oncePass.records.length + canonical.objects.length);
+});

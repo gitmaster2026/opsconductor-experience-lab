@@ -155,3 +155,19 @@ sprint's brief still requires the repo owner's own pass:
 5. The 300ms Hover Preview grace period (this session's bug fix) feels
    right in practice - long enough to reach the Probe button, short enough
    to not feel sticky/laggy when genuinely moving away.
+
+## Sprint V1-UX-1A Cleanup re-validation
+
+A synchronization-cleanup pass (data-source classification, snapshot-status
+re-verification, UI drift audit - see docs/SNAPSHOT_CONSUMPTION_NOTES.md and
+docs/UNSUPPORTED_UI_FIELD_REPORT.md for full detail) re-ran `npm run build`
+(syntax check + lint + `verify-field-map` + full `node --test` suite):
+**366/366 tests pass** (359 pre-existing + 7 new: duplicate-id guards on
+`nr04-canonical-universe.json` and the new `test/data-classification.test.mjs`
+file-classification suite). A headless-Chromium smoke test confirmed the
+one behavioral change this pass made (the app's default lens, `'risk_board'`
+-> `'universe'`) actually renders: the app loads with the Universe canvas
+visible and the Universe tab marked active on first paint, Dashboard still
+present as the left panel, zero console errors. No other UI/data-binding
+regressions were found; every other Golden Story step and V1-UX-1b surface
+this document already validated remains unchanged by this pass.
