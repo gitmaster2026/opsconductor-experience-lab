@@ -58,6 +58,18 @@
  *   lenses/conductor-studio.js's Recommendation Review / Approval Queue
  *   panels (the latter is a client-side filter of these same rows, not a
  *   separate bundle field - see that derive.js function's own header).
+ * @property {Object|null} hoverPreview - V1-UX-1b Task 2 (Hover Passport
+ *   Preview): engine/derive.js's buildHoverPreviewViewModel() output for
+ *   state.hoveredObjectId at the current time slice, consumed by
+ *   panels/hover-preview.js. Null when nothing is hovered, or the hovered
+ *   id does not resolve to a graph node. Deliberately independent of
+ *   `passport` above (which tracks selectedObjectId, not hoveredObjectId) -
+ *   "Hover = preview. Select = focus." (docs/PANEL_SPECIFICATIONS.md).
+ * @property {Object|null} representativeDrilldown - V1-UX-1b Task 7:
+ *   engine/derive.js's buildRepresentativeDrilldownViewModel() output for
+ *   the current selectedObjectId, consumed by panels/passport.js's
+ *   "Demo-derived Detail" section. Null for every object outside the small
+ *   explicit anchor allowlist (see docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md).
  */
 
 /**
@@ -159,6 +171,12 @@ export function initTimeline({ store, getSnapshot, derive }) {
       sliceIndex
     );
     const recommendationReview = derive.buildRecommendationReviewViewModel(snapshot, sliceIndex, scope);
+    const hoverPreview = state.hoveredObjectId
+      ? derive.buildHoverPreviewViewModel(snapshot, state.hoveredObjectId, sliceIndex)
+      : null;
+    const representativeDrilldown = state.selectedObjectId
+      ? derive.buildRepresentativeDrilldownViewModel(snapshot, state.selectedObjectId)
+      : null;
 
     /** @type {DerivedBundle} */
     const bundle = {
@@ -178,6 +196,8 @@ export function initTimeline({ store, getSnapshot, derive }) {
       spider,
       collectionPassport,
       recommendationReview,
+      hoverPreview,
+      representativeDrilldown,
     };
 
     lastBundle = bundle;

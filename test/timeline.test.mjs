@@ -249,21 +249,21 @@ test('initTimeline: dispose() unsubscribes from the store so no further recomput
 // V5 Phase 4: bundle.hierarchyPath / bundle.spider / bundle.collectionPassport
 // ---------------------------------------------------------------------------
 
-test('initTimeline: bundle includes hierarchyPath (empty), spider (org-level), and collectionPassport (null) before any selection/scope', () => {
+test('initTimeline: bundle includes hierarchyPath (empty), spider (portfolio-level Commitment Health Radar), and collectionPassport (null) before any selection/scope', () => {
   const store = freshStore();
   const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
   const bundle = timeline.getDerivedBundle();
 
   assert.deepEqual(bundle.hierarchyPath, []);
   assert.ok(bundle.spider);
-  assert.equal(bundle.spider.isOrgLevel, true);
-  assert.equal(bundle.spider.spiderAxisScores.length, 7);
+  assert.equal(bundle.spider.isPortfolioLevel, true);
+  assert.equal(bundle.spider.spiderAxisScores.length, 9);
   assert.equal(bundle.collectionPassport, null);
 
   timeline.dispose();
 });
 
-test('initTimeline: selecting an object populates hierarchyPath (ending at that object) and switches spider off org-level', () => {
+test('initTimeline: selecting an object populates hierarchyPath (ending at that object) and switches the Commitment Health Radar off portfolio-level', () => {
   const store = freshStore();
   const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
 
@@ -275,7 +275,7 @@ test('initTimeline: selecting an object populates hierarchyPath (ending at that 
   assert.equal(last.id, 'e6bc8583-d191-417b-9284-01303238ddfc');
   assert.equal(last.isSelected, true);
 
-  assert.equal(bundle.spider.isOrgLevel, false);
+  assert.equal(bundle.spider.isPortfolioLevel, false);
   assert.equal(bundle.spider.subjectId, 'e6bc8583-d191-417b-9284-01303238ddfc');
 
   timeline.dispose();

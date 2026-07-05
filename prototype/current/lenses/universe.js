@@ -57,6 +57,29 @@ import { computeLabelPlan, shortCodeForNode } from '../engine/labels.js';
 // Visual constants
 // ---------------------------------------------------------------------------
 
+/**
+ * V1-UX-1b Task 4: relationship_type visual category -> CSS custom property
+ * name (styles.css :root --rel-* tokens). Written as a switch (not an
+ * object-literal map) purely to mirror this file's own RISK_COLOR_VAR
+ * pattern isn't required here (edge.visualClass values are already computed
+ * by engine/derive.js's relationshipVisualClass(), not scanned by
+ * scripts/verify-field-map.mjs), but kept as a plain object lookup for
+ * readability since the possible values are a small closed set produced
+ * entirely by that one derive.js function.
+ */
+const RELATIONSHIP_COLOR_VAR = Object.freeze({
+  causes: '--rel-causes',
+  depends_on: '--rel-depends_on',
+  affects: '--rel-affects',
+  evidences: '--rel-evidences',
+  resolves: '--rel-resolves',
+  blocks: '--rel-blocks',
+  ships: '--rel-ships',
+  changes: '--rel-changes',
+  escalates: '--rel-escalates',
+  structural: '--rel-structural',
+});
+
 /** Risk-state -> CSS custom property name (see styles.css :root tokens). */
 const RISK_COLOR_VAR = Object.freeze({
   critical: '--red',
@@ -137,6 +160,28 @@ const SCOPE_RECEDE_SCALE = 0.82;
 
 const MIN_USER_SCALE = 0.35;
 const MAX_USER_SCALE = 3.5;
+
+/**
+ * V1-UX-1b Task 5: "Node size = materiality/operational impact... enforce
+ * min/max node sizes so outliers don't dominate the graph." node.materiality
+ * (engine/derive.js's applyNodeMateriality(), normalized [0,1] within each
+ * node type's own real magnitude field) is mapped onto this bounded
+ * multiplier range and applied on TOP of the existing per-type
+ * BASE_NODE_RADIUS band + emphasis scaling below, rather than replacing
+ * them - materiality modulates size WITHIN a type's own visual tier, it
+ * never lets a highly-material evidence node out-grow a commitment. Chosen
+ * so a neutral (no real magnitude signal, materiality=0.5) node renders at
+ * exactly its unmodified BASE_NODE_RADIUS, per applyNodeMateriality()'s own
+ * "no materiality signal must render as size-neutral" contract.
+ */
+const MATERIALITY_MIN_SCALE = 0.75;
+const MATERIALITY_MAX_SCALE = 1.25;
+
+function materialityScale(node) {
+  const materiality = typeof node.materiality === 'number' ? node.materiality : 0.5;
+  const clamped = Math.max(0, Math.min(1, materiality));
+  return MATERIALITY_MIN_SCALE + clamped * (MATERIALITY_MAX_SCALE - MATERIALITY_MIN_SCALE);
+}
 
 // --- V5 Phase 2 additions ----------------------------------------------------
 
@@ -1155,7 +1200,8 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // Emphasized nodes (per depthFilter) render slightly larger, giving
     // the working depth's main objects visual weight without a jarring
     // size jump between depths.
-    return depth.emphasized ? base : base * 0.72;
+    const emphasisScale = depth.emphasized ? 1 : 0.72;
+    return base * emphasisScale * materialityScale(node);
   }
 
   function hitTestAt(screenX, screenY) {
@@ -1473,8 +1519,18 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
         ctx.lineWidth = 2;
         ctx.globalAlpha = clamp(edgeOpacity, 0.5, 1);
       } else {
-        ctx.setLineDash([]);
-        ctx.strokeStyle = resolveCssVar(canvasEl, '--edge-color', 'rgba(150,180,210,0.35)');
+        // V1-UX-1b Task 4: relationship types are visually distinguishable
+        // by color (causes/depends_on/affects/evidences/resolves/blocks/
+        // ships/changes/escalates - see RELATIONSHIP_COLOR_VAR above); a
+        // 'blocks' edge (gates/unblocks - a hard dependency gate) also gets
+        // a short dash, since "blocked" reads naturally as an interrupted
+        // line rather than a continuous one. 'structural' (graph-
+        // scaffolding joins) keeps the original plain --edge-color exactly,
+        // so the merged graph's org/commitment/item composition edges don't
+        // visually compete with the 9 semantic categories.
+        const colorVar = RELATIONSHIP_COLOR_VAR[edge.visualClass] ?? RELATIONSHIP_COLOR_VAR.structural;
+        ctx.setLineDash(edge.visualClass === 'blocks' ? [6, 5] : []);
+        ctx.strokeStyle = resolveCssVar(canvasEl, colorVar, 'rgba(150,180,210,0.35)');
         ctx.lineWidth = 1;
         ctx.globalAlpha = edgeOpacity;
       }

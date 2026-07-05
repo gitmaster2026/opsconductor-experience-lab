@@ -230,6 +230,165 @@ const PLANT_DISPLAY_LABELS = Object.freeze({
 });
 
 /**
+ * V1-UX-1b Task 4/5: fold a raw `relationship_type` value (every one of
+ * these strings is a real value already produced by relationships.json,
+ * nr04-canonical-universe.json's links, or buildUniverseGraph()'s own
+ * synthesized structural edges - see this function's inline citations) into
+ * one of the 9 semantic categories the sprint brief names ("causes, depends
+ * on, affects, evidences, resolves, blocks, ships, changes, escalates"), so
+ * Universe can render relationship types as visually distinguishable
+ * (color/dash) rather than one undifferentiated edge style.
+ *
+ * Written as a switch (not an object-literal lookup map) for the same
+ * reason spiderRiskWeight() below is - scripts/verify-field-map.mjs's
+ * conservative scan should never mistake these relationship_type VALUES for
+ * output field KEYS.
+ *
+ * Structural/graph-scaffolding edges (organization/plant/commitment/item/
+ * demand-signal/risk-cell joins the app synthesizes to hold the merged
+ * graph together) are not forced into one of the 9 semantic buckets - they
+ * return 'structural', a distinct, honestly-named 10th category, rather
+ * than a misleading guess. This mapping is documented in full in
+ * docs/INTERACTION_MODEL_NOTES.md.
+ *
+ * @param {string} relationshipType
+ * @returns {'causes'|'depends_on'|'affects'|'evidences'|'resolves'|'blocks'|'ships'|'changes'|'escalates'|'structural'}
+ */
+function relationshipVisualClass(relationshipType) {
+  switch (relationshipType) {
+    // causes: one object's condition produced/produces another.
+    case 'produced_quality_event':
+    case 'supplier_quality_issue_for':
+      return 'causes';
+
+    // depends_on: one object requires/consumes/relies on another to proceed.
+    case 'requires_item':
+    case 'requires_product':
+    case 'driven_by_demand_signal':
+    case 'uses_work_center':
+    case 'uses_engineering_disposition':
+    case 'uses_evidence':
+    case 'constrains_product':
+    case 'issued_by':
+    case 'passport_cites_recommendation':
+      return 'depends_on';
+
+    // affects: a broader operational or commercial impact relationship.
+    case 'affects_product':
+    case 'relates_to_customer':
+    case 'quantifies_impact':
+    case 'highlights_commitment':
+    case 'strategic_supplier_of':
+    case 'strategic_customer_of':
+    case 'owned_by_customer':
+    case 'leads':
+      return 'affects';
+
+    // evidences: documents/supports/proves a fact about another object.
+    case 'supported_by_evidence':
+    case 'cites_source_record':
+    case 'provides_field_evidence_for':
+    case 'summarizes':
+    case 'passport_cites_evidence':
+      return 'evidences';
+
+    // resolves: a corrective/disposition action addressing another object.
+    case 'requires_corrective_action':
+    case 'dispositions':
+      return 'resolves';
+
+    // blocks: a hard gate/dependency that prevents progress until cleared.
+    case 'gates':
+    case 'unblocks':
+      return 'blocks';
+
+    // ships: logistics/delivery-protecting relationships.
+    case 'protects_delivery':
+      return 'ships';
+
+    // changes: a revision/succession relationship.
+    case 'belongs_to_family':
+    case 'precedes':
+      return 'changes';
+
+    // escalates: an urgency/severity hand-off to a higher-attention path.
+    case 'escalates_to':
+      return 'escalates';
+
+    // structural: graph-scaffolding joins (org/site/commitment/item/demand/
+    // risk-cell/recommendation composition) - real edges, just not one of
+    // the 9 named semantic categories above.
+    default:
+      return 'structural';
+  }
+}
+
+/**
+ * V1-UX-1b Task 5: the real, already-existing magnitude field a node's type
+ * carries (revenue at risk for a risk cell, quantity for a commitment/
+ * demand signal, allocated/on-hand quantity for allocation/inventory,
+ * impact_score - already a raw operational_domain_objects column - for
+ * every ECO/NCR/work-order/etc. narrative object). Returns null when a node
+ * type has no real magnitude field in this dataset, so it falls back to a
+ * neutral (not fabricated) materiality below.
+ *
+ * @param {Object} node
+ * @returns {number|null}
+ */
+function materialityBasisValue(node) {
+  switch (node.type) {
+    case 'commitment_risk_cell':
+      return typeof node.revenue_at_risk === 'number' ? node.revenue_at_risk : null;
+    case 'commitment':
+    case 'demand_signal':
+      return typeof node.quantity === 'number' ? node.quantity : null;
+    case 'allocation':
+      return typeof node.allocated_qty === 'number' ? node.allocated_qty : null;
+    case 'inventory':
+      return typeof node.quantity_on_hand === 'number' ? node.quantity_on_hand : null;
+    default:
+      return typeof node.impact_score === 'number' ? node.impact_score : null;
+  }
+}
+
+/**
+ * V1-UX-1b Task 5: annotate every node with a `materiality` value in [0,1] -
+ * "node size = materiality/operational impact," per the sprint brief, with
+ * enforced min/max (the [0,1] normalization itself IS the min/max
+ * enforcement; lenses/universe.js maps this to a bounded radius multiplier
+ * so no single outlier can dominate the graph). Normalized WITHIN each
+ * node type's own magnitude field (a $2M commitment vs. a $50k one; an
+ * impact_score of 90 vs. 20) rather than across incomparable units (dollars
+ * vs. an 0-100 score) - comparing magnitude only within a comparable cohort.
+ * Nodes whose type has no real magnitude field (materialityBasisValue()
+ * returns null for every member, e.g. organization/plant/customer/item/
+ * evidence anchors) get a neutral 0.5 - "no materiality signal" must render
+ * as size-neutral, never as an arbitrary extreme.
+ *
+ * @param {Map<string, Object>} nodesById
+ */
+function applyNodeMateriality(nodesById) {
+  const byType = new Map();
+  for (const node of nodesById.values()) {
+    const basis = materialityBasisValue(node);
+    if (basis === null) continue;
+    if (!byType.has(node.type)) byType.set(node.type, []);
+    byType.get(node.type).push({ node, basis });
+  }
+  for (const group of byType.values()) {
+    const values = group.map((g) => g.basis);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    for (const { node, basis } of group) {
+      node.materiality = max > min ? (basis - min) / (max - min) : 0.5;
+    }
+  }
+  for (const node of nodesById.values()) {
+    if (typeof node.materiality !== 'number') node.materiality = 0.5;
+  }
+}
+
+/**
  * Build the merged Universe graph: { nodes, edges }. Per
  * docs/V4_DATA_RECONCILIATION.md item 4 ("Universe graph composition"),
  * this merges four families of real+sanctioned data:
@@ -609,6 +768,27 @@ export function buildUniverseGraph(snapshot) {
       impact_score: obj.impact_score,
       urgency_score: obj.urgency_score,
       confidence_score: obj.confidence_score,
+      // V1-UX-1b Task 2 (Hover Passport Preview): real raw passthrough
+      // fields already present on nr04-canonical-universe.json's objects
+      // (owner_name/owner_role/business_impact_summary/next_action_summary
+      // - see NR04's own OPERATIONAL_SNAPSHOT_EXPORT_CONTRACT domainObjects
+      // shape) but never surfaced anywhere in this app until now. Undefined
+      // (not present) on the 9 pre-existing curated flagship records, which
+      // predate these columns - buildHoverPreviewViewModel() below treats
+      // that as an honest "not available" rather than fabricating a value.
+      owner_name: obj.owner_name ?? null,
+      owner_role: obj.owner_role ?? null,
+      business_impact_summary: obj.business_impact_summary ?? null,
+      next_action_summary: obj.next_action_summary ?? null,
+      // V1-UX-1b Task 7 (Representative demo-derived drilldowns): real raw
+      // per-object-type structured data nr04-canonical-universe.json's
+      // scenario source already carries (e.g. an ECO's current_revision/
+      // new_revision, an NCR's defect_code/lot_number/disposition). Only
+      // ever surfaced for the small, explicit allowlist of anchor object
+      // ids in REPRESENTATIVE_DRILLDOWN_CATEGORIES below - see
+      // buildRepresentativeDrilldownViewModel() and
+      // docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md.
+      detail: obj.detail ?? null,
       sourceTable: 'operational_domain_objects',
       sourceRecordId: obj.id,
       sourceIdentifier: obj.source_identifier,
@@ -729,6 +909,19 @@ export function buildUniverseGraph(snapshot) {
       }
     }
   }
+
+  // V1-UX-1b Task 4/5: annotate every edge with its relationship-type visual
+  // category and every node with its normalized materiality, once, after
+  // the full node/edge set is known (materiality's min/max normalization
+  // needs the whole population; visual class is a pure per-edge lookup but
+  // is likewise applied once here so every edge source above - synthesized
+  // structural edges, relationships.json chain edges, and passport-derived
+  // edges alike - is covered without repeating this line at every addEdge()
+  // call site).
+  for (const edge of edges) {
+    edge.visualClass = relationshipVisualClass(edge.relationship_type);
+  }
+  applyNodeMateriality(nodes);
 
   return {
     nodes: [...nodes.values()],
@@ -1627,6 +1820,179 @@ function buildFallbackOverview(node) {
 }
 
 // ---------------------------------------------------------------------------
+// buildHoverPreviewViewModel (V1-UX-1b Task 2: Hover Passport Preview)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the compact Hover Passport Preview view-model for any operational
+ * node/risk object, at a given time slice. Distinct from
+ * buildPassportViewModel()'s full 7-section biography (docs/
+ * PANEL_SPECIFICATIONS.md: "Hover must not open the full Passport. Hover =
+ * preview. Select = focus. Probe = investigate.") - this returns only the
+ * compact fields the sprint brief names: object identity/type/status/owner,
+ * operational impact, affected commitment, relationship counts, timeline
+ * position, source/evidence indicator, and recommended next action.
+ *
+ * Every field is either a raw passthrough (owner_name/owner_role/
+ * business_impact_summary/next_action_summary - real nr04-canonical-
+ * universe.json columns buildUniverseGraph() now carries onto the node, see
+ * that function's operational-objects loop) or a derived count/join already
+ * used elsewhere in this file (resolveCommitmentForObject(),
+ * resolveVisibilityForSlice()). Fields with no real value on a given node
+ * (e.g. the 9 pre-existing curated flagship records predate owner_name/
+ * business_impact_summary/next_action_summary) come back null - an honest
+ * "not available," never a fabricated placeholder.
+ *
+ * @param {any} snapshot
+ * @param {string} objectId
+ * @param {number} sliceIndex
+ * @returns {Object|null} null if objectId does not resolve to any node in
+ *   the merged Universe graph
+ */
+export function buildHoverPreviewViewModel(snapshot, objectId, sliceIndex) {
+  assertSnapshot(snapshot);
+  if (typeof objectId !== 'string' || objectId.length === 0) {
+    return null;
+  }
+
+  const graph = buildUniverseGraph(snapshot);
+  const node = graph.nodes.find((n) => n.id === objectId);
+  if (!node) {
+    return null;
+  }
+
+  const visibility = resolveVisibilityForSlice(snapshot, sliceIndex);
+  const timelineEvents = recordsOf(snapshot.timelineEvents).filter((ev) => ev.object_id === objectId);
+  const lastEvent =
+    timelineEvents.length > 0
+      ? [...timelineEvents].sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at))[0]
+      : null;
+
+  const relatedEdges = graph.edges.filter((e) => e.from_id === objectId || e.to_id === objectId);
+  const evidenceCount = relatedEdges.filter((e) => {
+    const otherId = e.from_id === objectId ? e.to_id : e.from_id;
+    return graph.nodes.find((n) => n.id === otherId)?.type === 'evidence';
+  }).length;
+
+  const commitmentId = resolveCommitmentForObject(snapshot, objectId);
+  const commitmentNode = commitmentId ? graph.nodes.find((n) => n.id === commitmentId) ?? null : null;
+
+  let visibleAtSlice = true;
+  if (node.type === 'commitment_risk_cell') {
+    visibleAtSlice = visibility.visibleRiskBoardIds.includes(node.id);
+  } else if (node.sourceTable === 'operational_domain_objects') {
+    visibleAtSlice = visibility.visibleNarrativeObjectIds.includes(node.id);
+  }
+
+  return {
+    objectId: node.id,
+    objectType: node.type,
+    label: node.label,
+    status: node.status ?? null,
+    currentRisk: node.risk_state ?? 'neutral',
+    owner_name: node.owner_name ?? null,
+    owner_role: node.owner_role ?? null,
+    business_impact_summary: node.business_impact_summary ?? null,
+    next_action_summary: node.next_action_summary ?? null,
+    commitmentId,
+    commitmentLabel: commitmentNode ? commitmentNode.label : null,
+    relationshipCount: relatedEdges.length,
+    evidenceCount,
+    timelinePositionLabel: lastEvent ? lastEvent.title ?? lastEvent.event_type : null,
+    timelinePositionAt: lastEvent ? lastEvent.occurred_at : (node.occurred_at ?? null),
+    materiality: node.materiality,
+    visibleAtSlice,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// buildRepresentativeDrilldownViewModel (V1-UX-1b Task 7)
+// ---------------------------------------------------------------------------
+
+/**
+ * The explicit, closed allowlist of Golden Story anchor object ids this
+ * sprint's Representative Drilldown covers, per docs/
+ * REPRESENTATIVE_DRILLDOWN_MANIFEST.md (the canonical source of truth for
+ * this list - keep both in sync). Every id is a real nr04-canonical-
+ * universe.json object id (see scripts/build-nr04-snapshot.mjs); the value
+ * is the Approved Category (per the sprint brief's Task 7 list) each
+ * belongs to. Deliberately small (6 objects across the CPP-1000/Horizon LNG
+ * flagship chain, one per approved category, plus a bonus MRB disposition
+ * object extending the NCR story) - "representative," not a general
+ * drilldown mechanism for every object.
+ *
+ * @type {Readonly<Record<string, string>>}
+ */
+const REPRESENTATIVE_DRILLDOWN_CATEGORIES = Object.freeze({
+  'nr04:eco:ECO-NR-GOU-099': 'ECO / ECN',
+  'nr04:ncr:NCR-NR-GOU-301': 'NCR',
+  'nr04:mrb:MRB-NR-GOU-117': 'NCR',
+  'nr04:wo:WO-NR-GOU-2101': 'Work Order',
+  'nr04:supplier-advisory:SA-NR-2026-117': 'Supplier',
+  'nr04:shipment:SHP-NR-GOU-6101': 'Logistics',
+});
+
+/**
+ * Title-case a snake_case detail key for display (e.g. `rework_qty` ->
+ * "Rework Qty"). Pure string formatting, no domain meaning.
+ *
+ * @param {string} key
+ * @returns {string}
+ */
+function titleCaseDetailKey(key) {
+  return key
+    .split('_')
+    .map((part) => (part.length > 0 ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(' ');
+}
+
+/**
+ * Build the Representative Drilldown view-model for an object, if (and only
+ * if) it is one of the explicit REPRESENTATIVE_DRILLDOWN_CATEGORIES anchors
+ * above. Returns null for every other object - this is not a general
+ * drilldown mechanism, per docs/RULES.md's schema-fidelity rule and the
+ * sprint brief's explicit "limited, anchored, documented" constraint.
+ *
+ * Every field returned is a raw passthrough of the anchor object's own real
+ * `detail` column (nr04-canonical-universe.json - real NR04 scenario
+ * source, see buildUniverseGraph()'s operational-objects loop), never
+ * fabricated. `demoDerived: true` and the manifest citation make the
+ * classification explicit on every render (docs/PANEL_SPECIFICATIONS.md/
+ * docs/RULES.md: never let demo-derived detail read as production schema
+ * support).
+ *
+ * @param {any} snapshot
+ * @param {string} objectId
+ * @returns {{ objectId: string, category: string, demoDerived: true, manifestNote: string, drilldownFields: Array<{ label: string, value: string }> }|null}
+ */
+export function buildRepresentativeDrilldownViewModel(snapshot, objectId) {
+  assertSnapshot(snapshot);
+  const category = REPRESENTATIVE_DRILLDOWN_CATEGORIES[objectId];
+  if (!category) {
+    return null;
+  }
+
+  const graph = buildUniverseGraph(snapshot);
+  const node = graph.nodes.find((n) => n.id === objectId);
+  if (!node || !node.detail || typeof node.detail !== 'object') {
+    return null;
+  }
+
+  const drilldownFields = Object.entries(node.detail).map(([key, value]) => ({
+    label: titleCaseDetailKey(key),
+    value: Array.isArray(value) ? value.join(', ') : String(value),
+  }));
+
+  return {
+    objectId,
+    category,
+    demoDerived: true,
+    manifestNote: 'Representative Drilldown Manifest: docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md',
+    drilldownFields,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // buildJarvisViewModel
 // ---------------------------------------------------------------------------
 
@@ -1849,27 +2215,79 @@ export function buildHierarchyPathForObject(snapshot, objectId) {
 }
 
 // ---------------------------------------------------------------------------
-// buildSpiderViewModel (V5 Phase 4, docs/V5_DESIGN_SPEC.md §4)
+// buildSpiderViewModel: the Commitment Health Radar (V1-UX-1b Task 1,
+// superseding the V5 Phase 4 generic domain-exposure Spider - the exported
+// name/bundle key are kept as-is to avoid an unnecessary rename across
+// engine/timeline.js and lenses/spider.js; the lens itself is now presented
+// to the user as "Commitment Health Radar", not "Spider" - see
+// lenses/spider.js and docs/LENS_SPECIFICATIONS.md)
 // ---------------------------------------------------------------------------
 
 /**
- * Spider lens axes - the exact `domain` values buildUniverseGraph() already
- * assigns to every node (docs/field-map.md "Spider Axis Score"). No
- * invented categories: this is the same vocabulary
- * buildUniverseGraph()/buildPassportViewModel() already use for every
- * node's `domain` field.
+ * Commitment Health Radar axes (docs/field-map.md "Commitment Health Radar
+ * Axis Score"). Purpose: answer "how likely are we to successfully fulfill
+ * THIS customer commitment?" - not a generic KPI chart. Each axis groups
+ * the real `domain` values buildUniverseGraph() already assigns to every
+ * node (from operational-objects.json / nr04-canonical-universe.json's own
+ * `domain` column) into the 9 operational domains the sprint brief names -
+ * see radarAxisForNode() for the exact grouping. No invented domains: every
+ * raw `domain` value folded into an axis here is a real value already
+ * produced by buildUniverseGraph().
  *
  * @type {ReadonlyArray<string>}
  */
 export const SPIDER_AXES = Object.freeze([
-  'commercial',
-  'supply',
-  'quality',
-  'engineering',
-  'manufacturing',
-  'logistics',
-  'customer',
+  'Customer Commitment',
+  'Planning',
+  'Supply Chain',
+  'Manufacturing',
+  'Inventory',
+  'Quality',
+  'Engineering',
+  'Logistics',
+  'Service',
 ]);
+
+/**
+ * Fold a graph node's real `domain` field (and, for the single ambiguous
+ * `supply` domain, its `type`) into one of the 9 SPIDER_AXES above. Written
+ * as a switch (not an object-literal map) for the same
+ * scripts/verify-field-map.mjs reason spiderRiskWeight() below is.
+ *
+ * Structural/context domains (`organization`, `platform`, `governance`,
+ * `program`, `asset`) return null - they describe WHERE something sits in
+ * the org chart, not a fulfillment-risk signal, so they are excluded from
+ * radar scoring entirely, the same exclusion the prior 7-axis formula
+ * already applied to `organization`/`platform`.
+ *
+ * @param {{ domain?: string, type?: string }} node
+ * @returns {string|null}
+ */
+function radarAxisForNode(node) {
+  switch (node.domain) {
+    case 'commercial':
+    case 'finance':
+      return 'Customer Commitment';
+    case 'customer':
+      return 'Service';
+    case 'planning':
+      return 'Planning';
+    case 'supplier':
+      return 'Supply Chain';
+    case 'supply':
+      return node.type === 'inventory' ? 'Inventory' : 'Supply Chain';
+    case 'manufacturing':
+      return 'Manufacturing';
+    case 'quality':
+      return 'Quality';
+    case 'engineering':
+      return 'Engineering';
+    case 'logistics':
+      return 'Logistics';
+    default:
+      return null;
+  }
+}
 
 /**
  * Risk-state -> weight, per the field-map.md "Spider Axis Score" formula
@@ -1992,13 +2410,76 @@ function effectiveRiskStateAtSlice(snapshot, graph, visibility, node) {
 }
 
 /**
- * Build the Spider lens view-model for a given selection + time slice, per
- * docs/field-map.md's "Spider Axis Score" formula: "weighted count of
- * <=2-hop related objects per domain whose risk_state is critical (w=3) /
- * elevated (w=2) / watch (w=1), normalized [0,1] per axis." No selection
- * (selectedObjectId null) radars the Organization itself - "whole-enterprise
- * exposure" (docs/V5_DESIGN_SPEC.md §4.3) - using the exact same formula
- * with the org node as subject, not a special-cased second computation.
+ * Compute one commitment's raw per-axis weighted risk exposure: BFS <=2 hops
+ * from the commitment id, weighting each reached node's effective risk
+ * state by spiderRiskWeight() and bucketing it into a SPIDER_AXES entry via
+ * radarAxisForNode() - the same "<=2-hop related objects... critical (w=3) /
+ * elevated (w=2) / watch (w=1)" formula the prior 7-axis Spider used,
+ * unchanged, just re-bucketed into the 9 Commitment Health Radar axes and
+ * always anchored at a commitment (never an arbitrary node) per this
+ * radar's stated purpose. Returns un-normalized raw scores - normalization
+ * happens once, by the caller, after either a single commitment's raw
+ * scores (single-commitment mode) or the SUM across every commitment's raw
+ * scores (portfolio mode) is known.
+ *
+ * @param {any} snapshot
+ * @param {{ nodes: Array<Object>, edges: Array<Object> }} graph
+ * @param {ReturnType<typeof resolveVisibilityForSlice>} visibility
+ * @param {string} commitmentId
+ * @returns {{ axisRaw: Map<string, number>, axisWorst: Map<string, { weight: number, node: Object, state: string }> }}
+ */
+function radarRawScoresForCommitment(snapshot, graph, visibility, commitmentId) {
+  const hopDistances = bfsHopDistances(graph, commitmentId, 2);
+  const axisRaw = new Map(SPIDER_AXES.map((a) => [a, 0]));
+  /** @type {Map<string, { weight: number, node: Object, state: string }>} */
+  const axisWorst = new Map();
+
+  for (const [nodeId, hops] of hopDistances) {
+    if (nodeId === commitmentId || hops < 1 || hops > 2) continue;
+    const node = graph.nodes.find((n) => n.id === nodeId);
+    const axis = node ? radarAxisForNode(node) : null;
+    if (!axis) continue;
+
+    const state = effectiveRiskStateAtSlice(snapshot, graph, visibility, node);
+    const weight = spiderRiskWeight(state);
+    if (weight <= 0) continue;
+
+    axisRaw.set(axis, axisRaw.get(axis) + weight);
+    const currentWorst = axisWorst.get(axis);
+    // Deterministic tie-break: higher weight wins; equal weight keeps the
+    // lexicographically-lowest node id (arbitrary but stable, same
+    // "ties broken by node id" convention docs/V5_DESIGN_SPEC.md §8.1 uses
+    // for label priority).
+    if (!currentWorst || weight > currentWorst.weight || (weight === currentWorst.weight && node.id < currentWorst.node.id)) {
+      axisWorst.set(axis, { weight, node, state });
+    }
+  }
+
+  return { axisRaw, axisWorst };
+}
+
+/**
+ * Build the Commitment Health Radar view-model for a given selection + time
+ * slice (docs/LENS_SPECIFICATIONS.md "Commitment Health Radar" - V1-UX-1b
+ * Task 1, superseding the prior generic domain-exposure Spider). Purpose:
+ * "how likely are we to successfully fulfill THIS customer commitment?" -
+ * so the radar's subject is always a COMMITMENT, resolved via
+ * resolveCommitmentForObject() (the same join Passport/Jarvis already use
+ * to trace an arbitrary selection back to its commitment):
+ *
+ *   - selectedObjectId is a commitment, or traces to one (a demand signal,
+ *     risk-board cell, recommendation, allocation, item, etc. that belongs
+ *     to it): single-commitment mode, radaring that one commitment's 2-hop
+ *     neighborhood.
+ *   - selectedObjectId is null, or does not trace to any commitment (an
+ *     organization/plant/customer/supplier/NR04-canonical node with no
+ *     commitment join): portfolio mode - "how healthy is the whole
+ *     commitment book right now" - summed across every real commitments.json
+ *     row, per axis, then normalized the same way. This replaces the prior
+ *     "whole-enterprise exposure from the org node" empty state with a
+ *     rollup that is actually about commitments (this radar's stated
+ *     purpose) rather than a BFS from the org node, which in practice could
+ *     not reach most of the graph anyway.
  *
  * @param {any} snapshot
  * @param {string|null} selectedObjectId
@@ -2006,10 +2487,10 @@ function effectiveRiskStateAtSlice(snapshot, graph, visibility, node) {
  * @returns {{
  *   subjectId: string|null,
  *   subjectLabel: string|null,
- *   isOrgLevel: boolean,
+ *   isPortfolioLevel: boolean,
  *   sliceId: string|null,
  *   sliceLabel: string|null,
- *   spiderAxisScores: Array<{ domain: string, rawScore: number, score: number, worstObjectId: string|null, worstObjectLabel: string|null, worstRiskState: string|null }>
+ *   spiderAxisScores: Array<{ axis: string, rawScore: number, score: number, worstObjectId: string|null, worstObjectLabel: string|null, worstRiskState: string|null }>
  * }}
  */
 export function buildSpiderViewModel(snapshot, selectedObjectId, sliceIndex) {
@@ -2018,15 +2499,11 @@ export function buildSpiderViewModel(snapshot, selectedObjectId, sliceIndex) {
   const visibility = resolveVisibilityForSlice(snapshot, sliceIndex);
   const timeSlices = recordsOf(snapshot.timeSlices);
   const slice = timeSlices[Math.max(0, Math.min(sliceIndex, timeSlices.length - 1))] ?? null;
-
-  const isOrgLevel = !selectedObjectId;
-  const orgNode = graph.nodes.find((n) => n.type === 'organization') ?? null;
-  const subjectId = selectedObjectId ?? (orgNode ? orgNode.id : null);
-  const subjectNode = subjectId ? graph.nodes.find((n) => n.id === subjectId) ?? null : null;
+  const commitments = recordsOf(snapshot.commitments);
 
   const emptyAxisScores = () =>
-    SPIDER_AXES.map((domain) => ({
-      domain,
+    SPIDER_AXES.map((axis) => ({
+      axis,
       rawScore: 0,
       score: 0,
       worstObjectId: null,
@@ -2034,49 +2511,74 @@ export function buildSpiderViewModel(snapshot, selectedObjectId, sliceIndex) {
       worstRiskState: null,
     }));
 
-  if (!subjectNode) {
+  const resolvedCommitmentId = selectedObjectId ? resolveCommitmentForObject(snapshot, selectedObjectId) : null;
+
+  if (resolvedCommitmentId) {
+    const commitmentNode = graph.nodes.find((n) => n.id === resolvedCommitmentId) ?? null;
+    if (!commitmentNode) {
+      return {
+        subjectId: null,
+        subjectLabel: null,
+        isPortfolioLevel: true,
+        sliceId: slice ? slice.id : null,
+        sliceLabel: slice ? slice.label : null,
+        spiderAxisScores: emptyAxisScores(),
+      };
+    }
+
+    const { axisRaw, axisWorst } = radarRawScoresForCommitment(snapshot, graph, visibility, resolvedCommitmentId);
+    const maxRaw = Math.max(0, ...[...axisRaw.values()]);
+    const spiderAxisScores = SPIDER_AXES.map((axis) => {
+      const worst = axisWorst.get(axis) ?? null;
+      return {
+        axis,
+        rawScore: axisRaw.get(axis),
+        score: maxRaw > 0 ? axisRaw.get(axis) / maxRaw : 0,
+        worstObjectId: worst ? worst.node.id : null,
+        worstObjectLabel: worst ? worst.node.label : null,
+        worstRiskState: worst ? worst.state : null,
+      };
+    });
+
     return {
-      subjectId: null,
-      subjectLabel: null,
-      isOrgLevel,
+      subjectId: resolvedCommitmentId,
+      subjectLabel: commitmentNode.label,
+      isPortfolioLevel: false,
       sliceId: slice ? slice.id : null,
       sliceLabel: slice ? slice.label : null,
-      spiderAxisScores: emptyAxisScores(),
+      spiderAxisScores,
     };
   }
 
-  const hopDistances = bfsHopDistances(graph, subjectId, 2);
-  const axisRaw = new Map(SPIDER_AXES.map((a) => [a, 0]));
+  // Portfolio mode: sum every real commitment's raw per-axis exposure, and
+  // track the single worst contributor per axis across the whole portfolio
+  // (same tie-break rule as the single-commitment path above).
+  const portfolioAxisRaw = new Map(SPIDER_AXES.map((a) => [a, 0]));
   /** @type {Map<string, { weight: number, node: Object, state: string }>} */
-  const axisWorst = new Map();
-
-  for (const [nodeId, hops] of hopDistances) {
-    if (nodeId === subjectId || hops < 1 || hops > 2) continue;
-    const node = graph.nodes.find((n) => n.id === nodeId);
-    if (!node || !SPIDER_AXES.includes(node.domain)) continue;
-
-    const state = effectiveRiskStateAtSlice(snapshot, graph, visibility, node);
-    const weight = spiderRiskWeight(state);
-    if (weight <= 0) continue;
-
-    axisRaw.set(node.domain, axisRaw.get(node.domain) + weight);
-    const currentWorst = axisWorst.get(node.domain);
-    // Deterministic tie-break: higher weight wins; equal weight keeps the
-    // lexicographically-lowest node id (arbitrary but stable, same
-    // "ties broken by node id" convention docs/V5_DESIGN_SPEC.md §8.1 uses
-    // for label priority).
-    if (!currentWorst || weight > currentWorst.weight || (weight === currentWorst.weight && node.id < currentWorst.node.id)) {
-      axisWorst.set(node.domain, { weight, node, state });
+  const portfolioAxisWorst = new Map();
+  for (const commitment of commitments) {
+    if (!graph.nodes.some((n) => n.id === commitment.id)) continue;
+    const { axisRaw, axisWorst } = radarRawScoresForCommitment(snapshot, graph, visibility, commitment.id);
+    for (const axis of SPIDER_AXES) {
+      portfolioAxisRaw.set(axis, portfolioAxisRaw.get(axis) + axisRaw.get(axis));
+      const candidate = axisWorst.get(axis);
+      const currentWorst = portfolioAxisWorst.get(axis);
+      if (
+        candidate &&
+        (!currentWorst || candidate.weight > currentWorst.weight || (candidate.weight === currentWorst.weight && candidate.node.id < currentWorst.node.id))
+      ) {
+        portfolioAxisWorst.set(axis, candidate);
+      }
     }
   }
 
-  const maxRaw = Math.max(0, ...[...axisRaw.values()]);
-  const spiderAxisScores = SPIDER_AXES.map((domain) => {
-    const worst = axisWorst.get(domain) ?? null;
+  const portfolioMaxRaw = Math.max(0, ...[...portfolioAxisRaw.values()]);
+  const spiderAxisScores = SPIDER_AXES.map((axis) => {
+    const worst = portfolioAxisWorst.get(axis) ?? null;
     return {
-      domain,
-      rawScore: axisRaw.get(domain),
-      score: maxRaw > 0 ? axisRaw.get(domain) / maxRaw : 0,
+      axis,
+      rawScore: portfolioAxisRaw.get(axis),
+      score: portfolioMaxRaw > 0 ? portfolioAxisRaw.get(axis) / portfolioMaxRaw : 0,
       worstObjectId: worst ? worst.node.id : null,
       worstObjectLabel: worst ? worst.node.label : null,
       worstRiskState: worst ? worst.state : null,
@@ -2084,9 +2586,9 @@ export function buildSpiderViewModel(snapshot, selectedObjectId, sliceIndex) {
   });
 
   return {
-    subjectId,
-    subjectLabel: subjectNode.label,
-    isOrgLevel,
+    subjectId: null,
+    subjectLabel: 'All Commitments (Portfolio)',
+    isPortfolioLevel: true,
     sliceId: slice ? slice.id : null,
     sliceLabel: slice ? slice.label : null,
     spiderAxisScores,
@@ -2453,16 +2955,35 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   // --- buildHierarchyPathForObject (V5 Phase 4) ---
   isSelected: { category: 'derived_supported', note: 'field-map.md Text View: Hierarchy Path, frontend-only flag marking the trailing (actually-selected) path entry' },
 
-  // --- buildSpiderViewModel (V5 Phase 4) ---
-  subjectId: { category: 'supported', note: 'field-map.md Spider: Spider Axis Score, the selected object id (or org id) the radar is computed for' },
-  subjectLabel: { category: 'supported', note: 'field-map.md Universe: Node Label, echoed as the Spider subject label' },
-  isOrgLevel: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score, frontend-only flag for the "no selection = whole-enterprise" empty state (docs/V5_DESIGN_SPEC.md §4.3)' },
-  spiderAxisScores: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score (V5 Phase 4 governance-gated key, docs/V5_DESIGN_SPEC.md §4.2/§10)' },
-  rawScore: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score, pre-normalization weighted count per axis' },
-  score: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score, normalized [0,1] per-axis value' },
-  worstObjectId: { category: 'derived_supported', note: 'field-map.md Spider: Spider Axis Score, vertex-click drill-down target (docs/V5_DESIGN_SPEC.md §4.3)' },
-  worstObjectLabel: { category: 'supported', note: 'field-map.md Universe: Node Label, echoed for the Spider axis\' worst contributor' },
-  worstRiskState: { category: 'derived_supported', note: 'field-map.md RiskBoard: Risk State / Universe: Risk Intensity, echoed for the Spider axis\' worst contributor' },
+  // --- buildSpiderViewModel: Commitment Health Radar (V1-UX-1b Task 1) ---
+  subjectId: { category: 'supported', note: 'field-map.md Commitment Health Radar: Radar Subject, the resolved commitment id the radar is computed for (null in portfolio mode)' },
+  subjectLabel: { category: 'supported', note: 'field-map.md Universe: Node Label, echoed as the radar subject label (or the literal portfolio-mode label)' },
+  isPortfolioLevel: { category: 'derived_supported', note: 'field-map.md Commitment Health Radar: Radar Subject, frontend-only flag for the "no commitment resolved = whole-portfolio rollup" state' },
+  spiderAxisScores: { category: 'derived_supported', note: 'field-map.md Commitment Health Radar: Commitment Health Radar Axis Score (governance-gated key, see scripts/verify-field-map.mjs)' },
+  axis: { category: 'derived_supported', note: 'field-map.md Commitment Health Radar: Commitment Health Radar Axis Score, one of the 9 named axes (radarAxisForNode())' },
+  rawScore: { category: 'derived_supported', note: 'field-map.md Commitment Health Radar: Commitment Health Radar Axis Score, pre-normalization weighted count per axis' },
+  score: { category: 'derived_supported', note: 'field-map.md Commitment Health Radar: Commitment Health Radar Axis Score, normalized [0,1] per-axis value' },
+  worstObjectId: { category: 'derived_supported', note: 'field-map.md Commitment Health Radar: Commitment Health Radar Axis Score, spoke-click Probe/drill-down target' },
+  worstObjectLabel: { category: 'supported', note: 'field-map.md Universe: Node Label, echoed for the radar axis\' worst contributor' },
+  worstRiskState: { category: 'derived_supported', note: 'field-map.md RiskBoard: Risk State / Universe: Risk Intensity, echoed for the radar axis\' worst contributor' },
+
+  // --- V1-UX-1b Task 4/5: relationship visual class + node materiality ---
+  visualClass: { category: 'derived_supported', note: 'field-map.md Universe: Relationship Visual Class, derived from the real relationship_type value via relationshipVisualClass()' },
+  materiality: { category: 'derived_supported', note: 'field-map.md Universe: Node Materiality, normalized [0,1] from the node type\'s own real magnitude field (revenue_at_risk/quantity/allocated_qty/quantity_on_hand/impact_score)' },
+
+  // --- V1-UX-1b Task 2: buildHoverPreviewViewModel (currentRisk/commitmentId
+  // reuse the same documented concepts above; only the genuinely new keys
+  // are listed here) ---
+  commitmentLabel: { category: 'supported', note: 'field-map.md Universe: Node Label, echoed as the Hover Preview\'s affected-commitment label' },
+  relationshipCount: { category: 'derived_supported', note: 'field-map.md Hover Passport Preview: Relationship Counts, count of graph edges incident to the node' },
+  evidenceCount: { category: 'derived_supported', note: 'field-map.md Hover Passport Preview: Relationship Counts, count of incident edges whose other endpoint is an evidence node' },
+  timelinePositionLabel: { category: 'derived_supported', note: 'field-map.md Hover Passport Preview: Timeline Position, the node\'s most recent timeline-events.json title/event_type' },
+  timelinePositionAt: { category: 'supported', note: 'field-map.md Hover Passport Preview: Timeline Position, timeline-events.json occurred_at (or the node\'s own occurred_at) passthrough' },
+
+  // --- V1-UX-1b Task 7: buildRepresentativeDrilldownViewModel ---
+  demoDerived: { category: 'derived_supported', note: 'field-map.md Representative Drilldown: explicit Lab-side classification flag, always true on this view-model, never rendered as production schema support' },
+  manifestNote: { category: 'derived_supported', note: 'field-map.md Representative Drilldown: citation pointer to docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md' },
+  drilldownFields: { category: 'derived_supported', note: 'field-map.md Representative Drilldown: label/value pairs, a raw passthrough of the anchor object\'s own real nr04-canonical-universe.json `detail` column' },
 
   // --- buildCollectionPassportViewModel (V5 Phase 4) ---
   collectionLabel: { category: 'supported', note: 'docs/V5_HANDOVER.md §9.1 scopeContext.label, echoed as the Collection Passport subject label' },

@@ -57,6 +57,7 @@ import { mountWorkbenchLens } from './lenses/workbench.js';
 import { mountConductorStudioLens } from './lenses/conductor-studio.js';
 import { mountDashboardPanel } from './panels/dashboard.js';
 import { mountPassportPanel } from './panels/passport.js';
+import { mountHoverPreview } from './panels/hover-preview.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
 import { mountScopePanel } from './panels/scope.js';
 import { mountNavHistoryRail } from './panels/nav-history.js';
@@ -93,6 +94,7 @@ const els = {
   scopeExplorer: document.getElementById('scopeExplorer'),
   navHistoryRail: document.getElementById('navHistoryRail'),
   nodeTooltip: document.getElementById('nodeTooltip'),
+  hoverPreview: document.getElementById('hoverPreview'),
   savedViewsManager: document.getElementById('savedViewsManager'),
 };
 
@@ -174,6 +176,24 @@ async function main() {
     store.selectObject(id);
   }
 
+  // --- Probe (V1-UX-1b Task 3) ------------------------------------------------
+  //
+  // "Probe takes the user into the Depth Lens / deeper investigation
+  // context" (docs/UX_ARCHITECTURE.md). Concretely: selecting alone already
+  // opens the Passport (engine/state.js's selectObject()); Probe goes one
+  // step further and ensures the user lands in Universe, where selection
+  // drives the relationship focus mode / orbit reorganization (Tasks 4/8) -
+  // the actual "deeper investigation context" this sprint builds. A Probe
+  // action never fires from within Universe's own canvas (there, clicking a
+  // node IS the selection - see mountUniverseLens's onSelect below), only
+  // from surfaces that show objects WITHOUT switching the workspace lens
+  // (Hover Passport Preview, Passport relationship/recommendation rows,
+  // Risk Board cells, the Commitment Health Radar).
+  function probeObject(id) {
+    selectAndClearHighlight(id);
+    store.setLens('universe');
+  }
+
   // --- Navigation History rail (V5 Phase 2.6 item E) ------------------------
   //
   // focusTrail is a plain stack (Phase 1) with no "redo" data once an entry
@@ -226,6 +246,8 @@ async function main() {
     getHighlightIds: () => getHighlightedIds(),
     onSelect: (cellId) => selectAndClearHighlight(cellId),
     onHover: (cellId) => store.setHovered(cellId),
+    // V1-UX-1b Task 3: the expanded card's Probe CTA.
+    onProbe: (cellId) => probeObject(cellId),
   });
 
   // V5 Phase 4 (docs/V5_DESIGN_SPEC.md §4/§5): the Spider and Text View
@@ -234,7 +256,11 @@ async function main() {
   // access of their own, same pattern as Universe/Risk Board above.
   const spiderLens = mountSpiderLens(els.spiderChartEl, {
     getBundle: () => timeline.getDerivedBundle(),
-    onSelect: (nodeId) => selectAndClearHighlight(nodeId),
+    // Every Commitment Health Radar spoke is a Probe affordance (V1-UX-1b
+    // Task 1/3): clicking a weak spoke focuses that axis's worst-risk
+    // object and its relationship chain in Universe, not just a local
+    // selection.
+    onSelect: (nodeId) => probeObject(nodeId),
     onHover: (nodeId) => store.setHovered(nodeId),
   });
 
@@ -301,6 +327,8 @@ async function main() {
     // the exploration flow - a related-object click is itself an explicit
     // single selection, so it also clears any lingering highlight set.
     onSelect: (id) => selectAndClearHighlight(id),
+    // V1-UX-1b Task 3: the Overview header's "Probe {Type} in Universe" CTA.
+    onProbe: (id) => probeObject(id),
   });
 
   const jarvisPanel = mountJarvisPanel(els.jarvisPanel, {
@@ -308,6 +336,15 @@ async function main() {
     // Acting on Jarvis's Suggested Next Step navigates to that risk-board
     // cell, closing the "Jarvis... open passports" loop from the brief.
     onSelect: (id) => selectAndClearHighlight(id),
+  });
+
+  // V1-UX-1b Task 2: the Hover Passport Preview - one instance, works across
+  // every lens (Universe/Risk Board/Commitment Health Radar) since hover
+  // already funnels through the single state.hoveredObjectId field (see
+  // this module's header comment on why no per-lens plumbing is needed).
+  const hoverPreviewPanel = mountHoverPreview(els.hoverPreview, {
+    getBundle: () => timeline.getDerivedBundle(),
+    onProbe: (id) => probeObject(id),
   });
 
   // V5 Phase 3.5 (docs/V5_HANDOVER.md §9.1-§9.3): the Scope Bar + Scope
@@ -330,6 +367,30 @@ async function main() {
     getFocusTrail: () => store.getState().focusTrail,
     getSelectedId: () => store.getState().selectedObjectId,
     onJumpToIndex: (index) => jumpToTrailIndex(index),
+  });
+
+  // --- Generic [data-select-id] hover wiring (V1-UX-1b Task 2) --------------
+  //
+  // Universe (canvas hit-testing) and Risk Board (per-card mouseenter/leave)
+  // already call store.setHovered() themselves - see their own onHover
+  // wiring above. Passport's relationship rows and Text View's reference/
+  // hierarchy buttons are plain DOM buttons that already carry a
+  // `data-select-id` attribute (for click-through) but never wired hover.
+  // Rather than duplicate this listener inside every such lens/panel
+  // module, one delegated document-level listener picks up EVERY current
+  // and future `[data-select-id]` element for free, extending the Hover
+  // Passport Preview to those surfaces too. Redundant with a lens's own
+  // onHover call is harmless: engine/state.js's setHovered() only notifies
+  // subscribers when the id actually changes.
+  document.addEventListener('mouseover', (ev) => {
+    const target = ev.target.closest('[data-select-id]');
+    if (target) store.setHovered(target.getAttribute('data-select-id'));
+  });
+  document.addEventListener('mouseout', (ev) => {
+    const target = ev.target.closest('[data-select-id]');
+    if (!target) return;
+    const next = ev.relatedTarget instanceof Element ? ev.relatedTarget.closest('[data-select-id]') : null;
+    if (!next) store.setHovered(null);
   });
 
   // --- Toolbar wiring --------------------------------------------------------
@@ -445,6 +506,7 @@ async function main() {
     jarvisPanel.render();
     scopePanel.render();
     navHistoryPanel.render();
+    hoverPreviewPanel.render();
 
     universeLens.render();
     riskBoardLens.render();

@@ -55,6 +55,18 @@ database. See `docs/SNAPSHOT_CONSUMPTION_NOTES.md` for the full pipeline,
 current binding status per surface, and an honest accounting of what is
 snapshot-bound versus still a temporary compatibility adapter.
 
+## Probe interaction model (V1-UX-1b)
+
+The workspace uses one consistent interaction language across every lens:
+**Hover** = compact preview, **Select** = focus (opens the Passport),
+**Probe** = investigate (takes the user into Universe's relationship focus
+mode). See `docs/INTERACTION_MODEL_NOTES.md` for the full model (Commitment
+Health Radar, relationship visual language, node materiality, the
+logo-inspired focus transition), `docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md`
+for the small set of demo-derived object drilldowns, and
+`docs/UNSUPPORTED_UI_FIELD_REPORT.md` / `docs/VALIDATION_REPORT.md` for an
+honest accounting of what is and isn't supported.
+
 ## Workflow
 
 This repository has used a PR-per-phase workflow (reviewed and merged by the

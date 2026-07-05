@@ -45,6 +45,18 @@
 // Like every other panel/lens module, this file knows nothing about
 // engine/state.js directly - app.js wires onSelect to engine/state.js's
 // selectObject.
+//
+// V1-UX-1b Task 3 (Probe as the canonical action): the Overview header
+// carries an explicit "Probe {Type}" button (docs/UX_ARCHITECTURE.md's
+// investigative verb) distinct from a plain Relationships-row click - Probe
+// takes the user into the Depth Lens (Universe's relationship focus mode,
+// via app.js's probeObject()), while a related-object row click (onSelect)
+// only updates the selection/Passport in place, per docs/
+// PANEL_SPECIFICATIONS.md's "Select = focus. Probe = investigate."
+// Relationship rows are additionally labeled with the same Probe verb so
+// the wording is consistent everywhere a related object can be opened.
+
+import { probeLabel } from '../engine/labels.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -90,6 +102,7 @@ function renderOverviewSection(overview) {
         ${overview.program ? `<div><dt>Program</dt><dd>${escapeHtml(overview.program)}</dd></div>` : ''}
       </dl>
       ${overview.summary ? `<p class="passport-overview-summary">${escapeHtml(overview.summary)}</p>` : ''}
+      ${overview.objectId ? `<button type="button" class="passport-probe-btn" data-probe-id="${escapeHtml(overview.objectId)}">${escapeHtml(probeLabel(overview.objectType))} in Universe →</button>` : ''}
     </header>
   `;
 }
@@ -125,13 +138,13 @@ function renderRelationshipsSection(relationships) {
           .map(
             (rel) => `
           <li>
-            <button type="button" class="passport-relationship-item" data-select-id="${escapeHtml(rel.relatedObjectId)}">
+            <button type="button" class="passport-relationship-item" data-select-id="${escapeHtml(rel.relatedObjectId)}" title="${escapeHtml(probeLabel(rel.relatedObjectType))}">
               <span class="passport-relationship-dir">${rel.direction === 'outgoing' ? '→' : '←'}</span>
               <span class="passport-relationship-body">
                 <strong>${escapeHtml(rel.relatedObjectLabel ?? rel.relatedObjectId)}</strong>
                 <span class="passport-relationship-type">${escapeHtml((rel.relationshipType ?? '').replace(/_/g, ' '))}</span>
               </span>
-              <span class="passport-relationship-kind">${escapeHtml(rel.relatedObjectType ?? '')}</span>
+              <span class="passport-relationship-kind">${escapeHtml(probeLabel(rel.relatedObjectType))}</span>
             </button>
           </li>`
           )
@@ -258,6 +271,41 @@ function renderOperationalHistorySection(operationalHistory) {
   `;
 }
 
+/**
+ * V1-UX-1b Task 7: the "Demo-derived Detail" section - only rendered when
+ * bundle.representativeDrilldown is non-null (the selected object is one of
+ * the small, explicit Golden Story anchor ids - see
+ * docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md). Always visibly badged
+ * "Demo-derived" so it is never mistaken for a general, production-backed
+ * Passport section - every other section on this panel is real snapshot
+ * data; this one explicitly is not.
+ *
+ * @param {Object|null} drilldown - engine/derive.js's
+ *   buildRepresentativeDrilldownViewModel() output, or null.
+ * @returns {string}
+ */
+function renderRepresentativeDrilldownSection(drilldown) {
+  if (!drilldown) return '';
+  const fields = Array.isArray(drilldown.drilldownFields) ? drilldown.drilldownFields : [];
+  return `
+    <section class="passport-section passport-drilldown">
+      <h3 class="passport-section-title">
+        ${escapeHtml(drilldown.category)} Detail
+        <span class="demo-derived-badge" title="${escapeHtml(drilldown.manifestNote)}">Demo-derived</span>
+      </h3>
+      <p class="passport-drilldown-note">Representative detail for this flagship Golden Story object - not a general production capability. See the Representative Drilldown Manifest.</p>
+      <dl class="passport-drilldown-fields">
+        ${fields
+          .map(
+            (f) => `
+          <div><dt>${escapeHtml(f.label)}</dt><dd>${escapeHtml(f.value)}</dd></div>`
+          )
+          .join('')}
+      </dl>
+    </section>
+  `;
+}
+
 function renderSourceRecordsSection(sourceRecords) {
   const list = Array.isArray(sourceRecords) ? sourceRecords : [];
   if (list.length === 0) {
@@ -349,13 +397,18 @@ function renderEmptyState() {
  *   and no single object is selected).
  * @param {(objectId: string|null) => void} callbacks.onSelect - selects a
  *   related object (the "Related Objects" click-through step).
+ * @param {(objectId: string) => void} [callbacks.onProbe] - the Overview
+ *   header's "Probe {Type} in Universe" CTA (V1-UX-1b Task 3): takes the
+ *   user into the Depth Lens (Universe's relationship focus mode), distinct
+ *   from a plain related-object row click (onSelect above), which only
+ *   updates the selection/Passport in place.
  * @returns {{ render: () => void, destroy: () => void }}
  */
 export function mountPassportPanel(el, callbacks) {
   if (!el || typeof el.appendChild !== 'function') {
     throw new Error('mountPassportPanel: el must be a DOM element');
   }
-  const { getBundle, onSelect } = callbacks ?? {};
+  const { getBundle, onSelect, onProbe } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountPassportPanel: callbacks.getBundle is required');
   }
@@ -368,6 +421,12 @@ export function mountPassportPanel(el, callbacks) {
       const targetId = itemEl.getAttribute('data-select-id');
       itemEl.addEventListener('click', () => {
         if (typeof onSelect === 'function') onSelect(targetId);
+      });
+    });
+    el.querySelectorAll('[data-probe-id]').forEach((btnEl) => {
+      const targetId = btnEl.getAttribute('data-probe-id');
+      btnEl.addEventListener('click', () => {
+        if (typeof onProbe === 'function') onProbe(targetId);
       });
     });
   }
@@ -409,6 +468,7 @@ export function mountPassportPanel(el, callbacks) {
         ${renderEvidenceSection(passport.evidence)}
         ${renderOperationalHistorySection(passport.operationalHistory)}
         ${renderSourceRecordsSection(passport.sourceRecords)}
+        ${renderRepresentativeDrilldownSection(bundle?.representativeDrilldown ?? null)}
       </div>
     `;
 

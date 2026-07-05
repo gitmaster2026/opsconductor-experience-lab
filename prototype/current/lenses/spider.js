@@ -1,12 +1,27 @@
 // lenses/spider.js
 //
-// The Spider lens (V5 Phase 4, docs/V5_DESIGN_SPEC.md §4): a radar chart
-// whose axes are the existing operational domains (engine/derive.js's
-// buildSpiderViewModel(), field-map.md "Spider Axis Score") and whose
-// polygon reflects the current subject's (selected object, or the
-// Organization when nothing is selected - §4.3's "whole-enterprise
-// exposure" empty state) weighted risk exposure per domain at the current
+// The Commitment Health Radar (V1-UX-1b Task 1; superseded the prior
+// generic domain-exposure "Spider" lens from V5 Phase 4 -
+// docs/V5_DESIGN_SPEC.md §4). Module filename/export name are kept as-is
+// to avoid an unnecessary rename across app.js/engine/timeline.js; the UI
+// itself now presents this as "Commitment Health Radar," per
+// docs/LENS_SPECIFICATIONS.md.
+//
+// Purpose: answer "how likely are we to successfully fulfill THIS customer
+// commitment?" - not a generic KPI chart. Its 9 axes (Customer Commitment,
+// Planning, Supply Chain, Manufacturing, Inventory, Quality, Engineering,
+// Logistics, Service - engine/derive.js's SPIDER_AXES) are derived from
+// canonical NR04 domain data. The polygon reflects the resolved subject's
+// (the commitment the current selection traces to, or a whole-portfolio
+// rollup when nothing resolves to a commitment - engine/derive.js's
+// buildSpiderViewModel()) weighted risk exposure per axis at the current
 // time slice.
+//
+// Every spoke is Probeable: clicking a weak spoke selects that axis's worst
+// contributing object, which (per docs/UX_ARCHITECTURE.md's Probe
+// interaction language) focuses the related evidence/relationship chain in
+// Universe and opens its Passport - the same onSelect callback Universe/
+// Risk Board/Passport all route through.
 //
 // Rendering approach: a single inline SVG (not Canvas) - a radar chart is a
 // handful of static lines/labels plus one polygon, and SVG lets the
@@ -148,7 +163,7 @@ export function mountSpiderLens(containerEl, callbacks) {
   const svgWrap = document.createElement('div');
   svgWrap.className = 'spider-svg-wrap';
   svgWrap.innerHTML = `
-    <svg class="spider-svg" viewBox="0 0 ${VIEW_SIZE} ${VIEW_SIZE}" role="img" aria-label="Risk exposure radar by domain">
+    <svg class="spider-svg" viewBox="0 0 ${VIEW_SIZE} ${VIEW_SIZE}" role="img" aria-label="Commitment Health Radar">
       <g class="spider-static"></g>
       <polygon class="spider-polygon" points="" />
       <g class="spider-vertices"></g>
@@ -164,7 +179,7 @@ export function mountSpiderLens(containerEl, callbacks) {
 
   const emptyNotice = document.createElement('div');
   emptyNotice.className = 'spider-empty';
-  emptyNotice.textContent = 'No domain exposure data available.';
+  emptyNotice.textContent = 'No commitment health data available.';
   emptyNotice.classList.add('hidden');
   surface.appendChild(emptyNotice);
 
@@ -221,17 +236,24 @@ export function mountSpiderLens(containerEl, callbacks) {
         const p = axisPoint(i, targetAxes.length, scores[i]);
         const colorVar = riskColorVar(axis.worstRiskState);
         const clickable = Boolean(axis.worstObjectId);
+        // Probe is the canonical investigative verb (docs/UX_ARCHITECTURE.md):
+        // a weak spoke's aria-label/title reads as an explicit Probe action,
+        // not a generic "select"/"view" - clicking it focuses that axis's
+        // worst-risk object and its relationship chain (Task 4).
+        const probeLabel = clickable
+          ? `Probe ${axis.axis}: ${axis.worstObjectLabel ?? 'worst contributor'}`
+          : `${axis.axis} axis, no exposure at this time slice`;
         return `
           <circle
             class="spider-vertex${clickable ? ' is-clickable' : ''}"
             cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6"
             style="--spider-vertex-color: var(${colorVar})"
-            data-axis-domain="${escapeHtml(axis.domain)}"
+            data-axis="${escapeHtml(axis.axis)}"
             ${clickable ? `data-select-id="${escapeHtml(axis.worstObjectId)}"` : ''}
             tabindex="${clickable ? '0' : '-1'}"
             role="${clickable ? 'button' : 'presentation'}"
-            aria-label="${escapeHtml(axis.domain)} axis, score ${(axis.score * 100).toFixed(0)}%${axis.worstObjectLabel ? `, worst: ${axis.worstObjectLabel}` : ''}"
-          ></circle>
+            aria-label="${escapeHtml(probeLabel)}, score ${(axis.score * 100).toFixed(0)}%"
+          ><title>${escapeHtml(probeLabel)}</title></circle>
         `;
       })
       .join('');
@@ -259,7 +281,7 @@ export function mountSpiderLens(containerEl, callbacks) {
     labelsGroup.innerHTML = axes
       .map((axis, i) => {
         const p = axisPoint(i, axes.length, 1.16);
-        return `<text class="spider-axis-label" x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(axis.domain)}</text>`;
+        return `<text class="spider-axis-label" x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(axis.axis)}</text>`;
       })
       .join('');
   }
@@ -286,8 +308,9 @@ export function mountSpiderLens(containerEl, callbacks) {
     }
 
     header.innerHTML = `
-      <span class="spider-kicker">${spider.isOrgLevel ? 'WHOLE-ENTERPRISE EXPOSURE' : 'RISK EXPOSURE'}</span>
-      <h2 class="spider-title">${escapeHtml(spider.subjectLabel ?? 'Organization')}</h2>
+      <span class="spider-kicker">${spider.isPortfolioLevel ? 'PORTFOLIO COMMITMENT HEALTH' : 'COMMITMENT HEALTH RADAR'}</span>
+      <h2 class="spider-title">${escapeHtml(spider.subjectLabel ?? 'All Commitments (Portfolio)')}</h2>
+      <p class="spider-subtitle">How likely are we to successfully fulfill this ${spider.isPortfolioLevel ? 'commitment book' : 'customer commitment'}?</p>
       ${spider.sliceLabel ? `<span class="spider-slice">${escapeHtml(spider.sliceLabel)}</span>` : ''}
     `;
 
