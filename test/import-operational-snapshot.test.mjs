@@ -40,6 +40,7 @@ function fixtureSnapshot() {
       decisionOutcomeObservations: [],
       domainObjects: [
         {
+          id: 'domain-object-1',
           object_key: 'signal:EXEC-NR-GOU-001',
           source_system: 'northriver-golden-universe',
           object_type: 'other',
@@ -54,6 +55,7 @@ function fixtureSnapshot() {
           detail: { semantic_role: 'executive_signal' },
         },
         {
+          id: 'domain-object-2',
           object_key: 'commitment:CUST-HORIZON-CPP-2026-09',
           source_system: 'northriver-golden-universe',
           object_type: 'contract_milestone',
@@ -120,11 +122,47 @@ test('buildCanonicalUniverseFromSnapshot derives namespaced Lab objects and link
   });
 });
 
+test('buildCanonicalUniverseFromSnapshot resolves production artifact database-id links', () => {
+  const snapshot = fixtureSnapshot();
+  snapshot.sections.domainObjectLinks = [
+    {
+      from_domain_object_id: 'domain-object-1',
+      to_domain_object_id: 'domain-object-2',
+      relationship_type: 'highlights_commitment',
+    },
+  ];
+
+  const universe = buildCanonicalUniverseFromSnapshot(snapshot);
+  assert.deepEqual(universe.links[0], {
+    id: 'nr04:link-1',
+    provenance: 'nr04_canonical_snapshot',
+    from_id: 'nr04:signal:EXEC-NR-GOU-001',
+    to_id: 'nr04:commitment:CUST-HORIZON-CPP-2026-09',
+    relationship_type: 'highlights_commitment',
+  });
+});
+
 test('buildCanonicalUniverseFromSnapshot rejects links to missing domain objects', () => {
   const snapshot = fixtureSnapshot();
   snapshot.sections.domainObjectLinks[0].to_key = 'missing:OBJECT';
   assert.throws(
     () => buildCanonicalUniverseFromSnapshot(snapshot),
     /links with missing endpoints/
+  );
+});
+
+test('buildCanonicalUniverseFromSnapshot rejects database-id links whose endpoints cannot be resolved', () => {
+  const snapshot = fixtureSnapshot();
+  snapshot.sections.domainObjectLinks = [
+    {
+      from_domain_object_id: 'domain-object-1',
+      to_domain_object_id: 'missing-domain-object',
+      relationship_type: 'highlights_commitment',
+    },
+  ];
+
+  assert.throws(
+    () => buildCanonicalUniverseFromSnapshot(snapshot),
+    /missing resolvable toKey\/toDomainObjectId/
   );
 });
