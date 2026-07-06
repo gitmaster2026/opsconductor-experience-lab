@@ -75,6 +75,21 @@ run verify-data` (schema-fidelity enforcement against `field-map.md`'s
 documented fields) all pass; `npm run build` runs all three plus the test
 suite.
 
+**Note (V1-UX-2, 2026-07-06):** the counts and phase list above describe the
+original V4 milestone only and have not been reconciled since (this file
+has the same self-referential lag `docs/V5_HANDOVER.md` §1 flags for
+itself: "Phase 5 - motion grammar + doc reconciliation - Not started").
+The lab has since grown through V5 (6 workspace lenses: Universe, Risk
+Board, Commitment Health Radar/`spider`, Text, Workbench, Conductor
+Studio) and the V1-UX-1a/1b/1B/2A/2B sprints (canonical NR04 snapshot
+binding, Probe interaction language, Focus Mode, Navigation History rail,
+Return to Universe, relationship-color legend, Documents Passport section,
+Universe Search, Functional Radar). Treat `docs/RULES.md` §3 (the current
+lens list) and `docs/field-map.md` (the current field authority) as the
+live sources of truth over this section's phase-by-phase narrative. See
+`docs/V1_UX_2_PRELAUNCH_PLAN.md` for the current pre-launch UX completion
+plan and status.
+
 ## Known limitations / not yet verified
 
 - **No browser is available in the sandbox these phases were built in.**
@@ -91,14 +106,21 @@ suite.
   click-through navigation works, and Jarvis's Suggested Next Step button
   navigates correctly.
 
-## Next implementation target (post-V4)
+## Next implementation target
 
-With V4's architecture and interaction model built, natural next steps are
-visual/interaction polish informed by that first real browser pass, plus
-whichever of the "Future lenses" `docs/LENS_SPECIFICATIONS.md` names
-(supplier network, inventory flow, program map, evidence chain, timeline
-replay) prove most valuable once the current four surfaces have been used
-directly.
+**Current: V1-UX-2 Pre-Launch Interaction Completion** (see
+`docs/V1_UX_2_PRELAUNCH_PLAN.md`) — Sprint V1-UX-2A (Universe Focus +
+Investigation Flow) and the first part of V1-UX-2B (Functional Radar) are
+implemented and tested this sprint; Progressive Risk Board enrichment and
+all of V1-UX-2C (Source Handoff + Final UX Finish) remain as documented,
+not-yet-implemented pre-launch work.
+
+With V4's architecture and interaction model built, natural next steps
+beyond V1-UX-2 are visual/interaction polish informed by a first real
+browser pass, plus whichever of the "Future lenses"
+`docs/LENS_SPECIFICATIONS.md` names (supplier network, inventory flow,
+program map, evidence chain, timeline replay) prove most valuable once the
+current surfaces have been used directly.
 
 ## Non-goals
 

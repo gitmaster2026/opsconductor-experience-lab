@@ -1,0 +1,206 @@
+// panels/functional-radar.js
+//
+// V1-UX-2B (Progressive Risk Board + Functional Radar): a toggleable
+// flyout answering "what is happening inside this function?" for the five
+// named functions (Engineering, Planning, Manufacturing, Procurement,
+// Quality). Pure UI wiring over engine/functional-view.js's
+// buildFunctionalViewGroups() - all grouping/ranking logic lives there;
+// this module only renders it and wires clicks through onSelect.
+//
+// Deliberately NOT a new workspace lens or left-panel mode (both are
+// closed, tested enums in engine/state.js's WORKSPACE_LENSES/
+// LEFT_PANEL_MODES - adding a 6th/3rd value would touch that already-
+// tested contract for no real benefit here, and would need a RULES.md §3
+// update). Instead this follows the exact same "toggle button + floating
+// panel, local open/closed state" pattern panels/scope.js's Scope
+// Explorer already uses, so opening/closing Functional Radar never
+// touches engine/state.js at all - see that module's header for the same
+// precedent.
+//
+// Every listed object routes through the same onSelect callback every
+// other lens/panel already uses (app.js wires this to probeObject()), so
+// clicking an object inside a function group behaves identically to
+// selecting it anywhere else in the app - closing the flyout afterward so
+// the resulting Universe focus/Passport is immediately visible.
+
+import { buildFunctionalViewGroups } from '../engine/functional-view.js';
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// "attention" is a real, observed synonym for "elevated" in this dataset
+// (see engine/functional-view.js's header) - both render the same badge.
+const RISK_BADGE = Object.freeze({
+  critical: { label: 'Critical', modifier: 'critical' },
+  elevated: { label: 'Elevated', modifier: 'elevated' },
+  attention: { label: 'Elevated', modifier: 'elevated' },
+  watch: { label: 'Watch', modifier: 'watch' },
+});
+
+function riskBadgeHtml(riskState) {
+  const badge = RISK_BADGE[String(riskState ?? '').toLowerCase()];
+  if (!badge) return '';
+  return `<span class="functional-radar-risk-badge functional-radar-risk-badge--${badge.modifier}">${badge.label}</span>`;
+}
+
+/**
+ * Mount the Functional Radar toggle button + flyout panel.
+ *
+ * @param {HTMLElement} toggleEl - a small persistent toolbar element for
+ *   the toggle button.
+ * @param {HTMLElement} panelEl - the flyout panel container (hidden by
+ *   default, matching every other overlay in this app's 'hidden' class
+ *   convention).
+ * @param {Object} callbacks
+ * @param {() => Object} callbacks.getBundle - returns the current
+ *   engine/timeline.js DerivedBundle (reads .universe.nodes).
+ * @param {(objectId: string) => void} callbacks.onSelect - called with the
+ *   chosen object's id. app.js wires this to probeObject().
+ * @returns {{ render: () => void, destroy: () => void }}
+ */
+export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
+  if (!toggleEl || typeof toggleEl.appendChild !== 'function') {
+    throw new Error('mountFunctionalRadarPanel: toggleEl must be a DOM element');
+  }
+  if (!panelEl || typeof panelEl.appendChild !== 'function') {
+    throw new Error('mountFunctionalRadarPanel: panelEl must be a DOM element');
+  }
+  const { getBundle, onSelect } = callbacks ?? {};
+  if (typeof getBundle !== 'function') {
+    throw new Error('mountFunctionalRadarPanel: callbacks.getBundle is required');
+  }
+
+  let isOpen = false;
+
+  function toggleOpen() {
+    isOpen = !isOpen;
+    render();
+  }
+
+  function close() {
+    if (!isOpen) return;
+    isOpen = false;
+    render();
+  }
+
+  function renderToggle() {
+    toggleEl.innerHTML = `
+      <button
+        type="button"
+        class="functional-radar-toggle-btn${isOpen ? ' is-active' : ''}"
+        data-functional-radar-toggle
+        aria-haspopup="dialog"
+        aria-expanded="${isOpen ? 'true' : 'false'}"
+      >Functional Radar</button>
+    `;
+    toggleEl.querySelector('[data-functional-radar-toggle]')?.addEventListener('click', toggleOpen);
+  }
+
+  /**
+   * @param {import('../engine/functional-view.js').FunctionalGroup} group
+   */
+  function renderGroup(group) {
+    const hasMembers = group.count > 0;
+    const hiddenCount = group.count - group.topObjects.length;
+    return `
+      <section class="functional-radar-group${hasMembers ? '' : ' is-empty'}">
+        <header class="functional-radar-group-header">
+          <span class="functional-radar-group-label">${escapeHtml(group.label)}</span>
+          <span class="functional-radar-group-count">${group.count}</span>
+          ${
+            group.riskCounts.critical > 0
+              ? `<span class="functional-radar-group-flag functional-radar-group-flag--critical">${group.riskCounts.critical} critical</span>`
+              : ''
+          }
+        </header>
+        ${
+          hasMembers
+            ? `<ul class="functional-radar-object-list">
+                ${group.topObjects
+                  .map(
+                    (obj) => `
+                      <li>
+                        <button type="button" class="functional-radar-object" data-select-id="${escapeHtml(obj.id)}">
+                          <span class="functional-radar-object-top">
+                            <span class="functional-radar-object-label">${escapeHtml(obj.label)}</span>
+                            ${riskBadgeHtml(obj.riskState)}
+                          </span>
+                          ${
+                            obj.nextActionSummary
+                              ? `<span class="functional-radar-object-detail">${escapeHtml(obj.nextActionSummary)}</span>`
+                              : obj.ownerName
+                                ? `<span class="functional-radar-object-detail functional-radar-object-detail--owner">Owner: ${escapeHtml(obj.ownerName)}</span>`
+                                : ''
+                          }
+                        </button>
+                      </li>
+                    `
+                  )
+                  .join('')}
+                ${hiddenCount > 0 ? `<li class="functional-radar-object-more">+ ${hiddenCount} more</li>` : ''}
+              </ul>`
+            : `<p class="functional-radar-empty-note">No significant ${escapeHtml(group.label.toLowerCase())} signals in the current operational graph.</p>`
+        }
+      </section>
+    `;
+  }
+
+  function render() {
+    renderToggle();
+
+    panelEl.classList.toggle('hidden', !isOpen);
+    if (!isOpen) {
+      panelEl.innerHTML = '';
+      return;
+    }
+
+    const bundle = getBundle();
+    const nodes = bundle?.universe?.nodes ?? [];
+    const groups = buildFunctionalViewGroups(nodes);
+
+    panelEl.innerHTML = `
+      <div class="functional-radar-backdrop" data-functional-radar-close></div>
+      <div class="functional-radar-dialog" role="dialog" aria-modal="true" aria-label="Functional Radar">
+        <header class="functional-radar-header">
+          <div>
+            <h2>Functional Radar</h2>
+            <p class="functional-radar-subtitle">What is happening inside each function, right now.</p>
+          </div>
+          <button type="button" class="functional-radar-close" data-functional-radar-close aria-label="Close">✕</button>
+        </header>
+        <div class="functional-radar-groups">
+          ${groups.map(renderGroup).join('')}
+        </div>
+      </div>
+    `;
+
+    panelEl.querySelectorAll('[data-functional-radar-close]').forEach((el) => el.addEventListener('click', close));
+    panelEl.querySelectorAll('[data-select-id]').forEach((el) => {
+      el.addEventListener('click', () => {
+        if (typeof onSelect === 'function') onSelect(el.getAttribute('data-select-id'));
+        close();
+      });
+    });
+  }
+
+  function onKeydown(ev) {
+    if (isOpen && ev.key === 'Escape') close();
+  }
+  document.addEventListener('keydown', onKeydown);
+
+  function destroy() {
+    document.removeEventListener('keydown', onKeydown);
+    toggleEl.innerHTML = '';
+    panelEl.innerHTML = '';
+  }
+
+  render();
+
+  return { render, destroy };
+}

@@ -106,6 +106,56 @@ Universe node (see `radarAxisForNode()`).
 | Radar Subject | the commitment the radar is computed for, resolved via `resolveCommitmentForObject()` from the current selection; falls back to a whole-portfolio rollup across every `commitments.json` row when the selection does not trace to a commitment | derived_supported |
 | Commitment Health Radar Axis Score | weighted count of <=2-hop related objects per axis whose risk_state is critical/elevated/watch, normalized per axis; derived from `relationships.json` / `nr04-canonical-universe.json` links, node `domain` fields (grouped into the 9 named axes), and `risk-board.json` per-slice risk states | derived_supported |
 
+## Universe Search fields
+
+V1-UX-2A (Universe Focus + Investigation Flow): `engine/search.js`'s
+`searchUniverseNodes()` is a pure filter/rank over the exact same
+`bundle.universe.nodes` every other lens already reads. No new field is
+introduced, no new derived data shape is added to the timeline bundle, and
+no change was made to `engine/derive.js`. Answers a different question
+than the pre-existing Scope Explorer search (`panels/scope.js`, which
+narrows the Operational Scope filter): this is "find a specific
+operational object and jump straight to it," not "narrow the graph to a
+hierarchy branch."
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Search result identity/type | `id`/`type`/`object_type` passthrough, same as Universe: Node ID / Node Type | supported |
+| Search match ranking | pure string comparison (exact / starts-with / contains) against the node's own label/id (identity fields), falling back to its type/customer/program/domain (context fields) only when identity doesn't match - no new field, presentation-layer ranking only | derived_supported |
+
+## Functional Radar fields
+
+V1-UX-2B (Progressive Risk Board + Functional Radar): `engine/functional-
+view.js`'s `buildFunctionalViewGroups()` groups the same Universe graph
+nodes into five named functions - Engineering, Planning, Manufacturing,
+Procurement, Quality - per the sprint brief. This is NOT the Commitment
+Health Radar above (a 9-axis per-COMMITMENT health score); it is a
+5-function GROUPING of the operational graph itself, with no health-score
+math and no dependency on a resolved commitment.
+
+Governance: all five function names map DIRECTLY onto real `domain`
+values already present on Universe graph nodes - confirmed directly
+against the live merged graph, not assumed. `procurement` and `supply` are
+both real, observed `domain` values folded into the Procurement group (the
+same domain-to-representative-system folding precedent the Documents
+section above already uses for `documentSystemForDomainAndType()`). No new
+field, no renamed/invented domain value, no change to `engine/derive.js`.
+
+| Function | Real `domain` value(s) grouped |
+|---|---|
+| Engineering | `engineering` |
+| Planning | `planning` |
+| Manufacturing | `manufacturing` |
+| Procurement | `procurement`, `supply` |
+| Quality | `quality` |
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Function group membership / count | real `domain` field passthrough, filtered per the table above | supported |
+| Function group risk counts (critical/elevated/watch) | `risk_state` passthrough, tallied per group - same field Risk Board / Universe already use | derived_supported |
+| Per-object owner / next action / business impact | `owner_name` / `next_action_summary` / `business_impact_summary` passthrough, identical real columns to Hover Passport Preview below | supported |
+| Empty-function state (0 matching nodes) | explicit, honest per-function empty note - never a fabricated or hidden row | derived_supported |
+
 ## Hover Passport Preview fields
 
 The Hover Passport Preview (V1-UX-1b Task 2) is a compact subset of the same

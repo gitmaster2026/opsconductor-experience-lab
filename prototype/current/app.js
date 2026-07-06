@@ -60,6 +60,8 @@ import { mountPassportPanel } from './panels/passport.js';
 import { mountHoverPreview } from './panels/hover-preview.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
 import { mountScopePanel } from './panels/scope.js';
+import { mountUniverseSearchPanel } from './panels/universe-search.js';
+import { mountFunctionalRadarPanel } from './panels/functional-radar.js';
 import { mountNavHistoryRail } from './panels/nav-history.js';
 import { mountReturnToUniverseButton } from './panels/return-to-universe.js';
 import { mountRelationshipLegend } from './panels/relationship-legend.js';
@@ -94,6 +96,9 @@ const els = {
   mainLayout: document.getElementById('mainLayout'),
   scopeBar: document.getElementById('scopeBar'),
   scopeExplorer: document.getElementById('scopeExplorer'),
+  universeSearch: document.getElementById('universeSearch'),
+  functionalRadarToggle: document.getElementById('functionalRadarToggle'),
+  functionalRadarPanel: document.getElementById('functionalRadarPanel'),
   navHistoryRail: document.getElementById('navHistoryRail'),
   returnToUniverseControl: document.getElementById('returnToUniverseControl'),
   relationshipLegend: document.getElementById('relationshipLegend'),
@@ -391,6 +396,28 @@ async function main() {
     onSetScope: (scope) => store.setScope(scope),
   });
 
+  // V1-UX-2A (Universe Focus + Investigation Flow): "search-to-focus" -
+  // find any operational object by name/id/type/customer/program/domain
+  // and jump straight to it. Routes through the same probeObject() choke
+  // point every other investigative trigger uses (Dashboard KPI, Risk
+  // Board card, Commitment Health Radar spoke, Passport relationship row),
+  // so a search result behaves identically to selecting that object
+  // anywhere else - see panels/universe-search.js's header comment.
+  const universeSearchPanel = mountUniverseSearchPanel(els.universeSearch, {
+    getBundle: () => timeline.getDerivedBundle(),
+    onSelect: (id) => probeObject(id),
+  });
+
+  // V1-UX-2B (Progressive Risk Board + Functional Radar): "what is
+  // happening inside this function?" - a toggleable flyout grouping the
+  // SAME bundle.universe.nodes by their real domain field into the five
+  // named functions. Selecting an object inside it is a Probe action, same
+  // as the search panel above - see panels/functional-radar.js's header.
+  const functionalRadarPanel = mountFunctionalRadarPanel(els.functionalRadarToggle, els.functionalRadarPanel, {
+    getBundle: () => timeline.getDerivedBundle(),
+    onSelect: (id) => probeObject(id),
+  });
+
   // V5 Phase 2.6 item E: the Navigation History rail - independent of the
   // zoom slider and of timeSliceId (jumpToTrailIndex only ever calls
   // popFocus(), which never touches timeSliceId/zoomLevel - see
@@ -574,6 +601,8 @@ async function main() {
     renderLeftPanel(state);
     jarvisPanel.render();
     scopePanel.render();
+    universeSearchPanel.render();
+    functionalRadarPanel.render();
     navHistoryPanel.render();
     returnToUniversePanel.render();
     relationshipLegendPanel.render();
