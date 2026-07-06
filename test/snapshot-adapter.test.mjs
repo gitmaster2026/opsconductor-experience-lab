@@ -98,15 +98,25 @@ test('nr04-golden-operational-universe.snapshot.json: envelope declares all 19 c
   }
 });
 
-test('nr04-golden-operational-universe.snapshot.json: governed sections are honestly empty, not fabricated', () => {
+test('nr04-golden-operational-universe.snapshot.json: governed sections reflect the current production snapshot export', () => {
   const snapshot = loadJson('nr04-golden-operational-universe.snapshot.json');
-  const GOVERNED_SECTIONS = [
-    'shortageExceptions', 'shortageRecommendations', 'recommendationEvidence',
-    'shortageRecommendationEvents', 'decisionOutcomeObservations', 'demandRevenueAtRisk',
-    'executiveOperationalHealthSummary', 'executiveRevenueSummary', 'plannerWorkQueue',
-  ];
-  for (const section of GOVERNED_SECTIONS) {
-    assert.equal(snapshot.sections[section].length, 0, `${section} should be empty pending a live export`);
+  const EXPECTED_GOVERNED_COUNTS = {
+    shortageExceptions: 4,
+    shortageRecommendations: 4,
+    recommendationEvidence: 0,
+    shortageRecommendationEvents: 8,
+    decisionOutcomeObservations: 8,
+    demandRevenueAtRisk: 4,
+    executiveOperationalHealthSummary: 1,
+    executiveRevenueSummary: 1,
+    plannerWorkQueue: 8,
+  };
+  for (const [section, expectedCount] of Object.entries(EXPECTED_GOVERNED_COUNTS)) {
+    assert.equal(
+      snapshot.sections[section].length,
+      expectedCount,
+      `${section} should match the retained production artifact's current record count`
+    );
   }
 });
 
@@ -116,8 +126,8 @@ test('nr04-golden-operational-universe.snapshot.json: input sections reflect the
   assert.equal(snapshot.sections.demandSignals.length, 8);
   assert.equal(snapshot.sections.demandSignalValues.length, 8);
   assert.equal(snapshot.sections.inventoryPositions.length, 5);
-  assert.equal(snapshot.sections.domainObjects.length, 64);
-  assert.equal(snapshot.sections.domainObjectLinks.length, 65);
+  assert.equal(snapshot.sections.domainObjects.length, 94);
+  assert.equal(snapshot.sections.domainObjectLinks.length, 127);
 });
 
 test('nr04-canonical-universe.json: every link resolves to an object present in the same document (no dangling references)', () => {
