@@ -74,7 +74,102 @@ installable offline under this project's zero-dependency rule), and `npm
 run verify-data` (schema-fidelity enforcement against `field-map.md`'s
 documented fields) all pass; `npm run build` runs all three plus the test
 suite.
+## V1 UX Product Decisions (2026-07-06)
 
+The remaining V1 UX work is now considered an implementation exercise rather than a product design exercise.
+
+A founder review confirmed the following interaction model for V1.
+
+### Recursive Investigation
+
+All investigative viewpoints share one interaction pattern.
+
+Users should progressively move through:
+
+Business Summary
+
+↓
+
+Operational Parameters
+
+↓
+
+Related Operational Objects
+
+↓
+
+Evidence
+
+↓
+
+Transactions (when available)
+
+↓
+
+Source Records
+
+↓
+
+Representative Documents
+
+↓
+
+External System / File Handoff
+
+This interaction model applies equally to:
+
+- Universe
+- Functional Radar
+- Risk Board
+- Timeline
+- Passport
+- future investigative viewpoints
+
+The recursion depth is governed entirely by available operational relationships.
+
+When no additional governed depth exists, the investigation terminates naturally at the deepest available governed object.
+
+No artificial hierarchy should be introduced.
+
+---
+
+### Functional Radar
+
+Functional Radar is now considered the second investigative layer.
+
+Navigation becomes:
+
+Universe Radar
+
+↓
+
+Functional Node
+
+↓
+
+Function-specific Functional Radar
+
+↓
+
+Recursive Investigation
+
+The existing Functional Radar implementation should be promoted rather than replaced.
+
+---
+
+### Progressive Disclosure
+
+Every investigation begins with a concise business explanation understandable by non-technical users.
+
+Technical identifiers, transactions, evidence and source records are progressively revealed only as users investigate deeper.
+
+---
+
+### Golden Investigation Regression
+
+V1 should preserve one or more canonical investigations that are manually exercised after every UX sprint to detect regressions.
+
+These become the standard acceptance path for future UX work.
 **Note (V1-UX-2, 2026-07-06):** the counts and phase list above describe the
 original V4 milestone only and have not been reconciled since (this file
 has the same self-referential lag `docs/V5_HANDOVER.md` §1 flags for
