@@ -1,0 +1,74 @@
+/* V1-UX-2A corrective port: shared investigation state HUD.
+   Reads engine/state.js; does not introduce a second store. */
+.shared-investigation-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 560px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.shared-investigation-chip,
+.shared-investigation-meta,
+.shared-investigation-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  background: rgba(12, 20, 36, 0.78);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.shared-investigation-chip {
+  max-width: 220px;
+  padding: 0 10px;
+}
+
+.shared-investigation-kicker {
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.shared-investigation-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+  font-weight: 650;
+}
+
+.shared-investigation-meta {
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shared-investigation-nav {
+  width: 28px;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.shared-investigation-nav:hover:not(:disabled) {
+  border-color: var(--cyan-accent);
+  color: var(--text-primary);
+}
+
+.shared-investigation-nav:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1180px) {
+  .shared-investigation-meta {
+    display: none;
+  }
+}

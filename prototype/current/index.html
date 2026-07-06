@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>OpsConductor Experience Lab V4</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="shared-investigation-state.css" />
 </head>
 <body>
   <div id="app">
@@ -28,6 +29,7 @@
       <div id="universeSearch" class="universe-search" role="search"></div>
       <div id="functionalRadarToggle" class="functional-radar-toggle"></div>
       <div class="spacer"></div>
+      <div id="sharedInvestigationState" class="shared-investigation-state" role="region" aria-label="Shared investigation state"></div>
       <div id="returnToUniverseControl" class="return-to-universe" role="navigation" aria-label="Return to Universe"></div>
       <div id="navHistoryRail" class="nav-history-rail" role="navigation" aria-label="Investigation history"></div>
       <label class="slider-control">
@@ -62,5 +64,6 @@
     <div id="savedViewsManager" class="saved-views-overlay hidden"></div>
   </div>
   <script type="module" src="app.js"></script>
+  <script type="module" src="panels/shared-investigation-state.js"></script>
 </body>
 </html>
