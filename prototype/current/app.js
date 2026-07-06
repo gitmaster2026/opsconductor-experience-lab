@@ -118,6 +118,7 @@ const els = {
 // store.setState()/timeline.onUpdate().
 // ---------------------------------------------------------------------------
 let highlightedIds = [];
+let passportTargetSection = null;
 
 function setHighlightedIds(ids) {
   highlightedIds = Array.isArray(ids) ? [...ids] : [];
@@ -229,24 +230,30 @@ async function main() {
     probeObject(id);
   }
 
-  function openObjectPassport(id) {
+  function openObjectPassportSection(id, section = null) {
+    passportTargetSection = section;
     selectAndClearHighlight(id);
     store.setLeftPanel('passport');
+  }
+
+  function openObjectPassport(id) {
+    openObjectPassportSection(id, null);
   }
 
   function openObjectTimeline(id) {
-    selectAndClearHighlight(id);
-    store.setLeftPanel('passport');
+    openObjectPassportSection(id, 'timeline');
   }
 
   function openObjectEvidence(id) {
-    selectAndClearHighlight(id);
-    store.setLeftPanel('passport');
+    openObjectPassportSection(id, 'evidence');
   }
 
   function openObjectSource(id) {
-    selectAndClearHighlight(id);
-    store.setLeftPanel('passport');
+    openObjectPassportSection(id, 'source');
+  }
+
+  function openObjectDocument(id) {
+    openObjectPassportSection(id, 'document');
   }
 
   // --- Return to Universe (V1-UX-1B) ----------------------------------------
@@ -333,6 +340,11 @@ async function main() {
     // object and its relationship chain in Universe, not just a local
     // selection.
     onSelect: (nodeId) => probeObject(nodeId),
+    onOpenFunction: (axis) => {
+      const functionKey = String(axis ?? '').toLowerCase().replace(/\s+chain$/, '').replace(/\s+/g, '_');
+      functionalRadarPanel.openFunction(functionKey === 'supply' ? 'procurement' : functionKey);
+      store.setLens('spider');
+    },
     onHover: (nodeId) => store.setHovered(nodeId),
   });
 
@@ -412,6 +424,7 @@ async function main() {
     onSelect: (id) => selectAndClearHighlight(id),
     // V1-UX-1b Task 3: the Overview header's "Probe {Type} in Universe" CTA.
     onProbe: (id) => probeObject(id),
+    getTargetSection: () => passportTargetSection,
   });
 
   const jarvisPanel = mountJarvisPanel(els.jarvisPanel, {
@@ -467,6 +480,7 @@ async function main() {
     onOpenTimeline: (id) => openObjectTimeline(id),
     onOpenEvidence: (id) => openObjectEvidence(id),
     onOpenSource: (id) => openObjectSource(id),
+    onOpenDocument: (id) => openObjectDocument(id),
   });
 
   // V5 Phase 2.6 item E: the Navigation History rail - independent of the
@@ -650,6 +664,9 @@ async function main() {
     applyPanelVisibility(state);
     updateToolbarLabels(state);
     renderLeftPanel(state);
+    if (passportTargetSection && state.leftPanelMode === 'passport' && typeof passportPanel.focusSection === 'function') {
+      if (passportPanel.focusSection(passportTargetSection)) passportTargetSection = null;
+    }
     jarvisPanel.render();
     scopePanel.render();
     universeSearchPanel.render();

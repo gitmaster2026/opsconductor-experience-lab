@@ -31,11 +31,11 @@ test('defaultContinuityAction degrades non-local objects to Universe probing', (
   );
 });
 
-test('buildContinuitySteps encodes Passport to Timeline to Evidence to Source continuity', () => {
+test('buildContinuitySteps encodes Passport to Timeline to Evidence to Source to Document continuity', () => {
   const steps = buildContinuitySteps('RB-CPP-HORIZON');
   assert.deepEqual(
     steps.map((step) => step.action),
-    ['open_passport', 'open_timeline', 'open_evidence', 'open_source', 'probe_universe'],
+    ['open_passport', 'open_timeline', 'open_evidence', 'open_source', 'open_document', 'probe_universe'],
   );
   assert.equal(steps.every((step) => step.objectId === 'RB-CPP-HORIZON'), true);
 });

@@ -96,6 +96,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   }
 
   let isOpen = false;
+  let activeFunctionKey = null;
 
   function toggleOpen() {
     isOpen = !isOpen;
@@ -105,6 +106,13 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   function close() {
     if (!isOpen) return;
     isOpen = false;
+    activeFunctionKey = null;
+    render();
+  }
+
+  function openFunction(functionKey) {
+    isOpen = true;
+    activeFunctionKey = functionKey ?? null;
     render();
   }
 
@@ -116,7 +124,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
         data-functional-radar-toggle
         aria-haspopup="dialog"
         aria-expanded="${isOpen ? 'true' : 'false'}"
-      >Functional Radar</button>
+      >${activeFunctionKey ? 'Functional Radar · ' + escapeHtml(activeFunctionKey) : 'Functional Radar'}</button>
     `;
     toggleEl.querySelector('[data-functional-radar-toggle]')?.addEventListener('click', toggleOpen);
   }
@@ -214,19 +222,20 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     const bundle = getBundle();
     const nodes = bundle?.universe?.nodes ?? [];
     const groups = buildFunctionalViewGroups(nodes);
+    const visibleGroups = activeFunctionKey ? groups.filter((group) => group.key === activeFunctionKey) : groups;
 
     panelEl.innerHTML = `
       <div class="functional-radar-backdrop" data-functional-radar-close></div>
       <div class="functional-radar-dialog" role="dialog" aria-modal="true" aria-label="Functional Radar">
         <header class="functional-radar-header">
           <div>
-            <h2>Functional Radar</h2>
-            <p class="functional-radar-subtitle">What is happening inside each function, right now.</p>
+            <h2>${activeFunctionKey ? `${escapeHtml(visibleGroups[0]?.label ?? 'Functional')} Radar` : 'Functional Radar'}</h2>
+            <p class="functional-radar-subtitle">${activeFunctionKey ? 'Function-specific investigation workspace. Continue through operational objects without returning to Universe.' : 'Select a function to open its investigation workspace.'}</p>
           </div>
           <button type="button" class="functional-radar-close" data-functional-radar-close aria-label="Close">✕</button>
         </header>
         <div class="functional-radar-groups">
-          ${groups.map(renderGroup).join('')}
+          ${visibleGroups.map(renderGroup).join('')}
         </div>
       </div>
     `;
@@ -242,6 +251,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
         else if (action === 'open_timeline' && typeof onOpenTimeline === 'function') onOpenTimeline(objectId);
         else if (action === 'open_evidence' && typeof onOpenEvidence === 'function') onOpenEvidence(objectId);
         else if (action === 'open_source' && typeof onOpenSource === 'function') onOpenSource(objectId);
+        else if (action === 'open_document' && typeof callbacks?.onOpenDocument === 'function') callbacks.onOpenDocument(objectId);
         else if (action === 'probe_universe' && typeof onProbe === 'function') onProbe(objectId);
         else if (typeof onSelect === 'function') onSelect(objectId);
         close();
@@ -262,5 +272,5 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
 
   render();
 
-  return { render, destroy };
+  return { render, openFunction, destroy };
 }

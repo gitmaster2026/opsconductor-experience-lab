@@ -1,8 +1,6 @@
 # V1 Pre-Launch UX Completion Plan (V1-UX-2)
 
-Status: **V1-UX-2A implemented and tested. V1-UX-2B partially implemented
-and tested (Functional Radar shipped; Progressive Risk Board enrichment
-deferred, see below). V1-UX-2C documented, not implemented.**
+Status: **V1-UX-2A implemented and tested. V1-UX-2B implemented for Functional Radar and lens continuity. V1-UX-2C operational language / IA shipped. V1-UX-2D Recursive Investigation Foundation implemented as interaction-layer work.**
 
 This document defines the remaining V1 pre-launch UX completion work as
 three focused sprints - V1-UX-2A, V1-UX-2B, V1-UX-2C - per the founder's
