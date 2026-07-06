@@ -45,6 +45,14 @@ Required sections:
 - Evidence
 - Timeline / Operational History
 - Source Records
+- Documents (representative links only, to the external enterprise systems -
+  SAP, Windchill, MES, Inspection Reports, SharePoint, network folders -
+  that would hold supporting artifacts for the selected object in a real
+  deployment; deterministically classified from the object's real
+  domain/type, never a real connector or working link; distinct from Source
+  Records, which cites this lab's own governed record lineage. See
+  `docs/field-map.md`'s "Documents fields" section and
+  `engine/derive.js`'s `buildDocumentReferencesForObject()`.)
 
 Passport must update with time.
 

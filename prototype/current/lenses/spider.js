@@ -46,14 +46,9 @@
 // Like every other lens module, this file knows nothing about
 // engine/state.js - app.js wires onSelect to store.selectObject().
 
-const MORPH_DURATION_MS = 400;
+import { easeOutCubic } from '../engine/easing.js';
 
-/** cubic-bezier(0.16, 1, 0.3, 1) approximated as a plain ease-out cubic for
- * per-frame interpolation (docs/V5_DESIGN_SPEC.md §9.1 `--ease-out`). */
-function easeOutCubic(t) {
-  const clamped = Math.max(0, Math.min(1, t));
-  return 1 - (1 - clamped) ** 3;
-}
+const MORPH_DURATION_MS = 400;
 
 function lerp(a, b, t) {
   return a + (b - a) * t;

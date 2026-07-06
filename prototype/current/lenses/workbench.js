@@ -37,6 +37,28 @@ import { buildRelationshipDataset, listNodeTypes, listDomains } from '../engine/
 import { mountFilterableTable, applyTable } from '../engine/filterable-table.js';
 import { mountSaveNamePrompt, placeholderSaveNote } from '../engine/saved-views.js';
 
+// --- Probe/Hover wiring (closing the "Workbench supports select-through
+// only" gap from the UX backlog) --------------------------------------------
+//
+// Every Workbench row is built by engine/relationship-dataset.js's
+// buildRelationshipDataset(), which always stamps `__rootId`/`__rootType`
+// (the real, already-resolved graph node this row is rooted at - see that
+// module's buildRow()) - a genuine, non-invented selectable object id/type
+// pair on every row, regardless of which columns the user has chosen to
+// show. These two tiny accessors hand that straight to
+// engine/filterable-table.js's new optional getRowSelectId/getRowProbeType
+// hooks, so this lens gets the exact same Hover Passport Preview + explicit
+// "Probe {Type} →" CTA every other lens already has, with zero new
+// rendering/markup of its own - see filterable-table.js's module header for
+// how those hooks work.
+function rootSelectId(row) {
+  return typeof row.__rootId === 'string' ? row.__rootId : null;
+}
+
+function rootProbeType(row) {
+  return typeof row.__rootType === 'string' ? row.__rootType : null;
+}
+
 /**
  * Documented target shape for a future real "Save Report"/"Save Current
  * View" (V5_HANDOVER.md §9.4: "should be documented as a comment/type...
@@ -240,13 +262,22 @@ function truncateLabel(label) {
  * @param {() => void} [callbacks.onOpenSavedViewsManager] - opens the
  *   shared "Manage Saved Views" modal (engine/saved-views.js's
  *   mountSavedViewsManager) - V5 Phase 4.6.
+ * @param {(objectId: string) => void} [callbacks.onSelect] - row click:
+ *   selects the row's root object (row.__rootId - see
+ *   engine/relationship-dataset.js's buildRow()), same choke point every
+ *   other lens's plain click-to-select already routes through.
+ * @param {(objectId: string) => void} [callbacks.onProbe] - the row's
+ *   explicit "Probe {Type} →" CTA (closing the UX backlog's "Workbench
+ *   supports select-through only" gap) - the deeper investigate action,
+ *   distinct from onSelect above exactly like every other Probe affordance
+ *   in this app (see lenses/risk-board.js/panels/passport.js).
  * @returns {{ render: () => void, resize: () => void, destroy: () => void }}
  */
 export function mountWorkbenchLens(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountWorkbenchLens: containerEl must be a DOM element');
   }
-  const { getBundle, getSnapshot, onOpenSavedViewsManager } = callbacks ?? {};
+  const { getBundle, getSnapshot, onOpenSavedViewsManager, onSelect, onProbe } = callbacks ?? {};
   if (typeof getBundle !== 'function') throw new Error('mountWorkbenchLens: callbacks.getBundle is required');
   if (typeof getSnapshot !== 'function') throw new Error('mountWorkbenchLens: callbacks.getSnapshot is required');
 
@@ -339,6 +370,17 @@ export function mountWorkbenchLens(containerEl, callbacks) {
     // engine/filterable-table.js's internals - see that module's
     // onStateChange doc comment.
     onStateChange: () => renderChart(currentRows()),
+    // Row click selects the row's root object - Workbench previously wired
+    // no onRowClick at all, so this is new baseline click-to-select
+    // behavior (onSelect is optional above; omitting it just means rows
+    // stay non-clickable, as before).
+    onRowClick: typeof onSelect === 'function' ? (row) => onSelect(rootSelectId(row)) : null,
+    // Probe/Hover wiring (see this file's rootSelectId/rootProbeType
+    // helpers + filterable-table.js's module header for the full
+    // mechanism). onProbe is optional the same way onSelect is.
+    getRowSelectId: rootSelectId,
+    getRowProbeType: rootProbeType,
+    onProbe: typeof onProbe === 'function' ? (row) => onProbe(rootSelectId(row)) : null,
   });
 
   let cachedSnapshot = null;

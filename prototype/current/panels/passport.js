@@ -5,7 +5,13 @@
 // object," per docs/PANEL_SPECIFICATIONS.md's Passport mode. All 7 required
 // V4 sections render here: Overview, Current Risk, Relationships,
 // Recommendations, Evidence, Timeline / Operational History, Source
-// Records.
+// Records - plus an 8th section, Documents (this sprint's addition, see
+// renderDocumentsSection() below): representative links to the external
+// enterprise systems (SAP, Windchill, MES, Inspection Reports, SharePoint,
+// Network Folder) that would hold supporting artifacts for the selected
+// object in a real deployment. Distinct from Source Records (this lab's own
+// governed record lineage) - Documents is always visibly badged
+// "Representative" and never a real, working link.
 //
 // This replaces prototype/current/app.js's prior placeholder
 // renderPassportPanel() (a handful of plain <p> tags) with real structure:
@@ -336,6 +342,65 @@ function renderSourceRecordsSection(sourceRecords) {
 }
 
 /**
+ * The Documents section (8th Passport section): representative links to the
+ * EXTERNAL enterprise systems (SAP, Windchill, MES, Inspection Reports,
+ * SharePoint, Network Folder) that would hold supporting artifacts for the
+ * selected object in a real deployment - engine/derive.js's
+ * buildDocumentReferencesForObject() output, nested onto
+ * bundle.passport.documents / bundle.collectionPassport.documents.
+ *
+ * Distinct from Source Records above: Source Records cites this lab's OWN
+ * governed record lineage (source_table/source_record_id); Documents points
+ * at a system this snapshot never actually connects to. Every entry is
+ * therefore rendered as inert text behind an `href="#"` anchor (never a
+ * working link to a real system) plus a visible "Representative" badge,
+ * reusing the exact same `.demo-derived-badge` treatment
+ * renderRepresentativeDrilldownSection() above already uses for its own
+ * "Demo-derived" content - no new CSS class introduced, per this app's
+ * "reuse existing classes only" rule for this section.
+ *
+ * @param {Array<Object>|undefined} documents
+ * @returns {string}
+ */
+function renderDocumentsSection(documents) {
+  const list = Array.isArray(documents) ? documents : [];
+  if (list.length === 0) {
+    return `
+      <section class="passport-section passport-documents">
+        <h3 class="passport-section-title">Documents</h3>
+        <div class="dash-section-empty">No representative document references for this object.</div>
+      </section>
+    `;
+  }
+  return `
+    <section class="passport-section passport-documents">
+      <h3 class="passport-section-title">
+        Documents <span class="passport-section-count">${list.length}</span>
+        <span class="demo-derived-badge" title="Representative link only - illustrative external-system reference, not a real connected document.">Representative</span>
+      </h3>
+      <p class="passport-drilldown-note">Representative links to the external enterprise systems (SAP, Windchill, MES, Inspection Reports, SharePoint, network folders) that would hold supporting artifacts for this object in a real deployment - not live connections.</p>
+      <ul class="passport-entry-list">
+        ${list
+          .map(
+            (doc) => `
+          <li class="passport-entry">
+            <div class="passport-entry-head">
+              <span class="passport-entry-tag">${escapeHtml(doc.system ?? 'Network Folder')}</span>
+              <span class="passport-entry-status">Representative</span>
+            </div>
+            <p class="passport-entry-summary"><a href="#" onclick="return false;" title="Representative link only - not a real connected document.">${escapeHtml(doc.path ?? doc.label ?? '—')}</a></p>
+            <div class="passport-entry-foot">
+              <span>${escapeHtml(doc.note ?? '')}</span>
+            </div>
+          </li>`
+          )
+          .join('')}
+      </ul>
+    </section>
+  `;
+}
+
+/**
  * The Collection Passport's overview header - the one piece of this
  * rendering path that has no single-object equivalent (renderOverviewSection
  * above is written around one selected object's fields, not a member list).
@@ -448,6 +513,7 @@ export function mountPassportPanel(el, callbacks) {
           ${renderEvidenceSection(collectionPassport.evidence)}
           ${renderOperationalHistorySection(collectionPassport.operationalHistory)}
           ${renderSourceRecordsSection(collectionPassport.sourceRecords)}
+          ${renderDocumentsSection(collectionPassport.documents)}
         </div>
       `;
       wireSelectHandlers();
@@ -468,6 +534,7 @@ export function mountPassportPanel(el, callbacks) {
         ${renderEvidenceSection(passport.evidence)}
         ${renderOperationalHistorySection(passport.operationalHistory)}
         ${renderSourceRecordsSection(passport.sourceRecords)}
+        ${renderDocumentsSection(passport.documents)}
         ${renderRepresentativeDrilldownSection(bundle?.representativeDrilldown ?? null)}
       </div>
     `;

@@ -1787,6 +1787,14 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
     })),
   ].filter((entry) => entry.sourceTable || entry.sourceRecordId);
 
+  // --- 8. Documents (representative links to external enterprise systems) ------
+  // buildDocumentReferencesForObject() re-derives from the same `node` this
+  // function already resolved above, so it can never disagree with the rest
+  // of this Passport about which object is selected. Distinct from Source
+  // Records above (this lab's own governed record lineage) - see that
+  // function's own header comment for the exact distinction.
+  const documentReferences = buildDocumentReferencesForObject(snapshot, objectId);
+
   return {
     objectId,
     overview,
@@ -1799,6 +1807,7 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
       effectiveDating,
     },
     sourceRecords: sourceRecordEntries,
+    documents: documentReferences ? documentReferences.references : [],
   };
 }
 
@@ -1989,6 +1998,212 @@ export function buildRepresentativeDrilldownViewModel(snapshot, objectId) {
     demoDerived: true,
     manifestNote: 'Representative Drilldown Manifest: docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md',
     drilldownFields,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// buildDocumentReferencesForObject (Documents Passport section)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Documents Passport section's sprint brief (see docs/field-map.md's
+ * "Documents" table and docs/PANEL_SPECIFICATIONS.md): "Representative
+ * links only... to SAP, Windchill, MES, Inspection Reports, SharePoint, PDFs,
+ * Network folders. Do not build connectors. Do not implement integrations."
+ * No such capability exists anywhere else in this app - see
+ * documentSystemForDomainAndType() below for the closed, deterministic
+ * mapping this function folds every object's real `domain`/`type` into.
+ *
+ * Distinct from the existing Source Records section
+ * (buildPassportViewModel()'s sourceRecords): Source Records cites this
+ * lab's OWN governed record lineage (source_table/source_record_id, real
+ * fields already in the snapshot); Documents is a representative pointer to
+ * the EXTERNAL enterprise system (SAP/Windchill/MES/etc.) that would hold
+ * supporting artifacts for an object of this domain/type in a real
+ * deployment - a system that this snapshot never actually connects to.
+ *
+ * @param {{ domain?: string, type?: string }} node
+ * @returns {{ system: string, note: string }} the representative external
+ *   system name plus one line of neutral context. Never a specific
+ *   file/artifact name (that is the caller's job, not this fold's - see
+ *   representativeDocumentPathForObject()), so this stays a pure
+ *   domain/type -> system classification, mirroring relationshipVisualClass()
+ *   and radarAxisForNode() above (same reason those are switches, not
+ *   object-literal maps: scripts/verify-field-map.mjs's conservative
+ *   "identifier:" scan should never mistake these domain/type VALUES for
+ *   output field KEYS).
+ */
+function documentSystemForDomainAndType(node) {
+  const domain = node?.domain ?? null;
+  const type = node?.type ?? null;
+
+  switch (domain) {
+    // engineering-domain objects (ECO/ECN/drawing/CAD-adjacent) -> Windchill (PLM).
+    case 'engineering':
+      return { system: 'Windchill', note: 'PLM system of record for engineering change/drawing artifacts' };
+
+    // manufacturing/work-order objects -> MES.
+    case 'manufacturing':
+      return { system: 'MES', note: 'Manufacturing execution system for shop-floor work order records' };
+
+    // quality (NCR/CAPA/inspection/MRB) objects -> Inspection Reports.
+    case 'quality':
+      return { system: 'Inspection Reports', note: 'Quality inspection/disposition report archive' };
+
+    // supply/procurement (PO, supplier) objects -> SAP.
+    case 'procurement':
+    case 'supplier':
+      return { system: 'SAP', note: 'ERP system of record for procurement/supplier transactions' };
+
+    // supply-domain objects: inventory/allocation nodes have no procurement
+    // system of their own real backing (they are internal fulfillment
+    // state, not an external system), but item/demand-signal-adjacent
+    // "supply" objects reflecting a purchase/supplier commitment fold to
+    // SAP the same as `procurement`/`supplier` above. Guarded by `type` the
+    // same way radarAxisForNode()'s `supply` case above disambiguates
+    // inventory from the rest.
+    case 'supply':
+      return type === 'inventory' || type === 'allocation'
+        ? { system: 'Network Folder', note: 'No dedicated external system of record for internal fulfillment state' }
+        : { system: 'SAP', note: 'ERP system of record for procurement/supplier transactions' };
+
+    // commercial/contract (customer commitment, contract milestone) objects -> SharePoint.
+    case 'commercial':
+    case 'customer':
+    case 'finance':
+      return { system: 'SharePoint', note: 'Commercial document/contract repository' };
+
+    // logistics (shipment, premium freight) objects -> SharePoint (carrier/
+    // freight paperwork lives in the same commercial document repository
+    // this lab's data has no dedicated logistics-TMS domain/type for).
+    case 'logistics':
+      return { system: 'SharePoint', note: 'Carrier/freight documentation repository' };
+
+    // structural/context domains (organization, platform, governance,
+    // program, asset) and anything unrecognized: no clear external-system
+    // mapping exists - honest generic fallback rather than a guessed one,
+    // per the sprint brief's "anything without a clear mapping -> a generic
+    // Network Folder fallback" instruction.
+    default:
+      return { system: 'Network Folder', note: 'No dedicated external system mapping for this domain' };
+  }
+}
+
+/**
+ * A plausible-looking, clearly-representative file path/URL string for a
+ * given system + object, deterministically composed from the object's own
+ * real id/label (never randomized - same input always yields the same
+ * string). Every path below is illustrative text only, never a real href to
+ * a real system - see renderDocumentsSection() in panels/passport.js, which
+ * either renders this as inert text or an `href="#"` anchor, exactly like
+ * the existing Representative Drilldown section avoids implying real
+ * connectivity for its own "Demo-derived" content.
+ *
+ * @param {string} system
+ * @param {{ id?: string, label?: string }} node
+ * @returns {string}
+ */
+function representativeDocumentPathForObject(system, node) {
+  const rawKey = String(node?.sourceIdentifier ?? node?.id ?? node?.label ?? 'object')
+    .split(':')
+    .pop();
+  const safeKey = rawKey.replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'object';
+
+  switch (system) {
+    case 'Windchill':
+      return `Windchill / ${safeKey}.pdf`;
+    case 'MES':
+      return `MES / Work Center Traveler ${safeKey}`;
+    case 'Inspection Reports':
+      return `Inspection Reports / ${safeKey}-inspection.pdf`;
+    case 'SAP':
+      return `SAP / ${safeKey}`;
+    case 'SharePoint':
+      return `SharePoint / Contracts / ${safeKey}.docx`;
+    default:
+      return `\\\\fileserver\\shared\\${safeKey}\\`;
+  }
+}
+
+/**
+ * Build the Documents Passport section's view-model for a selected object:
+ * a small, deterministic list of representative links to the EXTERNAL
+ * enterprise systems (SAP, Windchill, MES, Inspection Reports, SharePoint,
+ * Network Folder) that would hold supporting artifacts for an object of
+ * this real domain/type in a real deployment. Per the sprint brief and
+ * docs/RULES.md rule #7: "Representative links only... Do not build
+ * connectors. Do not implement integrations." - every entry carries
+ * `isRepresentative: true` and is never rendered as a real, working link
+ * (see panels/passport.js's renderDocumentsSection()).
+ *
+ * This is a NEW derived/presentation-layer capability, not a new backend
+ * field (docs/RULES.md rule #11): the classification lives entirely in
+ * documentSystemForDomainAndType() above, keyed off the object's own real
+ * `domain`/`type` fields (already produced by buildUniverseGraph() from
+ * operational-objects.json/nr04-canonical-universe.json's real `domain`/
+ * `object_type` columns) - no new object type (rule #8) and no new
+ * src/data/*.json field is introduced anywhere.
+ *
+ * Deterministic by construction: same objectId + same snapshot always
+ * yields the exact same reference list, in the same order (never
+ * randomized), per the sprint brief's explicit requirement.
+ *
+ * @param {any} snapshot
+ * @param {string} objectId
+ * @returns {{ objectId: string, references: Array<{ system: string, label: string, path: string, note: string, isRepresentative: true }> }|null}
+ *   null only when objectId does not resolve to any node in the merged
+ *   Universe graph (same "honest unavailable state" contract as
+ *   buildPassportViewModel()); every RESOLVABLE object gets at least one
+ *   reference (the generic Network Folder fallback when no closer mapping
+ *   applies), per the sprint brief's "avoid a dead-end empty section"
+ *   guidance.
+ */
+export function buildDocumentReferencesForObject(snapshot, objectId) {
+  assertSnapshot(snapshot);
+  if (typeof objectId !== 'string' || objectId.length === 0) {
+    return null;
+  }
+
+  const graph = buildUniverseGraph(snapshot);
+  const node = graph.nodes.find((n) => n.id === objectId);
+  if (!node) {
+    return null;
+  }
+
+  const { system, note } = documentSystemForDomainAndType(node);
+  const path = representativeDocumentPathForObject(system, node);
+
+  const references = [
+    {
+      system,
+      label: `${system} record for ${node.label ?? node.id}`,
+      path,
+      note,
+      isRepresentative: true,
+    },
+  ];
+
+  // Engineering objects also get a representative drawing/CAD PDF alongside
+  // the Windchill (PLM) record entry, per the sprint brief's example
+  // mapping ("engineering-domain objects ... -> Windchill (PLM) + a
+  // representative drawing PDF") - still fully deterministic (folds the
+  // same node fields, no randomization) and still isRepresentative: true.
+  if (system === 'Windchill') {
+    references.push({
+      system: 'Windchill',
+      label: `Representative drawing for ${node.label ?? node.id}`,
+      path: representativeDocumentPathForObject('Windchill', {
+        ...node,
+        id: `${node.sourceIdentifier ?? node.id}-drawing`,
+      }),
+      note: 'Illustrative CAD/drawing artifact - not a real Windchill export',
+      isRepresentative: true,
+    });
+  }
+
+  return {
+    objectId,
+    references,
   };
 }
 
@@ -2718,6 +2933,7 @@ export function buildCollectionPassportViewModel(snapshot, scope, sliceIndex) {
       effectiveDating: {},
     },
     sourceRecords: memberPassports.flatMap((p) => p.sourceRecords),
+    documents: memberPassports.flatMap((p) => p.documents),
   };
 }
 
@@ -2924,6 +3140,7 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   effectiveDating: { category: 'supported', note: 'field-map.md Global field rules: effective_from/effective_to/is_current' },
   isCurrent: { category: 'supported', note: 'commitments.json is_current field, surfaced inside Passport effectiveDating' },
   sourceRecords: { category: 'supported', note: 'field-map.md Passport: Source Records' },
+  documents: { category: 'derived_supported', note: 'field-map.md Passport: Documents, buildDocumentReferencesForObject() output nested onto the Passport view-model - representative external-system references, distinct from Source Records above' },
   objectId: { category: 'supported', note: 'field-map.md Global field rules: id (echoed as the Passport/Jarvis subject id)' },
   objectType: { category: 'supported', note: 'field-map.md Universe: Node Type, echoed on Passport overview' },
   relatedObjectId: { category: 'supported', note: 'field-map.md Passport: Relationships (operational graph related objects)' },
@@ -2984,6 +3201,11 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   demoDerived: { category: 'derived_supported', note: 'field-map.md Representative Drilldown: explicit Lab-side classification flag, always true on this view-model, never rendered as production schema support' },
   manifestNote: { category: 'derived_supported', note: 'field-map.md Representative Drilldown: citation pointer to docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md' },
   drilldownFields: { category: 'derived_supported', note: 'field-map.md Representative Drilldown: label/value pairs, a raw passthrough of the anchor object\'s own real nr04-canonical-universe.json `detail` column' },
+
+  // --- buildDocumentReferencesForObject (Documents Passport section) ---
+  references: { category: 'derived_supported', note: 'field-map.md Documents: Representative Document References, list of representative external-system pointers folded from the object\'s own real domain/type via documentSystemForDomainAndType()' },
+  system: { category: 'derived_supported', note: 'field-map.md Documents: Representative Document References, the representative external system name (SAP/Windchill/MES/Inspection Reports/SharePoint/Network Folder), deterministically classified from the object\'s real domain/type - never a fabricated backend field' },
+  isRepresentative: { category: 'derived_supported', note: 'field-map.md Documents: Representative Document References, explicit Lab-side flag marking every entry as illustrative/non-connected per docs/RULES.md rule #7 - always true, never rendered as a real working link' },
 
   // --- buildCollectionPassportViewModel (V5 Phase 4) ---
   collectionLabel: { category: 'supported', note: 'docs/V5_HANDOVER.md §9.1 scopeContext.label, echoed as the Collection Passport subject label' },

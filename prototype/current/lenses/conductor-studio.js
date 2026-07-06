@@ -105,13 +105,25 @@ const RECOMMENDATION_ACTIONS = Object.freeze([
  * @param {Object} callbacks
  * @param {() => import('../engine/timeline.js').DerivedBundle} callbacks.getBundle
  * @param {(id: string) => void} callbacks.onSelect
+ * @param {(id: string) => void} [callbacks.onProbe] - OPTIONAL: the
+ *   Recommendation Review/Approval Queue row's explicit "Probe {Type} →"
+ *   CTA (closing the UX backlog's "Conductor Studio supports select-through
+ *   only" gap) - every row here is a `recommendation` node (see
+ *   engine/derive.js's buildRecommendationReviewViewModel(), whose rows
+ *   this section reads verbatim), so the Probe type is that constant,
+ *   real object-type string, never invented. Distinct from onSelect above
+ *   exactly like every other Probe affordance in this app (see
+ *   lenses/risk-board.js/panels/passport.js) - onSelect merely selects the
+ *   row in place, onProbe takes the user into the deeper investigation
+ *   context. Omitting this callback simply renders no Probe button (see
+ *   engine/filterable-table.js's getRowProbeType/onProbe contract).
  * @returns {{ render: () => void, resize: () => void, destroy: () => void }}
  */
 export function mountConductorStudioLens(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountConductorStudioLens: containerEl must be a DOM element');
   }
-  const { getBundle, onSelect } = callbacks ?? {};
+  const { getBundle, onSelect, onProbe } = callbacks ?? {};
   if (typeof getBundle !== 'function') throw new Error('mountConductorStudioLens: callbacks.getBundle is required');
   if (typeof onSelect !== 'function') throw new Error('mountConductorStudioLens: callbacks.onSelect is required');
 
@@ -288,13 +300,40 @@ export function mountConductorStudioLens(containerEl, callbacks) {
     renderActionBar();
   }
 
+  function handleRowProbe(row) {
+    if (typeof onProbe === 'function') onProbe(row.id);
+  }
+
+  // Probe/Hover wiring (closing the UX backlog's "Conductor Studio supports
+  // select-through only" gap): every Recommendation Review/Approval Queue
+  // row IS a recommendation-typed object (row.id resolves to a
+  // `recommendation` graph node - see buildRecommendationReviewViewModel()),
+  // so both the hover `data-select-id` and the Probe type below are the
+  // row's own real id and this section's one constant, real object type -
+  // never invented. See engine/filterable-table.js's module header for how
+  // getRowSelectId/getRowProbeType turn into working hover/Probe UI with no
+  // extra rendering here.
+  const RECOMMENDATION_OBJECT_TYPE = 'recommendation';
+  function recommendationSelectId(row) {
+    return typeof row.id === 'string' ? row.id : null;
+  }
+  function recommendationProbeType() {
+    return RECOMMENDATION_OBJECT_TYPE;
+  }
+
   const reviewTable = mountFilterableTable(els.reviewTableContainer, {
     columns: RECOMMENDATION_COLUMNS,
     onRowClick: handleRowClick,
+    getRowSelectId: recommendationSelectId,
+    getRowProbeType: recommendationProbeType,
+    onProbe: handleRowProbe,
   });
   const queueTable = mountFilterableTable(els.queueTableContainer, {
     columns: RECOMMENDATION_COLUMNS,
     onRowClick: handleRowClick,
+    getRowSelectId: recommendationSelectId,
+    getRowProbeType: recommendationProbeType,
+    onProbe: handleRowProbe,
   });
 
   function renderActionBar() {
