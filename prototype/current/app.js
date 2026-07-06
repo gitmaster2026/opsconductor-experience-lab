@@ -66,6 +66,7 @@ import { mountNavHistoryRail } from './panels/nav-history.js';
 import { mountReturnToUniverseButton } from './panels/return-to-universe.js';
 import { mountRelationshipLegend } from './panels/relationship-legend.js';
 import { mountSavedViewsManager } from './engine/saved-views.js';
+import { defaultContinuityAction } from './engine/lens-continuity.js';
 
 // ---------------------------------------------------------------------------
 // DOM references (same element ids as the previous prototype iteration, so
@@ -208,6 +209,46 @@ async function main() {
     store.setLens('universe');
   }
 
+  // --- Lens continuity (V1-UX-2B) -------------------------------------------
+  //
+  // Some investigative surfaces should continue inside the lens the user is
+  // already using instead of forcing a return to Universe. Risk Board cards,
+  // for example, expand in place when the current lens is Risk Board; their
+  // explicit Probe button remains the intentional Universe path. Objects that
+  // do not have a lens-local representation still degrade to the existing
+  // probeObject() behavior.
+  function continueObjectInCurrentLens(id) {
+    const action = defaultContinuityAction({
+      currentLens: store.getState().workspaceLens,
+      objectId: id,
+    });
+    if (action === 'select_in_place') {
+      selectAndClearHighlight(id);
+      return;
+    }
+    probeObject(id);
+  }
+
+  function openObjectPassport(id) {
+    selectAndClearHighlight(id);
+    store.setLeftPanel('passport');
+  }
+
+  function openObjectTimeline(id) {
+    selectAndClearHighlight(id);
+    store.setLeftPanel('passport');
+  }
+
+  function openObjectEvidence(id) {
+    selectAndClearHighlight(id);
+    store.setLeftPanel('passport');
+  }
+
+  function openObjectSource(id) {
+    selectAndClearHighlight(id);
+    store.setLeftPanel('passport');
+  }
+
   // --- Return to Universe (V1-UX-1B) ----------------------------------------
   //
   // A full reset: clear any selection AND land back in Universe, regardless
@@ -275,6 +316,10 @@ async function main() {
     onHover: (cellId) => store.setHovered(cellId),
     // V1-UX-1b Task 3: the expanded card's Probe CTA.
     onProbe: (cellId) => probeObject(cellId),
+    onOpenPassport: (cellId) => openObjectPassport(cellId),
+    onOpenTimeline: (cellId) => openObjectTimeline(cellId),
+    onOpenEvidence: (cellId) => openObjectEvidence(cellId),
+    onOpenSource: (cellId) => openObjectSource(cellId),
   });
 
   // V5 Phase 4 (docs/V5_DESIGN_SPEC.md §4/§5): the Spider and Text View
@@ -415,7 +460,13 @@ async function main() {
   // as the search panel above - see panels/functional-radar.js's header.
   const functionalRadarPanel = mountFunctionalRadarPanel(els.functionalRadarToggle, els.functionalRadarPanel, {
     getBundle: () => timeline.getDerivedBundle(),
-    onSelect: (id) => probeObject(id),
+    getCurrentLens: () => store.getState().workspaceLens,
+    onSelect: (id) => continueObjectInCurrentLens(id),
+    onProbe: (id) => probeObject(id),
+    onOpenPassport: (id) => openObjectPassport(id),
+    onOpenTimeline: (id) => openObjectTimeline(id),
+    onOpenEvidence: (id) => openObjectEvidence(id),
+    onOpenSource: (id) => openObjectSource(id),
   });
 
   // V5 Phase 2.6 item E: the Navigation History rail - independent of the

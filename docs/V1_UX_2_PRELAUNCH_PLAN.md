@@ -373,3 +373,29 @@ dropped):
   audit responsive/narrow-viewport behavior (consistent with this repo's
   existing, separately-tracked "Backlogged, out of scope" mobile/
   responsive/touch item in `docs/V5_HANDOVER.md` §1).
+
+## Session log — 2026-07-06 UX-2B Lens Continuity
+
+**Repository state:** started from `main` commit `44a9064fb3d48251287a67498b7c8b0b713b730e` after UX-2A shared investigation state merged. Open PR count was 0 before branch creation.
+
+**Scope:** UX-only lens-continuity implementation. No architecture, schema, ontology, roadmap, golden data, investigation-domain logic, AI behavior, or automation changes.
+
+**Behavior changed:**
+- Risk Board expanded cards now expose explicit local investigation continuation actions: Passport, Timeline, Evidence, Source, plus the existing explicit Probe Commitment in Universe path. Selecting a Risk Board card still expands it in place and preserves Risk Board context.
+- Functional Radar object rows now separate default lens-local continuation from explicit next-step actions. If the current lens can represent the object locally, the default action stays in that lens; otherwise it degrades to the existing Probe Universe behavior. Each object also exposes Passport, Timeline, Evidence, Source, and Probe Universe actions.
+- Added a small pure `engine/lens-continuity.js` helper so the continuity decision is testable and does not add state, data fields, or derived model concepts.
+
+**Files changed:**
+- `prototype/current/engine/lens-continuity.js` (new pure continuity helper).
+- `prototype/current/app.js` (routes Functional Radar and Risk Board continuity actions through existing selection, left-panel, and probe state transitions).
+- `prototype/current/lenses/risk-board.js` (expanded-card continuation buttons).
+- `prototype/current/panels/functional-radar.js` (object row continuation actions and current-lens-aware default action).
+- `prototype/current/styles.css` (small button/row styling using existing tokens).
+- `test/lens-continuity.test.mjs` (new pure tests).
+
+**Tests run:**
+- `npm run build` passed locally: syntax check passed for 43 files, field-map verification passed, and 481/481 node tests passed.
+
+**Remaining notes:**
+- The Passport/Timeline/Evidence/Source buttons route to the existing Passport panel and its sections rather than creating new panels or routes. This is intentional for the current Lab architecture, where Passport is the universal selected-object detail surface and Timeline/Evidence/Source Records are Passport sections.
+- A real browser pass should confirm button layout in expanded Risk Board cards and Functional Radar rows on narrow toolbars/viewports.
