@@ -525,6 +525,18 @@ body {
   flex: 1;
 }
 
+/* Sprint UX-2C: the item now sits in the prominent top row (beside the
+   customer), so it reads as part of the "who + what" headline rather than
+   a secondary meta line. */
+.risk-card-top .risk-card-item {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .risk-card-revenue {
   font-size: 12.5px;
   font-weight: 700;
@@ -538,6 +550,16 @@ body {
   display: flex;
   gap: 6px;
   overflow: hidden;
+}
+
+/* Sprint UX-2C: the ERP reference id, demoted to the secondary meta line
+   ("Reference RB-CPP-HORIZON") so the customer + item headline leads.
+   Muted, mono, no weight — visually secondary, still available. */
+.risk-card-ref {
+  white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  color: var(--text-secondary);
+  opacity: 0.85;
 }
 
 .risk-card-item {
@@ -1405,6 +1427,38 @@ body {
   font-size: 12px;
   line-height: 1.55;
   color: var(--text-secondary);
+}
+
+/* Sprint UX-2C: progressive-detail overview lines — operational meaning
+   (why it matters / next action) rendered as a primary line above the
+   ERP-metadata <dl>, so a first-time reader sees what is happening and
+   what to do before any identifier. Reuses the existing summary register
+   (same size/line-height) with a slightly stronger weight on the lead-in
+   label, and no new color token. */
+.passport-overview-impact,
+.passport-overview-next {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.passport-overview-impact strong,
+.passport-overview-next strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* The ERP reference row in the overview meta <dl> is visually secondary:
+   muted color + lighter weight, so the identifier stays available but
+   never competes with the operational fields above it. */
+.passport-overview-meta-erp dt,
+.passport-overview-meta-erp dd {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+.passport-overview-meta-erp dd {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
 }
 
 /* V1-UX-1b Task 3: the canonical Probe CTA, reused by the Passport Overview
@@ -3058,6 +3112,17 @@ body {
   color: var(--text-secondary);
 }
 
+/* Sprint UX-2C: the operational lede under the Text View title — the
+   selected object's summary (what is happening) rendered before any
+   section or identifier, matching the Passport overview's progressive-
+   detail register. */
+.text-view-lede {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
 .text-view-empty {
   color: var(--text-secondary);
   font-size: 13px;
@@ -4006,6 +4071,23 @@ body {
 
 .functional-radar-object-detail--owner {
   font-style: italic;
+}
+
+/* Sprint UX-2C: the object's operational type noun (ECO / NCR / Work
+   Order / ...), shown beside the label inside a Functional Radar row when
+   it differs from the function group's own label. Muted + uppercase so it
+   reads as a category tag, not a competing title. */
+.functional-radar-object-type {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 1px 6px;
 }
 
 .functional-radar-continuity-actions,

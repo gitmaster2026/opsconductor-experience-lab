@@ -792,6 +792,20 @@ export function buildUniverseGraph(snapshot) {
       sourceTable: 'operational_domain_objects',
       sourceRecordId: obj.id,
       sourceIdentifier: obj.source_identifier,
+      // Sprint UX-2C: passthrough of the real nr04_object_key column (a
+      // raw field already on nr04-canonical-universe.json's objects, e.g.
+      // "customer:HORIZON-LNG-PARTNERS", "eco:ECO-NR-2026-071") so the
+      // presentation layer (engine/operational-language.js's objectNoun)
+      // can resolve the catch-all `other` object_type into its true
+      // operational noun (Customer / Site / Supplier / Product / ...).
+      // No new field is invented — this is a read of an existing source
+      // column that was simply not previously carried onto the node.
+      objectKey: obj.nr04_object_key ?? null,
+      // Sprint UX-2C: supplier passthrough (already on the NR04 objects,
+      // symmetric to the customer passthrough above) so the Passport
+      // Overview can present "Supplier: Apex Foundry Group" for
+      // supplier/procurement objects, not just customer for commercial ones.
+      supplier: obj.supplier ?? null,
     });
     // If this operational object shares a customer with an existing
     // customer node, wire it in so the narrative chain is reachable from
@@ -1628,6 +1642,14 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
   const operationalObjects = recordsOf(snapshot.operationalObjects);
 
   // --- 1. Overview -----------------------------------------------------------
+  // Sprint UX-2C: the overview now also carries the operational-detail
+  // fields (businessImpact / nextAction / supplier / sourceIdentifier /
+  // objectKey) the Passport needs to present meaning before ERP identifiers
+  // (progressive detail). Every one is a raw passthrough of a field already
+  // on the node (and, for NR04 objects, already on the source record) —
+  // null when absent (e.g. the pre-existing curated flagship records
+  // predate business_impact_summary), never fabricated. No existing field
+  // is renamed or reshaped; these are additive overview members only.
   const overview = {
     objectId: node.id,
     objectType: node.type,
@@ -1635,8 +1657,13 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
     domain: node.domain ?? null,
     status: node.status ?? null,
     customer: node.customer ?? null,
+    supplier: node.supplier ?? null,
     program: node.program ?? null,
     summary: preAuthored ? preAuthored.overview : buildFallbackOverview(node),
+    businessImpact: node.business_impact_summary ?? null,
+    nextAction: node.next_action_summary ?? null,
+    sourceIdentifier: node.sourceIdentifier ?? null,
+    objectKey: node.objectKey ?? null,
   };
 
   // --- 2. Current Risk ---------------------------------------------------------
@@ -1897,6 +1924,13 @@ export function buildHoverPreviewViewModel(snapshot, objectId, sliceIndex) {
     objectId: node.id,
     objectType: node.type,
     label: node.label,
+    // Sprint UX-2C: domain + objectKey passthroughs so the Hover Preview's
+    // type label can resolve the catch-all `other` object_type into its
+    // true operational noun (Customer / Site / Supplier / ...) via
+    // operational-language.js objectNoun(). Additive only; null when the
+    // node carries no such field (e.g. legacy commitment-spine nodes).
+    domain: node.domain ?? null,
+    objectKey: node.objectKey ?? null,
     status: node.status ?? null,
     currentRisk: node.risk_state ?? 'neutral',
     owner_name: node.owner_name ?? null,
@@ -3133,6 +3167,17 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   // --- buildPassportViewModel ---
   overview: { category: 'supported', note: 'field-map.md Passport: Overview' },
   currentRisk: { category: 'derived_supported', note: 'field-map.md Passport: Current Risk' },
+  // Sprint UX-2C: progressive-detail overview members. Each is a camelCased
+  // passthrough of a field already on the node (and, for NR04 objects, a
+  // real nr04-canonical-universe.json column) — exposed on the overview so
+  // the Passport can present operational meaning before ERP identifiers.
+  // The raw snake_case source fields (business_impact_summary /
+  // next_action_summary / nr04_object_key) match src/data/*.json field names
+  // and so are accepted by verify-field-map as passthroughs; these camelCase
+  // overview aliases do not, so they are registered here explicitly.
+  businessImpact: { category: 'derived_supported', note: 'field-map.md Passport: Overview / Hover Passport Preview: Operational Impact, business_impact_summary passthrough exposed on the Passport overview for progressive-detail (meaning before identifiers)' },
+  nextAction: { category: 'derived_supported', note: 'field-map.md Hover Passport Preview: Recommended Next Action, next_action_summary passthrough exposed on the Passport overview for progressive-detail' },
+  objectKey: { category: 'supported', note: 'nr04-canonical-universe.json nr04_object_key passthrough (see OPERATIONAL_SNAPSHOT_EXPORT_CONTRACT domainObjects SELECT list), exposed on the node + Passport overview so the presentation layer (operational-language.js objectNoun) can resolve the catch-all `other` object_type into its true operational noun' },
   relationships: { category: 'supported', note: 'field-map.md Passport: Relationships' },
   recommendations: { category: 'supported', note: 'field-map.md Passport: Recommendations' },
   evidence: { category: 'supported', note: 'field-map.md Passport: Evidence' },

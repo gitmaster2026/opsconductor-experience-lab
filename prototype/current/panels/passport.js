@@ -63,6 +63,14 @@
 // the wording is consistent everywhere a related object can be opened.
 
 import { probeLabel } from '../engine/labels.js';
+import {
+  relationshipLabel,
+  sortRelationshipsStable,
+  objectNoun,
+  domainLabel,
+  operationalSummary,
+  formatErpIdentifier,
+} from '../engine/operational-language.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -96,18 +104,28 @@ function riskBucketClass(riskState) {
   return 'neutral';
 }
 
-function renderOverviewSection(overview) {
+function renderOverviewSection(overview, businessImpact, nextAction, sourceIdentifier, objectKey) {
+  // Sprint UX-2C: progressive detail — headline (type + label) first, then
+  // the operational explanation (summary), then business context (impact /
+  // next action), then ERP metadata (identifier) as a visually-secondary
+  // supporting line. ERP identifiers remain available but never lead.
+  const typeNoun = objectNoun(overview.objectType, { domain: overview.domain, nr04_object_key: objectKey });
+  const domainText = overview.domain ? domainLabel(overview.domain) : '';
+  const erpId = formatErpIdentifier(sourceIdentifier, objectKey);
   return `
     <header class="passport-overview">
-      <div class="passport-overview-type">${escapeHtml(overview.objectType ?? 'object')}</div>
+      <div class="passport-overview-type">${escapeHtml(typeNoun)}${domainText && domainText !== typeNoun ? ` · ${escapeHtml(domainText)}` : ''}</div>
       <h2 class="passport-overview-label">${escapeHtml(overview.label ?? overview.objectId ?? 'Untitled')}</h2>
+      ${overview.summary ? `<p class="passport-overview-summary">${escapeHtml(overview.summary)}</p>` : ''}
+      ${businessImpact ? `<p class="passport-overview-impact"><strong>Why it matters:</strong> ${escapeHtml(businessImpact)}</p>` : ''}
+      ${nextAction ? `<p class="passport-overview-next"><strong>Next action:</strong> ${escapeHtml(nextAction)}</p>` : ''}
       <dl class="passport-overview-meta">
-        ${overview.domain ? `<div><dt>Domain</dt><dd>${escapeHtml(overview.domain)}</dd></div>` : ''}
         ${overview.status ? `<div><dt>Status</dt><dd>${escapeHtml(overview.status)}</dd></div>` : ''}
         ${overview.customer ? `<div><dt>Customer</dt><dd>${escapeHtml(overview.customer)}</dd></div>` : ''}
+        ${overview.supplier ? `<div><dt>Supplier</dt><dd>${escapeHtml(overview.supplier)}</dd></div>` : ''}
         ${overview.program ? `<div><dt>Program</dt><dd>${escapeHtml(overview.program)}</dd></div>` : ''}
+        ${erpId ? `<div class="passport-overview-meta-erp"><dt>Reference</dt><dd>${escapeHtml(erpId)}</dd></div>` : ''}
       </dl>
-      ${overview.summary ? `<p class="passport-overview-summary">${escapeHtml(overview.summary)}</p>` : ''}
       ${overview.objectId ? `<button type="button" class="passport-probe-btn" data-probe-id="${escapeHtml(overview.objectId)}">${escapeHtml(probeLabel(overview.objectType))} in Universe →</button>` : ''}
     </header>
   `;
@@ -127,8 +145,8 @@ function renderCurrentRiskSection(currentRisk) {
 }
 
 function renderRelationshipsSection(relationships) {
-  const list = Array.isArray(relationships) ? relationships : [];
-  if (list.length === 0) {
+  const rawList = Array.isArray(relationships) ? relationships : [];
+  if (rawList.length === 0) {
     return `
       <section class="passport-section">
         <h3 class="passport-section-title">Relationships</h3>
@@ -136,23 +154,33 @@ function renderRelationshipsSection(relationships) {
       </section>
     `;
   }
+  // Sprint UX-2C: stable canonical ordering (Primary Object → Related Objects
+  // → Dependencies → Risks → Evidence → Documents → Source Records), instead
+  // of graph insertion order. Ties preserve the graph's deterministic order.
+  const list = sortRelationshipsStable(rawList);
   return `
     <section class="passport-section">
       <h3 class="passport-section-title">Relationships <span class="passport-section-count">${list.length}</span></h3>
       <ul class="passport-relationship-list">
         ${list
           .map(
-            (rel) => `
+            (rel) => {
+              // Natural-language relationship label, directionalized so the
+              // row reads as a sentence ("Apex Foundry Group — sourced from")
+              // rather than a raw snake_case token ("sourced_from").
+              const relLabel = relationshipLabel(rel.relationshipType, rel.direction);
+              return `
           <li>
             <button type="button" class="passport-relationship-item" data-select-id="${escapeHtml(rel.relatedObjectId)}" title="${escapeHtml(probeLabel(rel.relatedObjectType))}">
               <span class="passport-relationship-dir">${rel.direction === 'outgoing' ? '→' : '←'}</span>
               <span class="passport-relationship-body">
                 <strong>${escapeHtml(rel.relatedObjectLabel ?? rel.relatedObjectId)}</strong>
-                <span class="passport-relationship-type">${escapeHtml((rel.relationshipType ?? '').replace(/_/g, ' '))}</span>
+                <span class="passport-relationship-type">${escapeHtml(relLabel)}</span>
               </span>
               <span class="passport-relationship-kind">${escapeHtml(probeLabel(rel.relatedObjectType))}</span>
             </button>
-          </li>`
+          </li>`;
+            },
           )
           .join('')}
       </ul>
@@ -527,7 +555,13 @@ export function mountPassportPanel(el, callbacks) {
 
     el.innerHTML = `
       <div class="panel-surface passport-panel">
-        ${renderOverviewSection(passport.overview ?? {})}
+        ${renderOverviewSection(
+          passport.overview ?? {},
+          passport.overview?.businessImpact ?? null,
+          passport.overview?.nextAction ?? null,
+          passport.overview?.sourceIdentifier ?? null,
+          passport.overview?.objectKey ?? null,
+        )}
         ${renderCurrentRiskSection(passport.currentRisk)}
         ${renderRelationshipsSection(passport.relationships)}
         ${renderRecommendationsSection(passport.recommendations)}

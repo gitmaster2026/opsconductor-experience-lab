@@ -99,7 +99,41 @@ function columnLabel(columnKey) {
       .replace(/([a-z])([A-Z])/g, '$1 $2')
       .replace(/\b\w/g, (c) => c.toUpperCase())
       .trim();
-  return typePart ? `${humanize(typePart)} — ${humanize(fieldPart)}` : humanize(fieldPart);
+  // Sprint UX-2C: operational terminology for the common joined-dataset
+  // column names, so the column header reads "Customer" / "Item" /
+  // "Revenue at Risk" (operational language) rather than the raw
+  // "Customer " / "Item Number " a generic humanizer produces. Falls
+  // through to the humanizer for any column not in this map, so future
+  // joined columns still get a readable label.
+  const FIELD_TERM = {
+    customer: 'Customer',
+    supplier: 'Supplier',
+    item_number: 'Item',
+    item: 'Item',
+    description: 'Description',
+    revenue_at_risk: 'Revenue at Risk',
+    currency: 'Currency',
+    risk_state: 'Risk State',
+    status: 'Status',
+    required_date: 'Required Date',
+    due_at: 'Due Date',
+    occurred_at: 'Occurred',
+    quantity: 'Quantity',
+    allocated_qty: 'Allocated',
+    quantity_on_hand: 'On Hand',
+    coverage_pct: 'Coverage',
+    source_identifier: 'Reference',
+    source_system: 'Source System',
+    domain: 'Domain',
+    program: 'Program',
+    owner_name: 'Owner',
+    category: 'Category',
+    evidence_summary: 'Evidence',
+    business_impact_summary: 'Business Impact',
+    next_action_summary: 'Next Action',
+  };
+  const labelPart = (part) => FIELD_TERM[part] ?? humanize(part);
+  return typePart ? `${humanize(typePart)} — ${labelPart(fieldPart)}` : labelPart(fieldPart);
 }
 
 function isNumericColumnAcrossRows(rows, key) {

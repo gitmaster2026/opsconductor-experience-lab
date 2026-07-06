@@ -4,6 +4,35 @@ This file controls schema fidelity for the Experience Lab.
 
 The lab may use fake values, but every visible field must map to an existing production-backed field, view, canonical demo-data field, or documented derived concept.
 
+## Sprint UX-2C — Operational Language & Information Architecture additions
+
+Sprint UX-2C is a presentation-layer sprint: it changes how already-supported
+fields are *rendered* (natural-language-first, progressive detail, stable
+relationship ordering, consistent visual object grammar, operational
+terminology), not what fields exist. The single new module
+`prototype/current/engine/operational-language.js` is a pure read-only
+transform over values already produced by `engine/derive.js`; it introduces
+no new snapshot field, no new object type, no new relationship type, and no
+schema/ontology change. The only additive view-model members it requires
+(`businessImpact` / `nextAction` / `objectKey` on the Passport overview;
+`domain` / `objectKey` on the Hover Preview) are camelCased passthroughs of
+fields already on the node (and, for NR04 objects, real
+nr04-canonical-universe.json columns: `business_impact_summary`,
+`next_action_summary`, `nr04_object_key`, `domain`) — registered in
+`derive.js`'s `KNOWN_OUTPUT_FIELDS` as `derived_supported` / `supported`.
+
+| UI / Presentation Field | Source / Derivation | Status |
+|---|---|---|
+| Natural-language relationship label (`relationshipLabel`) | pure string transform of the real `relationship_type` value (field-map.md Universe: Relationship Type), directionalized for outgoing/incoming voice — no new relationship type invented | derived_supported |
+| Stable relationship ordering (`relationshipOrderRank` / `sortRelationshipsStable`) | rank derived from `relationshipVisualClass()`'s existing category fold (causes/depends_on/affects/evidences/resolves/blocks/ships/changes/escalates/structural), mapping the brief's preferred group order — no new category | derived_supported |
+| Operational domain label (`domainLabel`) | pure string transform of the real `domain` value (field-map.md Universe: Node Type / Functional Radar: real `domain` values) | derived_supported |
+| Object noun for `other`/`purchase_order`/`supplier_quality_issue` (`objectNoun`) | extends labels.js `objectTypeNoun()` for the three nr04 object_types it does not yet name; resolves `other`-typed directory objects via the real `nr04_object_key` prefix or `domain` | derived_supported |
+| Operational summary (`operationalSummary`) | first-non-empty passthrough of `business_impact_summary` / `evidence_summary` / `next_action_summary` / `label` — all real node fields, never fabricated | derived_supported |
+| ERP identifier formatting (`formatErpIdentifier`) | pure string transform of the real `source_identifier` / `nr04_object_key` value, stripping a leading graph-key namespace prefix only — no new identifier | derived_supported |
+| Passport overview `businessImpact` / `nextAction` / `objectKey` | camelCased passthrough of `business_impact_summary` / `next_action_summary` / `nr04_object_key` (real nr04-canonical-universe.json columns), exposed for progressive-detail rendering | derived_supported / supported |
+| Hover Preview `domain` / `objectKey` | passthrough of the node's real `domain` / `nr04_object_key` (already on the node via buildUniverseGraph's operational-objects loop), exposed for type-noun resolution | supported |
+| Workbench operational column labels (`FIELD_TERM` map) | presentation-only label overrides for common joined-dataset column names (`item_number` → "Item", `revenue_at_risk` → "Revenue at Risk", etc.) — the underlying column keys are unchanged | derived_supported |
+
 ## V1-A Story Integrity additions
 
 The Experience Lab fixture files may include the following alignment-only fields to keep the HTML prototype synchronized with Sprint V1-A Demo Truth. These are frontend fixture annotations, not new production schema requirements.
