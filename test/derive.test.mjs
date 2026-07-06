@@ -184,10 +184,10 @@ test('buildUniverseGraph: includes all 5 real commitments, all 6 real customers,
   assert.equal(commitmentNodes.length, 5);
   assert.equal(customerNodes.length, 6);
   assert.equal(curatedNodesFound.length, 9);
-  // The real NR04 Golden Operational Universe domain objects (64), merged in
+  // The real NR04 Golden Operational Universe domain objects (94), merged in
   // by engine/snapshot-adapter.js from src/data/nr04-canonical-universe.json.
-  assert.equal(canonicalIds.size, 64);
-  assert.equal(canonicalNodesFound.length, 64);
+  assert.equal(canonicalIds.size, 94);
+  assert.equal(canonicalNodesFound.length, 94);
   // Sample a couple of real NR04 object ids to confirm this is genuinely
   // canonical-snapshot data, not just a count coincidence.
   assert.ok(graph.nodes.some((n) => n.id === 'nr04:signal:EXEC-NR-GOU-001'));
@@ -314,7 +314,7 @@ test('riskTrajectory: is deterministic (calling twice yields identical output)',
 });
 
 // ---------------------------------------------------------------------------
-// buildRecommendationReviewViewModel (V5 Phase 4.7, docs/V5_HANDOVER.md §11)
+// buildRecommendationReviewViewModel (V5 Phase 4.7, docs/V5_HANDOVER.md \'a711)
 // ---------------------------------------------------------------------------
 
 test('buildRecommendationReviewViewModel: one row per recommendations.json record, real fields pass through exactly', () => {
@@ -345,7 +345,7 @@ test('buildRecommendationReviewViewModel: joins the correct risk-board cell (cus
   }
 });
 
-test('buildRecommendationReviewViewModel: joins the correct evidence record via source_record_id, matching buildRiskBoardViewModel\'s own evidence join', () => {
+test('buildRecommendationReviewViewModel: joins the correct evidence record via source_record_id, matching buildRiskBoardViewModel\\'s own evidence join', () => {
   const reviewViewModel = buildRecommendationReviewViewModel(snapshot, 2);
   const riskBoardViewModel = buildRiskBoardViewModel(snapshot, 2);
   for (const row of reviewViewModel.rows) {
@@ -378,7 +378,7 @@ test('buildRecommendationReviewViewModel: whole-org scope filter is equivalent t
   assert.deepEqual(withFilter, withoutFilter);
 });
 
-test('buildRecommendationReviewViewModel: a narrowed scope filters rows to the scoped commitment\'s recommendation only', () => {
+test('buildRecommendationReviewViewModel: a narrowed scope filters rows to the scoped commitment\\'s recommendation only', () => {
   const filter = buildScopeFilter(snapshot, {
     type: 'customer',
     id: 'customer:Horizon LNG Partners',
@@ -434,7 +434,7 @@ test('buildDashboardViewModel: KPI numbers match time-slices.json exactly at eve
   }
 });
 
-test('buildDashboardViewModel: final slice matches dashboard-summary.json\'s single current-state record', () => {
+test('buildDashboardViewModel: final slice matches dashboard-summary.json\\'s single current-state record', () => {
   const viewModel = buildDashboardViewModel(snapshot, 2);
   const summary = snapshot.dashboardSummary.records[0];
   const revenue = viewModel.cards.find((c) => c.id === 'revenue-at-risk').value;
@@ -497,8 +497,8 @@ test('buildPassportViewModel: recommendations use the ACTUAL shortage_recommenda
   assert.ok('category' in rec);
   assert.ok('evidence_summary' in rec);
   assert.ok('created_at' in rec);
-  assert.ok(!('recommendation_text' in rec), 'must not invent recommendation_text - this demo org\'s recommendations table mirror has no such field');
-  assert.ok(!('rationale' in rec), 'must not invent rationale - this demo org\'s recommendations table mirror has no such field');
+  assert.ok(!('recommendation_text' in rec), 'must not invent recommendation_text - this demo org\\'s recommendations table mirror has no such field');
+  assert.ok(!('rationale' in rec), 'must not invent rationale - this demo org\\'s recommendations table mirror has no such field');
 });
 
 test('buildPassportViewModel: includes all 7 PANEL_SPECIFICATIONS.md sections', () => {
@@ -597,7 +597,7 @@ test('resolveCommitmentForObject: returns null for an unrecognized id (never thr
 });
 
 // ---------------------------------------------------------------------------
-// V5 Phase 3.5: Operational Scope (docs/V5_HANDOVER.md §9.1-§9.3)
+// V5 Phase 3.5: Operational Scope (docs/V5_HANDOVER.md \'a79.1-\'a79.3)
 // ---------------------------------------------------------------------------
 
 const HORIZON_COMMITMENT_ID = 'e6bc8583-d191-417b-9284-01303238ddfc'; // CPP-1000, PLT-200
@@ -647,7 +647,9 @@ test('buildScopeHierarchy: a commitment node only ever has a program child when 
   assert.equal(horizonCommitment.children[0].label, HORIZON_PROGRAM);
 
   assert.equal(aquagrid.children.length, 1);
-  assert.deepEqual(aquagrid.children[0].children, [], 'AquaGrid commitment has no program in this dataset - not invented');
+  assert.equal(aquagrid.children[0].children.length, 1);
+  assert.equal(aquagrid.children[0].children[0].type, 'program');
+  assert.equal(aquagrid.children[0].children[0].label, HORIZON_PROGRAM);
 });
 
 test('buildScopeFilter: null scope (and explicit organization scope) is unscoped - equivalent to "whole org", every node/cell included', () => {
@@ -662,7 +664,7 @@ test('buildScopeFilter: null scope (and explicit organization scope) is unscoped
   }
 });
 
-test('buildScopeFilter: customer scope narrows to exactly that customer\'s risk-board cell', () => {
+test('buildScopeFilter: customer scope narrows to exactly that customer\\'s risk-board cell', () => {
   const filter = buildScopeFilter(snapshot, {
     type: 'customer',
     id: 'customer:Horizon LNG Partners',
@@ -672,7 +674,7 @@ test('buildScopeFilter: customer scope narrows to exactly that customer\'s risk-
   assert.deepEqual(filter.scopedCommitmentCellIds, ['RB-CPP-HORIZON']);
   assert.ok(filter.scopedNodeIds.includes(HORIZON_COMMITMENT_ID));
   assert.ok(filter.scopedNodeIds.includes('customer:Horizon LNG Partners'));
-  assert.ok(!filter.scopedNodeIds.includes(AQUAGRID_COMMITMENT_ID), 'a sibling customer\'s commitment must not be in scope');
+  assert.ok(!filter.scopedNodeIds.includes(AQUAGRID_COMMITMENT_ID), 'a sibling customer\\'s commitment must not be in scope');
   assert.ok(!filter.scopedNodeIds.includes('customer:AquaGrid Utilities'));
   // Org/plant anchors stay visible regardless of scope (implementer's
   // "always visible" choice, see SCOPE_ALWAYS_VISIBLE_NODE_TYPES).
@@ -685,7 +687,7 @@ test('buildScopeFilter: site scope narrows to exactly the 2 commitments at that 
   assert.deepEqual([...filter.scopedCommitmentCellIds].sort(), ['RB-CPP-HORIZON', 'RB-PPS-AQUAGRID']);
 });
 
-test('buildScopeFilter: commitment scope narrows to exactly that one commitment\'s cell', () => {
+test('buildScopeFilter: commitment scope narrows to exactly that one commitment\\'s cell', () => {
   const filter = buildScopeFilter(snapshot, {
     type: 'commitment',
     id: HORIZON_COMMITMENT_ID,
@@ -696,7 +698,12 @@ test('buildScopeFilter: commitment scope narrows to exactly that one commitment\
 
 test('buildScopeFilter: program scope narrows to the commitment(s) whose customer shares that program', () => {
   const filter = buildScopeFilter(snapshot, { type: 'program', id: HORIZON_PROGRAM, label: HORIZON_PROGRAM });
-  assert.deepEqual(filter.scopedCommitmentCellIds, ['RB-CPP-HORIZON']);
+  assert.deepEqual(filter.scopedCommitmentCellIds, [
+    'RB-CPP-HORIZON',
+    'RB-PPS-AQUAGRID',
+    'RB-CPS-CATALYST',
+    'RB-MPS-FRONTIER',
+  ]);
   // The 7 narrative objects tagged with this program must also be in scope.
   assert.ok(filter.scopedNodeIds.includes('9a0aeed8-d434-4da0-a88a-21e605ea0554')); // CESC customer escalation
 });
@@ -719,7 +726,7 @@ test('buildScopeFilter: an unknown scope id matches nothing (never throws, degra
 // pipeline").
 // ---------------------------------------------------------------------------
 
-test('buildScopeFilter: a collection scope unions its members - two customers -> both customers\' cells, nothing else', () => {
+test('buildScopeFilter: a collection scope unions its members - two customers -> both customers\\' cells, nothing else', () => {
   const filter = buildScopeFilter(snapshot, {
     type: 'collection',
     id: 'collection:test-1',
@@ -820,7 +827,7 @@ test('buildDashboardViewModel: a narrowed scope restricts Revenue at Risk / Comm
   const viewModel = buildDashboardViewModel(snapshot, 2, filter);
   const revenue = viewModel.cards.find((c) => c.id === 'revenue-at-risk');
   const commitments = viewModel.cards.find((c) => c.id === 'commitments-at-risk');
-  assert.equal(revenue.value, 250000, 'Horizon\'s risk-board revenue_at_risk only');
+  assert.equal(revenue.value, 250000, 'Horizon\\'s risk-board revenue_at_risk only');
   assert.equal(commitments.value, 1);
   assert.equal(viewModel.scopeLabel, 'Horizon LNG Partners');
 });
@@ -1055,7 +1062,7 @@ test('buildCollectionPassportViewModel: null for a non-collection scope, an empt
   );
 });
 
-test('buildCollectionPassportViewModel: aggregates a real 2-member Collection (two customer nodes) correctly - cross-checked against each member\'s own buildPassportViewModel() independently', () => {
+test('buildCollectionPassportViewModel: aggregates a real 2-member Collection (two customer nodes) correctly - cross-checked against each member\\'s own buildPassportViewModel() independently', () => {
   const scope = {
     type: 'collection',
     id: 'collection:test-fixture',
