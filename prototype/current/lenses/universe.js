@@ -753,6 +753,46 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   let layoutHeight = 0;
   let layoutSeed = 20260702; // fixed seed: today's date at authoring time, arbitrary but stable
 
+  /**
+   * Performance: a counter bumped only when the graph's node id-set actually
+   * changes (see ingestBundle() below - same "same id-set -> nothing to
+   * recompute" detection recomputeLayoutIfNeeded() already uses for
+   * computeClusterLayout(), applied here to a second expensive-but-usually-
+   * redundant computation). computeOrbitLayout()/computeDecrossedOrbitAngles()/
+   * computeCollectionStreamAngles() (universe-layout.js) are pure functions
+   * of (anchor/member-id(s), currentEdges, currentNodes) ONLY - they do not
+   * depend on animation time, camera position, or anything else that changes
+   * every draw() frame. Without this cache, resolveFocusPresentation() (see
+   * below) was calling them fresh on EVERY animation frame (~60/sec via
+   * draw()) AND on every pointermove (via hitTestAt()) for as long as a
+   * selection/Collection focus was active - including
+   * computeDecrossedOrbitAngles()'s own greedy pairwise-swap crossing-
+   * repair pass, an O(passes * sector-pairs * segments^2) computation by its
+   * own module header, re-run for byte-identical output every single frame.
+   * Bumping this only inside ingestBundle() (itself only called on an actual
+   * bundle refresh - see this module's render() - not once per frame) is
+   * what lets the cache below key correctly off "has the underlying graph
+   * actually changed" instead of "has time passed."
+   */
+  let graphVersion = 0;
+
+  /**
+   * Memoizes the single most recent computeOrbitLayout()+
+   * computeDecrossedOrbitAngles() result (single-object focus) OR
+   * computeCollectionStreamAngles() result (Collection focus), keyed on the
+   * exact inputs that can change it: which anchor/member-set is focused, and
+   * graphVersion (a fresh selection or a fresh graph both correctly bust this
+   * single-entry cache - see resolveFocusPresentation() below for the two
+   * read/write sites). A single-entry cache (not a Map keyed by every anchor
+   * ever visited) is intentional and sufficient: only ONE anchor/Collection
+   * can be the active focus target at a time, and re-running the computation
+   * once on an actual focus CHANGE is exactly the "only recompute when
+   * selection changes" behavior the product brief asks for - this never
+   * needs to remember more than "the last one computed."
+   * @type {{ key: string, orbitResult: Object|null, collectionResult: Object|null }}
+   */
+  let orbitCache = { key: '', orbitResult: null, collectionResult: null };
+
   // Animated opacity per node id, so time-visibility changes fade rather
   // than hard-cut (per the phase brief's "reveal over time, don't hard-cut"
   // requirement). Each entry tracks the value it's animating FROM, the
@@ -820,6 +860,23 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     const universe = bundle?.universe ?? { nodes: [], edges: [] };
     currentNodes = Array.isArray(universe.nodes) ? universe.nodes : [];
     currentEdges = Array.isArray(universe.edges) ? universe.edges : [];
+
+    // Performance: same "same id-set -> nothing structurally changed"
+    // detection recomputeLayoutIfNeeded() below already relies on for
+    // computeClusterLayout() (see its own header comment on why reference
+    // equality can't be used - buildUniverseGraph() rebuilds fresh arrays
+    // every recompute even when the underlying data is identical), reused
+    // here to invalidate the orbit/de-crossing cache (see graphVersion's own
+    // header comment above) only on an ACTUAL structural change, not on
+    // every bundle refresh (e.g. a pure time-slice/visibility change leaves
+    // the node/edge id-set - and therefore every valid orbitCache entry -
+    // untouched, so ingesting one of those bundles must NOT invalidate it).
+    const graphIdsKey = currentNodes.map((n) => n.id).join('|');
+    if (graphIdsKey !== ingestBundle._lastGraphIdsKey) {
+      ingestBundle._lastGraphIdsKey = graphIdsKey;
+      graphVersion += 1;
+    }
+
     recomputeLayoutIfNeeded();
 
     const visibility = bundle?.timeline?.visibility ?? null;
@@ -1020,7 +1077,27 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       const memberNodes = currentNodes.filter((n) => memberIds.includes(n.id));
       const positions = memberIds.map((id) => layoutById.get(id)).filter(Boolean);
       const orbitCenter = positions.length > 0 ? centroidOf(positions) : null;
-      const stream = computeCollectionStreamAngles(memberNodes, currentEdges, { radius: COLLECTION_RING_RADIUS_PX });
+
+      // Performance: computeCollectionStreamAngles() (universe-layout.js) is
+      // a pure function of (memberNodes, currentEdges, radius) only - same
+      // member set + same graph always produces the exact same resolved
+      // angles, independent of animation time. resolveFocusPresentation()
+      // is called once per draw() frame AND once per hitTestAt() pointer-
+      // move, so without this cache the same de-crossing computation was
+      // re-running from scratch dozens of times a second for as long as
+      // this Collection stayed the active focus target. Cache key: the
+      // member-id set (order-sensitive is fine - it can only change via a
+      // fresh Collection build) plus graphVersion (busts the cache if the
+      // underlying graph itself changes) - see graphVersion/orbitCache's
+      // own header comments above for the full invalidation contract.
+      const collectionCacheKey = `collection:${memberIds.join(',')}:${graphVersion}`;
+      let stream;
+      if (orbitCache.key === collectionCacheKey && orbitCache.collectionResult) {
+        stream = orbitCache.collectionResult;
+      } else {
+        stream = computeCollectionStreamAngles(memberNodes, currentEdges, { radius: COLLECTION_RING_RADIUS_PX });
+        orbitCache = { key: collectionCacheKey, orbitResult: null, collectionResult: stream };
+      }
       const orbitMemberById = new Map(
         memberIds.map((id) => [id, { angle: stream.angleById.get(id) ?? 0, radius: COLLECTION_RING_RADIUS_PX }])
       );
@@ -1040,11 +1117,37 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     }
 
     if (anchorId !== null) {
-      const orbit = computeOrbitLayout(anchorId, currentEdges, currentNodes);
-      const decrossed = computeDecrossedOrbitAngles(orbit, currentEdges, {
-        ring1Radius: RING1_RADIUS_PX,
-        ring2Radius: RING2_RADIUS_PX,
-      });
+      // Performance: this is the highest-value cache in this module.
+      // computeOrbitLayout() (a breadth-first hop-distance walk) and
+      // especially computeDecrossedOrbitAngles() (a bounded greedy
+      // pairwise-swap local search over every same-sector pair, each
+      // candidate swap re-scoring the FULL O(segments^2) crossing count -
+      // see universe-layout.js's own module header for the algorithm's
+      // documented cost) are both pure functions of (anchorId, currentEdges,
+      // currentNodes) only - no animation-time/camera dependence at all.
+      // Before this cache, resolveFocusPresentation() re-ran BOTH from
+      // scratch on every single draw() frame (~60/sec) AND on every
+      // hitTestAt() pointermove, for as long as any object stayed selected -
+      // i.e. the exact "same input, same output, called repeatedly during
+      // an animation tick" redundant work the de-crossing algorithm's own
+      // "comparable in engineering weight to computeOrbitLayout" cost
+      // profile (docs/V5_HANDOVER.md §13.1) makes worth avoiding. Cache key:
+      // the anchor id (changes only on a fresh selection) plus graphVersion
+      // (busts the cache if the underlying graph itself changes) - see
+      // graphVersion/orbitCache's own header comments above.
+      const orbitCacheKey = `orbit:${anchorId}:${graphVersion}`;
+      let orbit;
+      let decrossed;
+      if (orbitCache.key === orbitCacheKey && orbitCache.orbitResult) {
+        ({ orbit, decrossed } = orbitCache.orbitResult);
+      } else {
+        orbit = computeOrbitLayout(anchorId, currentEdges, currentNodes);
+        decrossed = computeDecrossedOrbitAngles(orbit, currentEdges, {
+          ring1Radius: RING1_RADIUS_PX,
+          ring2Radius: RING2_RADIUS_PX,
+        });
+        orbitCache = { key: orbitCacheKey, orbitResult: { orbit, decrossed }, collectionResult: null };
+      }
       const orbitCenter = layoutById.get(anchorId) ?? null;
       const orbitMemberById = new Map([
         ...orbit.ring1.map((m) => [m.id, { angle: decrossed.ring1AngleById.get(m.id) ?? m.angle, radius: RING1_RADIUS_PX }]),

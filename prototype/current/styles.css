@@ -1430,6 +1430,49 @@ body {
   background: rgba(90, 209, 255, 0.22);
 }
 
+/* V1-UX-1B: this canonical Probe CTA had no explicit keyboard-focus style
+   (every OTHER interactive element in this codebase does - see
+   .risk-card/.dash-toplist-item/.jarvis-next-step-button/.spider-vertex.
+   is-clickable/.text-view-ref/.passport-collection-member/.cs-action-btn's
+   own :focus-visible rules) - adding one here benefits every existing
+   Probe button (Passport, Hover Preview) plus the newly-added ones below
+   (Text View, Workbench, Conductor Studio), all of which share this one
+   class. */
+.passport-probe-btn:focus-visible {
+  outline: 2px solid var(--cyan-accent);
+  outline-offset: 2px;
+}
+
+/* V1-UX-1B: Text View's/Workbench's/Conductor Studio's explicit "Probe
+   {Type} ->" CTA now reuses .passport-probe-btn above verbatim (see
+   lenses/text-view.js's probeButtonMarkup() and engine/
+   filterable-table.js's getRowProbeType/onProbe contract) rather than a
+   new button style - closing docs/UNSUPPORTED_UI_FIELD_REPORT.md's
+   Remaining UX Backlog #2 ("Explicit Probe buttons in Text View /
+   Workbench / Conductor Studio - currently these 3 lenses support
+   select-through only"). These two small table-specific touches keep the
+   shared button from making a dense filter/sort table row noticeably
+   taller/wider than it needs to be - the button itself needs zero new
+   CSS to render or work correctly without these. */
+.filterable-table-probe-th,
+.filterable-table-probe-td {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.filterable-table-probe-btn {
+  margin-top: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+/* V1-UX-1B: Text View's Probe button sits directly under the existing
+   .text-view-ref/.text-view-hierarchy-ref button inside the same list
+   item - a small top margin keeps the two from visually touching. */
+.text-view-probe-btn {
+  margin-top: 6px;
+}
+
 /* V1-UX-1b Task 7: the "Demo-derived Detail" section + its always-visible
    badge - a distinct amber/warning tint (not the cyan Probe/investigative
    color, not a risk color) so it reads as its own honest classification,
@@ -2391,6 +2434,129 @@ body {
 
 .nav-history-dot:disabled {
   cursor: default;
+}
+
+/* ---------------------------------------------------------------------
+   Return to Universe (V1-UX-1B) - a labeled, always-discoverable full
+   reset, distinct from the Navigation History rail above (one step at a
+   time) - see panels/return-to-universe.js's header comment. Sits in the
+   toolbar next to #navHistoryRail; hidden (is-empty) when there is
+   nothing to return from.
+   --------------------------------------------------------------------- */
+
+.return-to-universe.is-empty {
+  display: none;
+}
+
+.return-to-universe-btn {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  font-size: 11.5px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.return-to-universe-btn:hover {
+  color: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.1);
+}
+
+.return-to-universe-btn:focus-visible {
+  outline: 2px solid var(--cyan-accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------
+   Relationship-color legend (V1-UX-1B) - the on-screen key for Universe's
+   9 semantic relationship-type colors + the neutral "structural" fallback
+   (see panels/relationship-legend.js's header comment; colors read
+   directly from the same --rel-* custom properties declared at the top of
+   this file, so the legend can never visually drift from the real edges).
+   Floats over the bottom-left of the Universe canvas; renders nothing
+   (is-empty) in any other lens.
+   --------------------------------------------------------------------- */
+
+.relationship-legend {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.relationship-legend.is-empty {
+  display: none;
+}
+
+.relationship-legend-toggle {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  font-size: 10.5px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.relationship-legend-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--cyan-accent);
+}
+
+.relationship-legend-toggle:focus-visible {
+  outline: 2px solid var(--cyan-accent);
+  outline-offset: 2px;
+}
+
+.relationship-legend-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(var(--panel-blur));
+  -webkit-backdrop-filter: blur(var(--panel-blur));
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  max-width: 220px;
+}
+
+.relationship-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+
+.relationship-legend-swatch {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 0;
+  border-top: 2px solid var(--swatch-color);
+}
+
+.relationship-legend-swatch.is-dashed {
+  border-top-style: dashed;
+}
+
+.relationship-legend-label {
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------

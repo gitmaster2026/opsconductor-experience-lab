@@ -61,6 +61,8 @@ import { mountHoverPreview } from './panels/hover-preview.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
 import { mountScopePanel } from './panels/scope.js';
 import { mountNavHistoryRail } from './panels/nav-history.js';
+import { mountReturnToUniverseButton } from './panels/return-to-universe.js';
+import { mountRelationshipLegend } from './panels/relationship-legend.js';
 import { mountSavedViewsManager } from './engine/saved-views.js';
 
 // ---------------------------------------------------------------------------
@@ -93,6 +95,8 @@ const els = {
   scopeBar: document.getElementById('scopeBar'),
   scopeExplorer: document.getElementById('scopeExplorer'),
   navHistoryRail: document.getElementById('navHistoryRail'),
+  returnToUniverseControl: document.getElementById('returnToUniverseControl'),
+  relationshipLegend: document.getElementById('relationshipLegend'),
   nodeTooltip: document.getElementById('nodeTooltip'),
   hoverPreview: document.getElementById('hoverPreview'),
   savedViewsManager: document.getElementById('savedViewsManager'),
@@ -199,6 +203,19 @@ async function main() {
     store.setLens('universe');
   }
 
+  // --- Return to Universe (V1-UX-1B) ----------------------------------------
+  //
+  // A full reset: clear any selection AND land back in Universe, regardless
+  // of which lens/selection state the user is currently in. See
+  // panels/return-to-universe.js's header comment for how this differs from
+  // Escape (deselect only, below), the Navigation History rail (one step at
+  // a time), and clicking empty canvas space (Universe-only).
+  function returnToUniverse() {
+    clearHighlightedIds();
+    store.selectObject(null);
+    store.setLens('universe');
+  }
+
   // --- Navigation History rail (V5 Phase 2.6 item E) ------------------------
   //
   // focusTrail is a plain stack (Phase 1) with no "redo" data once an entry
@@ -290,6 +307,13 @@ async function main() {
     getBundle: () => timeline.getDerivedBundle(),
     getSnapshot: () => snapshot,
     onOpenSavedViewsManager: () => savedViewsManager.open(),
+    // V1-UX-1B: Workbench previously mounted with no onSelect/onProbe at
+    // all (rows were select-through only, per docs/UNSUPPORTED_UI_FIELD_
+    // REPORT.md's Remaining UX Backlog). Wiring the same two choke points
+    // every other lens already uses closes that gap with zero new
+    // mechanism - see workbench.js's own JSDoc on these two params.
+    onSelect: (id) => selectAndClearHighlight(id),
+    onProbe: (id) => probeObject(id),
   });
 
   // V5 Phase 4.7 (docs/V5_HANDOVER.md §11): Conductor Studio - the 6th
@@ -301,6 +325,10 @@ async function main() {
   const conductorStudioLens = mountConductorStudioLens(els.conductorStudioEl, {
     getBundle: () => timeline.getDerivedBundle(),
     onSelect: (id) => selectAndClearHighlight(id),
+    // V1-UX-1B: the explicit Probe CTA conductor-studio.js's row markup
+    // now renders (previously select-through only) - same probeObject()
+    // choke point as Risk Board/Passport/Radar/Workbench above.
+    onProbe: (id) => probeObject(id),
   });
 
   // --- Panel mounting ------------------------------------------------------
@@ -374,6 +402,22 @@ async function main() {
     onJumpToIndex: (index) => jumpToTrailIndex(index),
   });
 
+  // V1-UX-1B: the explicit "Return to Universe" affordance (Remaining UX
+  // Backlog #4) - sits next to the Navigation History rail in the toolbar
+  // since both answer "where am I / how do I get back."
+  const returnToUniversePanel = mountReturnToUniverseButton(els.returnToUniverseControl, {
+    getSelectedId: () => store.getState().selectedObjectId,
+    getWorkspaceLens: () => store.getState().workspaceLens,
+    onReturn: () => returnToUniverse(),
+  });
+
+  // V1-UX-1B: the in-app relationship-color legend (Remaining UX Backlog
+  // #1) - mounted over the Universe canvas, renders nothing in any other
+  // lens (see relationship-legend.js's own getWorkspaceLens-gated render()).
+  const relationshipLegendPanel = mountRelationshipLegend(els.relationshipLegend, {
+    getWorkspaceLens: () => store.getState().workspaceLens,
+  });
+
   // --- Generic [data-select-id] hover wiring (V1-UX-1b Task 2) --------------
   //
   // Universe (canvas hit-testing) and Risk Board (per-card mouseenter/leave)
@@ -396,6 +440,26 @@ async function main() {
     if (!target) return;
     const next = ev.relatedTarget instanceof Element ? ev.relatedTarget.closest('[data-select-id]') : null;
     if (!next) store.setHovered(null);
+  });
+
+  // --- Keyboard navigation: Escape deselects (V1-UX-1B) ---------------------
+  //
+  // Mirrors the existing "click empty canvas space" deselect path
+  // (engine/state.js's selectObject(null), documented as one of Universe's
+  // two return-to-full-graph mechanisms) so keyboard-only users have the
+  // same escape hatch out of Focus Mode / any panel's selected-object detail
+  // as mouse users - without switching lens, which is what makes this a
+  // lighter-weight action than the "Return to Universe" button above (see
+  // panels/return-to-universe.js's header comment for the full comparison).
+  // Two existing, unrelated Escape listeners already exist
+  // (engine/saved-views.js, panels/scope.js), each independently guarded by
+  // its own `isOpen` check for its own modal - this listener's guard
+  // (a selection exists) is a different condition, so all three coexist
+  // without conflict.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && store.getState().selectedObjectId !== null) {
+      store.selectObject(null);
+    }
   });
 
   // --- Toolbar wiring --------------------------------------------------------
@@ -511,6 +575,8 @@ async function main() {
     jarvisPanel.render();
     scopePanel.render();
     navHistoryPanel.render();
+    returnToUniversePanel.render();
+    relationshipLegendPanel.render();
     hoverPreviewPanel.render();
 
     universeLens.render();

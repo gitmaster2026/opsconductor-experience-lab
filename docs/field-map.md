@@ -144,6 +144,47 @@ production-backed drilldown mechanism.
 |---|---|---|
 | Demo-derived Detail fields | raw passthrough of the anchor object's `detail` column (a real nr04-canonical-universe.json field - see `scripts/build-nr04-snapshot.mjs`), only ever shown for the 6 explicit anchor ids in `REPRESENTATIVE_DRILLDOWN_CATEGORIES` / the Representative Drilldown Manifest | demo_derived_detail |
 
+## Documents fields
+
+This sprint's addition: the Passport's 8th section, "Documents"
+(`engine/derive.js`'s `buildDocumentReferencesForObject()`). Per the sprint
+brief - "Representative links only... to SAP, Windchill, MES, Inspection
+Reports, SharePoint, PDFs, Network folders. Do not build connectors. Do not
+implement integrations." - this is a closed, deterministic classification
+(`documentSystemForDomainAndType()`) that folds a selected object's own real
+`domain`/`type` fields (already produced by `buildUniverseGraph()` from
+operational-objects.json / nr04-canonical-universe.json's real `domain` /
+`object_type` columns - see those files' real vocabulary) into one of six
+named representative systems: engineering -> Windchill (PLM, plus a
+representative drawing PDF entry); manufacturing -> MES; quality (NCR/CAPA/
+MRB) -> Inspection Reports; procurement/supplier (and supply-domain objects
+that are not internal fulfillment state) -> SAP; commercial/customer/
+finance/logistics -> SharePoint; anything else (organization, asset,
+governance, program, and internal-fulfillment `supply` objects like
+inventory/allocation) -> a generic Network Folder fallback. No new object
+type (rule #8), no new `src/data/*.json` field (rule #11) - the mapping is a
+pure presentation-layer fold, the same pattern as `relationshipVisualClass()`
+/ `radarAxisForNode()` already use elsewhere in `derive.js`.
+
+Distinct from the existing Source Records section above: Source Records
+cites this lab's OWN governed record lineage (`source_table`/
+`source_record_id`, real fields already in the snapshot); Documents points
+at the EXTERNAL enterprise system that would hold supporting artifacts for
+an object of this domain/type in a real deployment - a system this snapshot
+never actually connects to. Every entry therefore carries
+`isRepresentative: true` and a visible "Representative" badge (reusing the
+same `.demo-derived-badge` CSS treatment the Representative Drilldown
+section above already uses), and is never rendered as a real, working link
+(`href="#"`, per docs/RULES.md rule #7 - "fake values allowed, fake backend
+fields are not"). See `docs/PANEL_SPECIFICATIONS.md`'s Passport mode section
+for the full section list.
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| Documents / `system` | representative external system name (SAP / Windchill / MES / Inspection Reports / SharePoint / Network Folder), deterministically classified from the object's real `domain`/`type` via `documentSystemForDomainAndType()` - never a fabricated backend field | derived_supported |
+| Documents / `path`, `label`, `note` | deterministic, illustrative presentation strings composed from the object's own real id/label - representative text only, never a real href to a real system | derived_supported |
+| Documents / `isRepresentative` | explicit Lab-side flag, always `true` on every entry, marking the whole section as illustrative/non-connected per rule #7 | derived_supported |
+
 ## Text View fields
 
 The Text View lens renders the same Passport fields as a collapsible outline, plus one presentation-only hierarchy path. No new backend fields.
@@ -163,6 +204,7 @@ The Text View lens renders the same Passport fields as a collapsible outline, pl
 | Evidence | `recommendation_evidence.evidence_type`, `source_table`, `source_record_id`, `evidence_summary` | supported |
 | Operational History | timeline events + effective dating + activity log where available | derived_supported |
 | Source Records | source lineage fields and `recommendation_evidence.source_*` fields | supported |
+| Documents | representative links to external enterprise systems (SAP/Windchill/MES/Inspection Reports/SharePoint/Network Folder), classified from the object's real `domain`/`type` - see "Documents fields" above | derived_supported |
 
 ## Jarvis fields
 

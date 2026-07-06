@@ -19,9 +19,37 @@
 // data-select-id button, wired to onSelect - same click-through contract
 // every other lens/panel in this app already uses.
 //
+// --- Explicit Probe CTA (closing the UX backlog's "Text View supports
+// select-through only" gap) --------------------------------------------
+//
+// Hierarchy entries and Relationships each already carry a REAL, non-
+// invented object-type field (hierarchy: buildHierarchyPathForObject()'s
+// entry.type, taken straight off buildUniverseGraph()'s node.type;
+// relationships: buildPassportViewModel()'s rel.relatedObjectType, same
+// source) - so both sections get an explicit "Probe {Type} →" button
+// (engine/labels.js's probeLabel(), never a hand-written label) beside
+// their existing data-select-id button, wired to a NEW onProbe callback.
+// This mirrors exactly how panels/passport.js's OWN relationship rows use
+// probeLabel(rel.relatedObjectType) for their button title/kind text (see
+// that module) - same field, same function, just surfaced as its own
+// clickable CTA here instead of a title attribute.
+//
+// Recommendations/Evidence entries are deliberately left WITHOUT a Probe
+// button here, matching panels/passport.js's own precedent for those exact
+// same view-model fields: neither section carries a real per-item object-
+// type value (a recommendation/evidence entry's `id` corresponds to a real
+// recommendation/evidence node, but the view-model itself never states
+// that type per-row), and passport.js - the reference "done right"
+// implementation this lens mirrors field-for-field - does not add a Probe
+// CTA to its own Recommendations/Evidence sections either. Inventing a
+// literal type string here would be new, undocumented behavior beyond what
+// this lens's own source view-model already supports.
+//
 // Like every other lens/panel module, this file knows nothing about
 // engine/state.js directly - app.js wires onSelect to store.selectObject()
 // and getZoomLevel to store.getState().zoomLevel.
+
+import { probeLabel } from '../engine/labels.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -68,6 +96,29 @@ function selectableRef(id, label, meta) {
 }
 
 /**
+ * The explicit "Probe {Type} →" CTA markup (module header's "Explicit Probe
+ * CTA" section) - a sibling to a selectableRef()/hierarchy button, not a
+ * replacement for it, so Select (click the ref, focus in place) and Probe
+ * (click this button, investigate deeper) stay two distinct actions on the
+ * same item, exactly like every other dual Select/Probe surface in this
+ * app. Reuses the shared `.passport-probe-btn` CTA class (already defined
+ * in styles.css for this exact purpose - see that file's own comment on
+ * panels/passport.js's Overview header / panels/hover-preview.js) rather
+ * than inventing a new button style.
+ *
+ * @param {string} objectId
+ * @param {string|null|undefined} objectType
+ * @returns {string}
+ */
+function probeButtonMarkup(objectId, objectType) {
+  return `
+    <button type="button" class="passport-probe-btn text-view-probe-btn" data-probe-id="${escapeHtml(objectId)}">
+      ${escapeHtml(probeLabel(objectType))} →
+    </button>
+  `;
+}
+
+/**
  * Section definitions, in the exact §5.2 order. `key` matches the property
  * name each render*() function below reads off the passport view-model
  * (except 'hierarchy', which reads bundle.hierarchyPath directly).
@@ -97,6 +148,7 @@ function renderHierarchySection(path) {
             <span class="text-view-hierarchy-label">${escapeHtml(entry.label)}</span>
             ${entry.isSelected ? '<span class="text-view-hierarchy-current">selected</span>' : ''}
           </button>
+          ${probeButtonMarkup(entry.id, entry.type)}
         </li>`
         )
         .join('')}
@@ -128,6 +180,7 @@ function renderRelationshipsSection(relationships) {
             `${rel.direction === 'outgoing' ? '→' : '←'} ${rel.relatedObjectLabel ?? rel.relatedObjectId}`,
             (rel.relationshipType ?? '').replace(/_/g, ' ')
           )}
+          ${probeButtonMarkup(rel.relatedObjectId, rel.relatedObjectType)}
         </li>`
         )
         .join('')}
@@ -255,13 +308,21 @@ function defaultExpandedSectionKeys(zoomLevel) {
  * @param {() => number} [callbacks.getZoomLevel] - current
  *   engine/state.js zoomLevel, sets default section expansion depth.
  * @param {(objectId: string|null) => void} callbacks.onSelect
+ * @param {(objectId: string) => void} [callbacks.onProbe] - OPTIONAL:
+ *   the Hierarchy/Relationships sections' explicit "Probe {Type} →" CTA
+ *   (module header's "Explicit Probe CTA" section) - distinct from
+ *   onSelect above exactly like every other Probe affordance in this app
+ *   (see lenses/risk-board.js/panels/passport.js/panels/hover-preview.js).
+ *   Omitting this callback simply renders Probe buttons that are present
+ *   but no-ops on click, same "optional, degrades gracefully" contract
+ *   every other optional callback in this app already has.
  * @returns {{ render: () => void, resize: () => void, destroy: () => void }}
  */
 export function mountTextViewLens(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountTextViewLens: containerEl must be a DOM element');
   }
-  const { getBundle, getZoomLevel, onSelect } = callbacks ?? {};
+  const { getBundle, getZoomLevel, onSelect, onProbe } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountTextViewLens: callbacks.getBundle is required');
   }
@@ -335,6 +396,25 @@ export function mountTextViewLens(containerEl, callbacks) {
     containerEl.querySelectorAll('[data-select-id]').forEach((el) => {
       el.addEventListener('click', () => {
         if (typeof onSelect === 'function') onSelect(el.getAttribute('data-select-id'));
+      });
+    });
+
+    // Explicit Probe CTA click wiring (module header's "Explicit Probe
+    // CTA" section) - same `[data-probe-id]` attribute + click-to-dispatch
+    // convention panels/hover-preview.js's wireProbeButton() and
+    // panels/passport.js's overview Probe button already use, so this is
+    // not a new parallel mechanism, just the same one applied to this
+    // lens's own Hierarchy/Relationships items.
+    containerEl.querySelectorAll('[data-probe-id]').forEach((el) => {
+      el.addEventListener('click', (ev) => {
+        // A Probe button never lives inside a [data-select-id] element in
+        // this lens's markup (they are always rendered as siblings - see
+        // renderHierarchySection/renderRelationshipsSection above), but
+        // stopping propagation here is cheap insurance against ever
+        // double-firing onSelect AND onProbe for the same click if that
+        // nesting changes later.
+        ev.stopPropagation();
+        if (typeof onProbe === 'function') onProbe(el.getAttribute('data-probe-id'));
       });
     });
 

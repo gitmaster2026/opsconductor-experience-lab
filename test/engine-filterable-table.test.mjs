@@ -1,21 +1,25 @@
 // test/engine-filterable-table.test.mjs
 //
 // Unit tests for engine/filterable-table.js's pure logic (sortRows/
-// filterRows/applyTable) - V5 Phase 4.5's designated REUSABLE component.
-// Deliberately exercised here against generic, Workbench-unrelated
-// synthetic data (a small fruit-inventory table) rather than the
-// operational dataset, to prove this module's logic has no hidden
+// filterRows/applyTable/resolveRowProbeInfo) - V5 Phase 4.5's designated
+// REUSABLE component. Deliberately exercised here against generic,
+// Workbench-unrelated synthetic data (a small fruit-inventory table) rather
+// than the operational dataset, to prove this module's logic has no hidden
 // coupling to Workbench's own column/row shapes - it is a real standalone
 // utility, testable and usable independently. (The DOM-rendering half,
 // mountFilterableTable(), is not exercised here - node:test has no DOM;
 // its standalone reusability is instead verified via the Playwright visual
-// pass, see the phase report.)
+// pass, see the phase report. resolveRowProbeInfo() is the one piece of
+// NEW pure/testable logic the Probe/Hover wiring added - see that
+// function's own doc comment and this module's header for why the
+// attribute-stamping/button-rendering half stays DOM-only and untested
+// here, matching the sort/filter split above.)
 //
 // Run with `node --test test/`.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sortRows, filterRows, applyTable } from '../prototype/current/engine/filterable-table.js';
+import { sortRows, filterRows, applyTable, resolveRowProbeInfo } from '../prototype/current/engine/filterable-table.js';
 
 const COLUMNS = [
   { key: 'name', label: 'Name' },
@@ -163,4 +167,50 @@ test('applyTable: filters first, then sorts the remaining rows', () => {
 test('applyTable: with no sort/filter state, returns all rows unchanged in order', () => {
   const result = applyTable(ROWS, COLUMNS, {});
   assert.deepEqual(result.map((r) => r.id), ROWS.map((r) => r.id));
+});
+
+// ---------------------------------------------------------------------------
+// resolveRowProbeInfo: the deterministic row -> Probe-label glue behind
+// the new optional getRowProbeType/onProbe config (module header's "Probe/
+// Hover wiring" section) - the one piece of new logic worth a pure-function
+// unit test per this file's own established split (DOM rendering itself is
+// exercised via the Playwright visual pass, not node:test - see header).
+// ---------------------------------------------------------------------------
+
+test('resolveRowProbeInfo: returns null when getRowProbeType is omitted entirely', () => {
+  assert.equal(resolveRowProbeInfo(ROWS[0], undefined), null);
+});
+
+test('resolveRowProbeInfo: returns null when the accessor returns null/undefined/empty-string for this row', () => {
+  assert.equal(resolveRowProbeInfo(ROWS[0], () => null), null);
+  assert.equal(resolveRowProbeInfo(ROWS[0], () => undefined), null);
+  assert.equal(resolveRowProbeInfo(ROWS[0], () => ''), null);
+});
+
+test('resolveRowProbeInfo: a real object type produces the exact same "Probe {Noun}" text engine/labels.js\'s probeLabel() produces', () => {
+  const info = resolveRowProbeInfo({ id: 'RB-1' }, () => 'commitment');
+  assert.deepEqual(info, { objectType: 'commitment', label: 'Probe Commitment' });
+});
+
+test('resolveRowProbeInfo: is per-row deterministic - given the SAME row and accessor, the type mapping in engine/labels.js\'s OBJECT_TYPE_NOUNS decides the label, not row identity', () => {
+  const accessor = (row) => row.category === 'fruit' ? 'commitment' : 'evidence';
+  const fruitRow = ROWS.find((r) => r.category === 'fruit');
+  const vegRow = ROWS.find((r) => r.category === 'vegetable');
+  assert.deepEqual(resolveRowProbeInfo(fruitRow, accessor), { objectType: 'commitment', label: 'Probe Commitment' });
+  assert.deepEqual(resolveRowProbeInfo(vegRow, accessor), { objectType: 'evidence', label: 'Probe Evidence' });
+});
+
+test('resolveRowProbeInfo: an unrecognized type string still produces a readable, non-empty label (falls through to probeLabel()\'s own title-case fallback) rather than throwing or returning null', () => {
+  const info = resolveRowProbeInfo(ROWS[0], () => 'some_future_type');
+  assert.deepEqual(info, { objectType: 'some_future_type', label: 'Probe Some Future Type' });
+});
+
+test('resolveRowProbeInfo: the accessor receives the exact row instance passed in (no cloning/mutation)', () => {
+  const row = { id: 'x', __rootType: 'demand_signal' };
+  let receivedRow = null;
+  resolveRowProbeInfo(row, (r) => {
+    receivedRow = r;
+    return r.__rootType;
+  });
+  assert.equal(receivedRow, row);
 });

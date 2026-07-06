@@ -24,7 +24,12 @@
 //
 // This module has no dependency on engine/state.js or engine/derive.js —
 // it is pure zoom-domain logic, callable with a plain number and a plain
-// node object.
+// node object. It does import engine/easing.js's easeInOutCubic() (a
+// sibling pure-primitives module with the exact same zero-DOM-dependency
+// contract), which used to be a private copy defined inline in this file -
+// see engine/easing.js's header for the consolidation rationale.
+
+import { easeInOutCubic } from './easing.js';
 
 /**
  * The 8-level zoom hierarchy, in order from broadest to most granular.
@@ -358,22 +363,6 @@ export function assignStratum(node, state) {
   }
 
   return 'background';
-}
-
-/**
- * Standard easeInOutCubic timing curve, used for the Universe's "travel"
- * camera-flight phase (docs/V5_DESIGN_SPEC.md §6.1: "Flights are
- * three-phase ... with distinct easings. Never a single linear tween").
- * Pure math, deterministic; `t` is clamped to [0, 1] first so out-of-range
- * animation-progress input degrades gracefully rather than producing an
- * out-of-[0,1] eased value.
- *
- * @param {number} t
- * @returns {number} eased value in [0, 1]
- */
-function easeInOutCubic(t) {
-  const clamped = Number.isFinite(t) ? Math.min(Math.max(t, 0), 1) : 0;
-  return clamped < 0.5 ? 4 * clamped ** 3 : 1 - (-2 * clamped + 2) ** 3 / 2;
 }
 
 /**
