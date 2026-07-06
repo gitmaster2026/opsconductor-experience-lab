@@ -170,7 +170,18 @@ export function mountRiskBoardLens(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountRiskBoardLens: containerEl must be a DOM element');
   }
-  const { getBundle, onSelect, onHover, getSelectedId, getHighlightIds, onProbe } = callbacks;
+  const {
+    getBundle,
+    onSelect,
+    onHover,
+    getSelectedId,
+    getHighlightIds,
+    onProbe,
+    onOpenPassport,
+    onOpenTimeline,
+    onOpenEvidence,
+    onOpenSource,
+  } = callbacks;
   if (typeof getBundle !== 'function') {
     throw new Error('mountRiskBoardLens: callbacks.getBundle is required');
   }
@@ -233,9 +244,15 @@ export function mountRiskBoardLens(containerEl, callbacks) {
       // this same clickable <button>-as-card element - intercept its click
       // first so Probing doesn't ALSO re-fire a redundant onSelect (the
       // card is already selected/expanded for the Probe button to exist).
-      if (ev.target.closest('.risk-card-probe-btn')) {
+      const continuityAction = ev.target.closest('[data-risk-continuity-action]');
+      if (continuityAction) {
         ev.stopPropagation();
-        if (typeof onProbe === 'function') onProbe(cellId);
+        const action = continuityAction.getAttribute('data-risk-continuity-action');
+        if (action === 'passport' && typeof onOpenPassport === 'function') onOpenPassport(cellId);
+        else if (action === 'timeline' && typeof onOpenTimeline === 'function') onOpenTimeline(cellId);
+        else if (action === 'evidence' && typeof onOpenEvidence === 'function') onOpenEvidence(cellId);
+        else if (action === 'source' && typeof onOpenSource === 'function') onOpenSource(cellId);
+        else if (action === 'probe' && typeof onProbe === 'function') onProbe(cellId);
         return;
       }
       if (typeof onSelect === 'function') onSelect(cellId);
@@ -474,7 +491,13 @@ export function mountRiskBoardLens(containerEl, callbacks) {
               </div>`
             : ''
         }
-        <button type="button" class="risk-card-probe-btn passport-probe-btn">Probe Commitment in Universe →</button>
+        <div class="risk-card-continuity-actions" aria-label="Continue this risk investigation">
+          <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="passport">Passport</button>
+          <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="timeline">Timeline</button>
+          <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="evidence">Evidence</button>
+          <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="source">Source</button>
+          <button type="button" class="risk-card-probe-btn passport-probe-btn" data-risk-continuity-action="probe">Probe Commitment in Universe →</button>
+        </div>
       </div>
     `;
   }

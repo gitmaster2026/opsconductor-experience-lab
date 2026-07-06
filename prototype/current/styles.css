@@ -3954,7 +3954,12 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 7px;
+}
+
+.functional-radar-object-row {
+  display: grid;
+  gap: 4px;
 }
 
 .functional-radar-object {
@@ -4001,6 +4006,38 @@ body {
 
 .functional-radar-object-detail--owner {
   font-style: italic;
+}
+
+.functional-radar-continuity-actions,
+.risk-card-continuity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.functional-radar-continuity-btn,
+.risk-card-continuity-btn {
+  appearance: none;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.functional-radar-continuity-btn:hover,
+.functional-radar-continuity-btn.is-default,
+.risk-card-continuity-btn:hover {
+  color: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.1);
+}
+
+.risk-card-continuity-actions .risk-card-probe-btn {
+  margin-top: 0;
 }
 
 .functional-radar-object-more {

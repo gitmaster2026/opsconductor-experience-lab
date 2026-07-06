@@ -24,6 +24,7 @@
 // the resulting Universe focus/Passport is immediately visible.
 
 import { buildFunctionalViewGroups } from '../engine/functional-view.js';
+import { buildContinuitySteps, defaultContinuityAction } from '../engine/lens-continuity.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -60,8 +61,16 @@ function riskBadgeHtml(riskState) {
  * @param {Object} callbacks
  * @param {() => Object} callbacks.getBundle - returns the current
  *   engine/timeline.js DerivedBundle (reads .universe.nodes).
- * @param {(objectId: string) => void} callbacks.onSelect - called with the
- *   chosen object's id. app.js wires this to probeObject().
+ * @param {() => string} [callbacks.getCurrentLens] - current workspace lens,
+ *   used to keep Risk Board selections inside Risk Board when possible.
+ * @param {(objectId: string) => void} callbacks.onSelect - default continuity
+ *   action for the chosen object. app.js keeps risk-board objects in-lens and
+ *   degrades other objects to Probe Universe.
+ * @param {(objectId: string) => void} [callbacks.onProbe]
+ * @param {(objectId: string) => void} [callbacks.onOpenPassport]
+ * @param {(objectId: string) => void} [callbacks.onOpenTimeline]
+ * @param {(objectId: string) => void} [callbacks.onOpenEvidence]
+ * @param {(objectId: string) => void} [callbacks.onOpenSource]
  * @returns {{ render: () => void, destroy: () => void }}
  */
 export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
@@ -71,7 +80,16 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   if (!panelEl || typeof panelEl.appendChild !== 'function') {
     throw new Error('mountFunctionalRadarPanel: panelEl must be a DOM element');
   }
-  const { getBundle, onSelect } = callbacks ?? {};
+  const {
+    getBundle,
+    getCurrentLens,
+    onSelect,
+    onProbe,
+    onOpenPassport,
+    onOpenTimeline,
+    onOpenEvidence,
+    onOpenSource,
+  } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountFunctionalRadarPanel: callbacks.getBundle is required');
   }
@@ -102,6 +120,29 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     toggleEl.querySelector('[data-functional-radar-toggle]')?.addEventListener('click', toggleOpen);
   }
 
+  function renderContinuityActions(obj) {
+    const steps = buildContinuitySteps(obj.id);
+    const currentLens = typeof getCurrentLens === 'function' ? getCurrentLens() : null;
+    const defaultAction = defaultContinuityAction({ currentLens, objectId: obj.id });
+    return `
+      <span class="functional-radar-continuity-actions" aria-label="Continue investigation for ${escapeHtml(obj.label)}">
+        ${steps
+          .map((step) => {
+            const isDefault =
+              (step.action === 'probe_universe' && defaultAction === 'probe_universe') ||
+              (step.action === 'open_passport' && defaultAction === 'select_in_place');
+            return `<button
+              type="button"
+              class="functional-radar-continuity-btn${isDefault ? ' is-default' : ''}"
+              data-continuity-action="${escapeHtml(step.action)}"
+              data-select-id="${escapeHtml(step.objectId)}"
+            >${escapeHtml(step.label)}</button>`;
+          })
+          .join('')}
+      </span>
+    `;
+  }
+
   /**
    * @param {import('../engine/functional-view.js').FunctionalGroup} group
    */
@@ -125,8 +166,8 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
                 ${group.topObjects
                   .map(
                     (obj) => `
-                      <li>
-                        <button type="button" class="functional-radar-object" data-select-id="${escapeHtml(obj.id)}">
+                      <li class="functional-radar-object-row">
+                        <button type="button" class="functional-radar-object" data-select-id="${escapeHtml(obj.id)}" data-continuity-action="default">
                           <span class="functional-radar-object-top">
                             <span class="functional-radar-object-label">${escapeHtml(obj.label)}</span>
                             ${riskBadgeHtml(obj.riskState)}
@@ -139,6 +180,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
                                 : ''
                           }
                         </button>
+                        ${renderContinuityActions(obj)}
                       </li>
                     `
                   )
@@ -181,9 +223,18 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     `;
 
     panelEl.querySelectorAll('[data-functional-radar-close]').forEach((el) => el.addEventListener('click', close));
-    panelEl.querySelectorAll('[data-select-id]').forEach((el) => {
-      el.addEventListener('click', () => {
-        if (typeof onSelect === 'function') onSelect(el.getAttribute('data-select-id'));
+    panelEl.querySelectorAll('[data-continuity-action]').forEach((el) => {
+      el.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const objectId = el.getAttribute('data-select-id');
+        const action = el.getAttribute('data-continuity-action');
+        if (!objectId) return;
+        if (action === 'open_passport' && typeof onOpenPassport === 'function') onOpenPassport(objectId);
+        else if (action === 'open_timeline' && typeof onOpenTimeline === 'function') onOpenTimeline(objectId);
+        else if (action === 'open_evidence' && typeof onOpenEvidence === 'function') onOpenEvidence(objectId);
+        else if (action === 'open_source' && typeof onOpenSource === 'function') onOpenSource(objectId);
+        else if (action === 'probe_universe' && typeof onProbe === 'function') onProbe(objectId);
+        else if (typeof onSelect === 'function') onSelect(objectId);
         close();
       });
     });
