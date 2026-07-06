@@ -50,6 +50,7 @@
 // and getZoomLevel to store.getState().zoomLevel.
 
 import { probeLabel } from '../engine/labels.js';
+import { relationshipLabel, sortRelationshipsStable, objectNoun } from '../engine/operational-language.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -169,16 +170,19 @@ function renderCurrentRiskSection(currentRisk) {
 function renderRelationshipsSection(relationships) {
   const list = Array.isArray(relationships) ? relationships : [];
   if (list.length === 0) return emptyLine('No related objects in the operational graph.');
+  // Sprint UX-2C: stable canonical relationship ordering + natural-language
+  // relationship labels, shared with the Passport via operational-language.js.
+  const ordered = sortRelationshipsStable(list);
   return `
     <ul class="text-view-list">
-      ${list
+      ${ordered
         .map(
           (rel) => `
         <li class="text-view-list-item">
           ${selectableRef(
             rel.relatedObjectId,
             `${rel.direction === 'outgoing' ? '→' : '←'} ${rel.relatedObjectLabel ?? rel.relatedObjectId}`,
-            (rel.relationshipType ?? '').replace(/_/g, ' ')
+            relationshipLabel(rel.relationshipType, rel.direction)
           )}
           ${probeButtonMarkup(rel.relatedObjectId, rel.relatedObjectType)}
         </li>`
@@ -374,11 +378,19 @@ export function mountTextViewLens(containerEl, callbacks) {
       sourceRecords: renderSourceRecordsSection(passport.sourceRecords),
     };
 
+    // Sprint UX-2C: the kicker is the object's operational noun (Customer
+    // Commitment / ECO / NCR / ...), not a generic "INVESTIGATION" label —
+    // so the surface reads as "Customer Commitment — Horizon LNG..." before
+    // any ERP identifier. The summary (operational explanation) renders as
+    // a lede line under the title when present.
+    const overview = passport.overview ?? {};
+    const typeNoun = objectNoun(overview.objectType, { domain: overview.domain, nr04_object_key: overview.objectKey });
     containerEl.innerHTML = `
       <div class="text-view-surface">
         <header class="text-view-header">
-          <span class="text-view-kicker">INVESTIGATION</span>
-          <h2 class="text-view-title">${escapeHtml(passport.overview.label ?? passport.objectId)}</h2>
+          <span class="text-view-kicker">${escapeHtml(typeNoun.toUpperCase())}</span>
+          <h2 class="text-view-title">${escapeHtml(overview.label ?? passport.objectId)}</h2>
+          ${overview.summary ? `<p class="text-view-lede">${escapeHtml(overview.summary)}</p>` : ''}
           <span class="text-view-time">${escapeHtml(sliceLabel)}</span>
         </header>
         ${SECTION_DEFS.map((def) => {

@@ -19,6 +19,7 @@
 //   Probe affordance elsewhere in the app).
 
 import { probeLabel } from '../engine/labels.js';
+import { objectNoun, domainLabel, operationalSummary } from '../engine/operational-language.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -189,11 +190,18 @@ export function mountHoverPreview(el, callbacks) {
       ? `${escapeHtml(preview.timelinePositionLabel)}${formatDate(preview.timelinePositionAt) ? ` · ${formatDate(preview.timelinePositionAt)}` : ''}`
       : formatDate(preview.timelinePositionAt);
 
+    // Sprint UX-2C: operational terminology — resolve the object type to its
+    // human noun (Customer / Site / Supplier / ECO / NCR / ...), not the raw
+    // snake_case token, and fold in the domain label where it adds meaning.
+    const typeNoun = objectNoun(preview.objectType, { domain: preview.domain, nr04_object_key: preview.objectKey });
+    const domainText = preview.domain ? domainLabel(preview.domain) : '';
+    const typeDisplay = domainText && domainText !== typeNoun ? `${typeNoun} · ${domainText}` : typeNoun;
+
     el.innerHTML = `
       <div class="hover-preview-title">${escapeHtml(preview.label ?? preview.objectId)}</div>
       <div class="hover-preview-meta">
         <span class="node-tooltip-risk node-tooltip-risk--${bucket}">${escapeHtml(preview.currentRisk ?? 'neutral')}</span>
-        <span class="node-tooltip-type">${escapeHtml(preview.objectType ?? '')}</span>
+        <span class="node-tooltip-type">${escapeHtml(typeDisplay)}</span>
         ${!preview.visibleAtSlice ? '<span class="dormant-tag">not yet visible at this time slice</span>' : ''}
       </div>
       ${preview.status ? `<div class="hover-preview-line"><strong>Status</strong> ${escapeHtml(preview.status)}</div>` : ''}

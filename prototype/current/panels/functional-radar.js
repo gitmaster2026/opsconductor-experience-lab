@@ -25,6 +25,7 @@
 
 import { buildFunctionalViewGroups } from '../engine/functional-view.js';
 import { buildContinuitySteps, defaultContinuityAction } from '../engine/lens-continuity.js';
+import { objectNoun, operationalSummary } from '../engine/operational-language.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -165,24 +166,32 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
             ? `<ul class="functional-radar-object-list">
                 ${group.topObjects
                   .map(
-                    (obj) => `
+                    (obj) => {
+                      // Sprint UX-2C: lead with operational meaning. Prefer
+                      // nextActionSummary (what to do), then businessImpactSummary
+                      // (why it matters), then ownerName as the supporting line —
+                      // never an ERP identifier as the primary detail.
+                      const detailLine = obj.nextActionSummary
+                        ? obj.nextActionSummary
+                        : obj.businessImpactSummary
+                          ? obj.businessImpactSummary
+                          : obj.ownerName
+                            ? `Owner: ${obj.ownerName}`
+                            : '';
+                      const typeNoun = objectNoun(obj.type, { domain: group.key });
+                      return `
                       <li class="functional-radar-object-row">
                         <button type="button" class="functional-radar-object" data-select-id="${escapeHtml(obj.id)}" data-continuity-action="default">
                           <span class="functional-radar-object-top">
                             <span class="functional-radar-object-label">${escapeHtml(obj.label)}</span>
+                            ${typeNoun && typeNoun !== group.label ? `<span class="functional-radar-object-type">${escapeHtml(typeNoun)}</span>` : ''}
                             ${riskBadgeHtml(obj.riskState)}
                           </span>
-                          ${
-                            obj.nextActionSummary
-                              ? `<span class="functional-radar-object-detail">${escapeHtml(obj.nextActionSummary)}</span>`
-                              : obj.ownerName
-                                ? `<span class="functional-radar-object-detail functional-radar-object-detail--owner">Owner: ${escapeHtml(obj.ownerName)}</span>`
-                                : ''
-                          }
+                          ${detailLine ? `<span class="functional-radar-object-detail">${escapeHtml(detailLine)}</span>` : ''}
                         </button>
                         ${renderContinuityActions(obj)}
-                      </li>
-                    `
+                      </li>`;
+                    },
                   )
                   .join('')}
                 ${hiddenCount > 0 ? `<li class="functional-radar-object-more">+ ${hiddenCount} more</li>` : ''}

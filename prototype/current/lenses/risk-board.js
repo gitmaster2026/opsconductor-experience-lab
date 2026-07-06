@@ -432,12 +432,12 @@ export function mountRiskBoardLens(containerEl, callbacks) {
     el.innerHTML = `
       <div class="risk-card-top">
         <span class="risk-card-dot"></span>
-        <span class="risk-card-id">${escapeHtml(cell.id ?? '—')}</span>
         <span class="risk-card-customer">${escapeHtml(cell.customer ?? '—')}</span>
+        <span class="risk-card-item">${escapeHtml(cell.item_number ?? '—')}</span>
         <span class="risk-card-revenue">${formatCurrency(cell.revenue_at_risk, cell.currency)}</span>
       </div>
       <div class="risk-card-meta">
-        <span class="risk-card-item">${escapeHtml(cell.item_number ?? '—')}</span>
+        <span class="risk-card-ref">Reference ${escapeHtml(cell.id ?? '—')}</span>
         <span class="risk-card-meta-sep">·</span>
         <span class="risk-card-required">Required ${formatDate(cell.required_date)}</span>
       </div>
