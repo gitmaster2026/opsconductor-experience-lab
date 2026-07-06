@@ -3205,6 +3205,7 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   // --- buildDocumentReferencesForObject (Documents Passport section) ---
   references: { category: 'derived_supported', note: 'field-map.md Documents: Representative Document References, list of representative external-system pointers folded from the object\'s own real domain/type via documentSystemForDomainAndType()' },
   system: { category: 'derived_supported', note: 'field-map.md Documents: Representative Document References, the representative external system name (SAP/Windchill/MES/Inspection Reports/SharePoint/Network Folder), deterministically classified from the object\'s real domain/type - never a fabricated backend field' },
+  path: { category: 'derived_supported', note: 'field-map.md Documents: "Documents / path, label, note" row - a deterministic, illustrative presentation string composed from the object\'s own real id/label via representativeDocumentPathForObject(), representative text only, never a real href to a real system' },
   isRepresentative: { category: 'derived_supported', note: 'field-map.md Documents: Representative Document References, explicit Lab-side flag marking every entry as illustrative/non-connected per docs/RULES.md rule #7 - always true, never rendered as a real working link' },
 
   // --- buildCollectionPassportViewModel (V5 Phase 4) ---

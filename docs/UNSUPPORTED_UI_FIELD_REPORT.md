@@ -85,25 +85,63 @@ duplicating documents) was already implemented by the V1-UX-1a/1b sprints
 and found unchanged/compliant - see docs/SNAPSHOT_CONSUMPTION_NOTES.md and
 docs/INTERACTION_MODEL_NOTES.md for where each was built.
 
+## New this sprint: V1-UX-2A Universe Search & V1-UX-2B Functional Radar
+
+| Field | Classification | Note |
+|---|---|---|
+| Universe Search results (label/id/type/customer/program/domain match) | **derived_supported** (not a gap) | `engine/search.js`'s `searchUniverseNodes()` is a pure filter/rank over the SAME already-derived `bundle.universe.nodes` every lens reads - no new field, no new derived data shape. Selecting a result is a Probe action, identical to selecting the same object anywhere else in the app. |
+| Functional Radar's 5 function groups (Engineering/Planning/Manufacturing/Procurement/Quality) | **derived_supported** (not a gap) | `engine/functional-view.js`'s `buildFunctionalViewGroups()` filters the same Universe graph nodes by their real, already-present `domain` field - see docs/field-map.md's "Functional Radar fields" for the exact domain-value mapping. Not a new taxonomy: all 5 function names are real, observed `domain` values in the live NR04 dataset. |
+| Functional Radar per-object detail (`ownerName`, `nextActionSummary`, `businessImpactSummary`) | **demo-derived detail gap on objects that predate these columns** (not a production gap) | Same real `owner_name`/`next_action_summary`/`business_impact_summary` columns the Hover Passport Preview (Task 2, above) already surfaces - renders null/omitted, never fabricated, on objects where the underlying NR04-canonical record doesn't populate them. |
+| Functional Radar empty function state (e.g. Planning/Procurement are thin in the current dataset) | **intentional placeholder** (by design, not a gap) | A function with 0 matching nodes still renders as its own section with an honest "No significant &lt;function&gt; signals in the current operational graph" note, per the sprint brief's "clearly degrade gracefully" requirement - never hidden, never backfilled with invented rows. |
+
+Not addressed this sprint (see `docs/V1_UX_2_PRELAUNCH_PLAN.md` for full
+sprint-by-sprint status): Progressive Risk Board enrichment (surfacing
+`ownerName`/`nextActionSummary` on Risk Board cards themselves, not just in
+Functional Radar) was scoped for V1-UX-2B but deferred - see that plan
+document's "Deferred" section for why.
+
 ## Remaining UX Backlog
 
-In priority order, none blocking this phase's PR:
+In priority order, none blocking this phase's PR. Items 1-4 below (from the
+V1-UX-1b sprint that originally authored this backlog) were resolved by a
+later sprint (V1-UX-1B / PR #15) and are recorded here as **RESOLVED**
+rather than removed, so this list stays an accurate history rather than a
+silently-shrinking one - this staleness (the list said "remaining" for
+already-shipped work) was found and fixed during V1-UX-2's research pass.
 
-1. **In-app relationship-color legend** - the 9-category mapping exists and
-   renders, but is only documented in docs/INTERACTION_MODEL_NOTES.md, not
-   shown on screen.
-2. **Explicit Probe buttons in Text View / Workbench / Conductor Studio** -
-   currently these 3 lenses support select-through only.
-3. **Hover Passport Preview wiring for Workbench/Conductor Studio rows** -
-   would need those two lenses to adopt a `[data-select-id]`-equivalent
-   convention (or their own onHover wiring) for the existing generic
-   delegation listener (or an equivalent) to reach them.
-4. **A labeled "Return to Universe" button**, distinct from (and in addition
-   to) the existing empty-space-click and Navigation History rail
-   mechanisms.
+1. ~~In-app relationship-color legend~~ - **RESOLVED (V1-UX-1B).** Now
+   `panels/relationship-legend.js`, a collapsible on-screen key mounted over
+   the Universe canvas, colors read live from the same `--rel-*` CSS custom
+   properties the real edges use.
+2. ~~Explicit Probe buttons in Text View / Workbench / Conductor Studio~~ -
+   **RESOLVED (V1-UX-1B).** All three lenses now wire an explicit
+   `onProbe` callback through the shared `probeObject()` choke point.
+3. ~~Hover Passport Preview wiring for Workbench/Conductor Studio rows~~ -
+   **RESOLVED (V1-UX-1B).** Both lenses' rows now carry `data-select-id`,
+   reaching app.js's existing generic hover-delegation listener.
+4. ~~A labeled "Return to Universe" button~~ - **RESOLVED (V1-UX-1B).** Now
+   `panels/return-to-universe.js`, wired into the toolbar next to the
+   Navigation History rail; distinct from Escape (deselect only) and the
+   rail (one step at a time).
 5. **Governed-section population** once a real NR04 `ops export snapshot`
-   run exists (carried over from V1-UX-1a, unchanged).
+   run exists (carried over from V1-UX-1a, unchanged - still open, this is
+   a production/data concern, not a Lab UI gap).
 6. **A real versioned revision-history / routing-operation / carrier-
    milestone export**, if production ever adds one, to deepen the
    Representative Drilldown Manifest's 6 anchors beyond their current flat
-   `detail` snapshot.
+   `detail` snapshot (still open).
+7. **Search-to-focus was itself a backlog item** (`docs/V5_HANDOVER.md`
+   §10.2 item G named a Scope Explorer search bar; no object-level
+   search-to-focus existed anywhere) - **RESOLVED (V1-UX-2A)**, see the new
+   section above.
+8. **A "Functional Radar" grouping by Engineering/Planning/Manufacturing/
+   Procurement/Quality did not exist** (the only prior multi-axis view was
+   the per-commitment Commitment Health Radar) - **RESOLVED (V1-UX-2B)**,
+   see the new section above. Progressive Risk Board enrichment (owner/
+   next-action fields on Risk Board cards themselves) remains open - see
+   `docs/V1_UX_2_PRELAUNCH_PLAN.md`.
+9. **V1-UX-2C (Source Handoff + Final UX Finish) is not yet assessed for
+   remaining gaps beyond what V1-UX-2's research pass already confirmed is
+   built** (Documents Passport section, Passport-first exploration,
+   Golden Story timeline ordering) - see `docs/V1_UX_2_PRELAUNCH_PLAN.md`
+   for the current read and what's left.
