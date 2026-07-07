@@ -58,6 +58,10 @@ function formatCurrency(amount) {
 const LENS_DISPLAY_LABEL = Object.freeze({
   universe: 'Universe',
   risk_board: 'Risk Board',
+  spider: 'Radar',
+  text: 'Text',
+  workbench: 'Workbench',
+  conductor_studio: 'Conductor Studio',
 });
 
 function renderContextBlock(currentContext) {
@@ -67,7 +71,7 @@ function renderContextBlock(currentContext) {
 
   return `
     <section class="jarvis-section jarvis-context">
-      <h3 class="jarvis-section-title">Context</h3>
+      <h3 class="jarvis-section-title">Where am I?</h3>
       <dl class="jarvis-context-grid">
         <div><dt>Scope</dt><dd>${escapeHtml(ctx.scopeLabel ?? 'Whole Organization')}</dd></div>
         <div><dt>Lens</dt><dd>${escapeHtml(lensLabel)}</dd></div>
@@ -91,14 +95,14 @@ function renderImportantChangesBlock(importantChanges) {
   if (list.length === 0) {
     return `
       <section class="jarvis-section">
-        <h3 class="jarvis-section-title">Important Changes</h3>
+        <h3 class="jarvis-section-title">What is happening?</h3>
         <div class="dash-section-empty">No new operational changes at this time slice.</div>
       </section>
     `;
   }
   return `
     <section class="jarvis-section">
-      <h3 class="jarvis-section-title">Important Changes <span class="passport-section-count">${list.length}</span></h3>
+      <h3 class="jarvis-section-title">What is happening? <span class="passport-section-count">${list.length}</span></h3>
       <ul class="jarvis-change-list">
         ${list
           .map((change) => {
@@ -120,14 +124,14 @@ function renderSuggestedNextStepBlock(suggestedNextStep) {
   if (!suggestedNextStep) {
     return `
       <section class="jarvis-section jarvis-next-step">
-        <h3 class="jarvis-section-title">Suggested Next Step</h3>
+        <h3 class="jarvis-section-title">What should I inspect next?</h3>
         <div class="dash-section-empty">No deterministic recommendation to surface at this time slice.</div>
       </section>
     `;
   }
   return `
     <section class="jarvis-section jarvis-next-step">
-      <h3 class="jarvis-section-title">Suggested Next Step</h3>
+      <h3 class="jarvis-section-title">What should I inspect next?</h3>
       <button type="button" class="jarvis-next-step-button" data-select-id="${escapeHtml(suggestedNextStep.riskBoardId ?? '')}">
         <span class="jarvis-next-step-icon" aria-hidden="true">→</span>
         <span class="jarvis-next-step-text">${escapeHtml(suggestedNextStep.text ?? '')}</span>
@@ -145,7 +149,7 @@ function renderEvidenceReferenceBlock(evidenceReference) {
   if (evidenceIds.length === 0 && sourceRecordIds.length === 0) {
     return `
       <section class="jarvis-section">
-        <h3 class="jarvis-section-title">Evidence Reference</h3>
+        <h3 class="jarvis-section-title">Why does it matter?</h3>
         <div class="dash-section-empty">No evidence citations available for the current context.</div>
       </section>
     `;
@@ -153,7 +157,7 @@ function renderEvidenceReferenceBlock(evidenceReference) {
 
   return `
     <section class="jarvis-section">
-      <h3 class="jarvis-section-title">Evidence Reference</h3>
+      <h3 class="jarvis-section-title">Why does it matter?</h3>
       ${
         evidenceIds.length > 0
           ? `<div class="jarvis-citation-group">
@@ -222,7 +226,7 @@ export function mountJarvisPanel(el, callbacks) {
         <div class="panel-heading jarvis-heading">
           <span class="jarvis-badge" aria-hidden="true"></span>
           <h2>Jarvis</h2>
-          <p class="panel-subhead">Deterministic operational copilot</p>
+          <p class="panel-subhead">Where am I · What is happening · Why it matters · What next</p>
         </div>
         ${renderContextBlock(jarvis.currentContext)}
         ${renderImportantChangesBlock(jarvis.importantChanges)}

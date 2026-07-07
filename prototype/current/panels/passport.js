@@ -63,6 +63,7 @@
 // the wording is consistent everywhere a related object can be opened.
 
 import { probeLabel } from '../engine/labels.js';
+import { renderRecursiveInvestigationCard } from './recursive-investigation-card.js';
 import {
   relationshipLabel,
   sortRelationshipsStable,
@@ -134,7 +135,7 @@ function renderOverviewSection(overview, businessImpact, nextAction, sourceIdent
 function renderCurrentRiskSection(currentRisk) {
   const bucket = riskBucketClass(currentRisk);
   return `
-    <section class="passport-section passport-current-risk">
+    <section class="passport-section passport-current-risk" data-passport-section="risk">
       <h3 class="passport-section-title">Current Risk</h3>
       <div class="risk-badge risk-badge--${bucket}">
         <span class="risk-dot risk-dot--${bucket}"></span>
@@ -148,7 +149,7 @@ function renderRelationshipsSection(relationships) {
   const rawList = Array.isArray(relationships) ? relationships : [];
   if (rawList.length === 0) {
     return `
-      <section class="passport-section">
+      <section class="passport-section" data-passport-section="relationships">
         <h3 class="passport-section-title">Relationships</h3>
         <div class="dash-section-empty">No related objects in the operational graph.</div>
       </section>
@@ -159,7 +160,7 @@ function renderRelationshipsSection(relationships) {
   // of graph insertion order. Ties preserve the graph's deterministic order.
   const list = sortRelationshipsStable(rawList);
   return `
-    <section class="passport-section">
+    <section class="passport-section" data-passport-section="relationships">
       <h3 class="passport-section-title">Relationships <span class="passport-section-count">${list.length}</span></h3>
       <ul class="passport-relationship-list">
         ${list
@@ -192,14 +193,14 @@ function renderRecommendationsSection(recommendations) {
   const list = Array.isArray(recommendations) ? recommendations : [];
   if (list.length === 0) {
     return `
-      <section class="passport-section">
+      <section class="passport-section" data-passport-section="recommendations">
         <h3 class="passport-section-title">Recommendations</h3>
         <div class="dash-section-empty">No recommendations for this object yet.</div>
       </section>
     `;
   }
   return `
-    <section class="passport-section">
+    <section class="passport-section" data-passport-section="recommendations">
       <h3 class="passport-section-title">Recommendations <span class="passport-section-count">${list.length}</span></h3>
       <ul class="passport-entry-list">
         ${list
@@ -227,14 +228,14 @@ function renderEvidenceSection(evidence) {
   const list = Array.isArray(evidence) ? evidence : [];
   if (list.length === 0) {
     return `
-      <section class="passport-section">
+      <section class="passport-section" data-passport-section="evidence">
         <h3 class="passport-section-title">Evidence</h3>
         <div class="dash-section-empty">No evidence linked to this object yet.</div>
       </section>
     `;
   }
   return `
-    <section class="passport-section">
+    <section class="passport-section" data-passport-section="evidence">
       <h3 class="passport-section-title">Evidence <span class="passport-section-count">${list.length}</span></h3>
       <ul class="passport-entry-list">
         ${list
@@ -272,7 +273,7 @@ function renderOperationalHistorySection(operationalHistory) {
 
   if (events.length === 0) {
     return `
-      <section class="passport-section">
+      <section class="passport-section" data-passport-section="timeline">
         <h3 class="passport-section-title">Timeline / Operational History</h3>
         ${dating.occurred_at || dating.due_at || dating.isCurrent !== null ? datingRow : ''}
         <div class="dash-section-empty">No recorded history events for this object.</div>
@@ -281,7 +282,7 @@ function renderOperationalHistorySection(operationalHistory) {
   }
 
   return `
-    <section class="passport-section">
+    <section class="passport-section" data-passport-section="timeline">
       <h3 class="passport-section-title">Timeline / Operational History</h3>
       ${dating.occurred_at || dating.due_at || dating.isCurrent !== null ? datingRow : ''}
       <ol class="passport-history-list">
@@ -344,14 +345,14 @@ function renderSourceRecordsSection(sourceRecords) {
   const list = Array.isArray(sourceRecords) ? sourceRecords : [];
   if (list.length === 0) {
     return `
-      <section class="passport-section passport-source-records">
+      <section class="passport-section passport-source-records" data-passport-section="source">
         <h3 class="passport-section-title">Source Records</h3>
         <div class="dash-section-empty">No source lineage recorded.</div>
       </section>
     `;
   }
   return `
-    <section class="passport-section passport-source-records">
+    <section class="passport-section passport-source-records" data-passport-section="source">
       <h3 class="passport-section-title">Source Records <span class="passport-section-count">${list.length}</span></h3>
       <ul class="source-record-list">
         ${list
@@ -394,14 +395,14 @@ function renderDocumentsSection(documents) {
   const list = Array.isArray(documents) ? documents : [];
   if (list.length === 0) {
     return `
-      <section class="passport-section passport-documents">
+      <section class="passport-section passport-documents" data-passport-section="document">
         <h3 class="passport-section-title">Documents</h3>
         <div class="dash-section-empty">No representative document references for this object.</div>
       </section>
     `;
   }
   return `
-    <section class="passport-section passport-documents">
+    <section class="passport-section passport-documents" data-passport-section="document">
       <h3 class="passport-section-title">
         Documents <span class="passport-section-count">${list.length}</span>
         <span class="demo-derived-badge" title="Representative link only - illustrative external-system reference, not a real connected document.">Representative</span>
@@ -440,6 +441,49 @@ function renderDocumentsSection(documents) {
  * @param {Object} collectionPassport - buildCollectionPassportViewModel() output.
  * @returns {string}
  */
+
+function buildRecursiveModelFromPassport(passport) {
+  const overview = passport?.overview ?? {};
+  const relationships = (passport?.relationships ?? [])
+    .slice(0, 4)
+    .map((rel) => `${rel.relatedObjectLabel ?? rel.relatedObjectId} — ${relationshipLabel(rel.relationshipType, rel.direction)}`);
+  const evidence = (passport?.evidence ?? [])
+    .slice(0, 4)
+    .map((ev) => ev.evidence_summary ?? ev.id)
+    .filter(Boolean);
+  const transactions = (passport?.recommendations ?? [])
+    .slice(0, 3)
+    .map((rec) => rec.status ? `${rec.status} recommendation ${rec.id ?? ''}`.trim() : rec.id)
+    .filter(Boolean);
+  const sourceRecords = (passport?.sourceRecords ?? [])
+    .slice(0, 4)
+    .map((rec) => `${rec.sourceTable ?? 'source'} / ${rec.sourceRecordId ?? 'record'}`);
+  const documents = (passport?.documents ?? [])
+    .slice(0, 3)
+    .map((doc) => `${doc.system ?? 'Document'} — ${doc.path ?? doc.label ?? 'representative reference'}`);
+
+  return {
+    kicker: 'Recursive Investigation',
+    title: overview.label ?? overview.objectId ?? 'Operational object',
+    summary: overview.summary ?? 'This object is part of the current governed operational investigation.',
+    businessMeaning: overview.businessImpact ?? overview.nextAction ?? null,
+    parameters: [
+      { label: 'Status', value: overview.status },
+      { label: 'Customer', value: overview.customer },
+      { label: 'Supplier', value: overview.supplier },
+      { label: 'Program', value: overview.program },
+    ],
+    relationships,
+    evidence,
+    transactions,
+    sourceRecords,
+    documents,
+    externalHandoff: documents.length > 0 ? 'Representative external document path is available above; no live connector is implied in the Lab.' : null,
+    termination: relationships.length === 0 ? 'No deeper governed relationship is available for this object. The investigation terminates at evidence, source records, and representative documents.' : undefined,
+    extraClass: 'passport-recursive-investigation',
+  };
+}
+
 function renderCollectionOverviewSection(collectionPassport) {
   const members = Array.isArray(collectionPassport.members) ? collectionPassport.members : [];
   return `
@@ -501,9 +545,19 @@ export function mountPassportPanel(el, callbacks) {
   if (!el || typeof el.appendChild !== 'function') {
     throw new Error('mountPassportPanel: el must be a DOM element');
   }
-  const { getBundle, onSelect, onProbe } = callbacks ?? {};
+  const { getBundle, onSelect, onProbe, getTargetSection } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountPassportPanel: callbacks.getBundle is required');
+  }
+
+  function focusTargetSection() {
+    const targetSection = typeof getTargetSection === 'function' ? getTargetSection() : null;
+    if (!targetSection) return;
+    const targetEl = el.querySelector(`[data-passport-section="${targetSection}"]`);
+    if (!targetEl) return;
+    targetEl.classList.add('is-targeted');
+    targetEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    window.setTimeout(() => targetEl.classList.remove('is-targeted'), 1400);
   }
 
   function wireSelectHandlers() {
@@ -535,6 +589,7 @@ export function mountPassportPanel(el, callbacks) {
       el.innerHTML = `
         <div class="panel-surface passport-panel passport-panel--collection">
           ${renderCollectionOverviewSection(collectionPassport)}
+          ${renderRecursiveInvestigationCard(buildRecursiveModelFromPassport(collectionPassport))}
           ${renderCurrentRiskSection(collectionPassport.currentRisk)}
           ${renderRelationshipsSection(collectionPassport.relationships)}
           ${renderRecommendationsSection(collectionPassport.recommendations)}
@@ -545,6 +600,7 @@ export function mountPassportPanel(el, callbacks) {
         </div>
       `;
       wireSelectHandlers();
+      focusTargetSection();
       return;
     }
 
@@ -562,6 +618,7 @@ export function mountPassportPanel(el, callbacks) {
           passport.overview?.sourceIdentifier ?? null,
           passport.overview?.objectKey ?? null,
         )}
+        ${renderRecursiveInvestigationCard(buildRecursiveModelFromPassport(passport))}
         ${renderCurrentRiskSection(passport.currentRisk)}
         ${renderRelationshipsSection(passport.relationships)}
         ${renderRecommendationsSection(passport.recommendations)}
@@ -574,11 +631,21 @@ export function mountPassportPanel(el, callbacks) {
     `;
 
     wireSelectHandlers();
+    focusTargetSection();
+  }
+
+  function focusSection(section) {
+    const targetEl = el.querySelector(`[data-passport-section="${section}"]`);
+    if (!targetEl) return false;
+    targetEl.classList.add('is-targeted');
+    targetEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    window.setTimeout(() => targetEl.classList.remove('is-targeted'), 1400);
+    return true;
   }
 
   function destroy() {
     el.innerHTML = '';
   }
 
-  return { render, destroy };
+  return { render, focusSection, destroy };
 }

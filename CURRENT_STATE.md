@@ -228,3 +228,20 @@ current surfaces have been used directly.
 ## Schema fidelity
 
 All visible fields must map to source authority documents in `docs/field-map.md` and `src/data/schema-authority.json`.
+
+
+## Session log — 2026-07-06 V1-UX-2D Recursive Investigation Foundation
+
+Scope: implementation-layer only in the Experience Lab. No architecture, schema, ontology, source data, timeline engine, Passport model, backend, AI, or automation changes.
+
+Product decisions applied: Functional Radar is promoted into the second investigative layer; every viewpoint uses the same recursive investigation pattern; progressive disclosure starts with business meaning; investigations terminate gracefully at the deepest governed relationship and expose evidence, source records, representative documents, and external handoff when available.
+
+Implementation summary:
+
+- Added one reusable recursive investigation card renderer for the approved Summary → Details → Relationships → Evidence → Transactions → Source Records → Representative Document → External Handoff sequence.
+- Embedded that reusable card inside Passport so the universal selected-object surface begins with the same progressive investigation model for any object type.
+- Promoted existing Functional Radar behavior into a function-specific investigation workspace: Radar spoke selection can open the corresponding Functional Radar context without returning through Universe.
+- Passport continuity actions for Timeline, Evidence, Source, and Document now target the relevant Passport section rather than simply opening Passport generically.
+- Simplified Jarvis into four questions: Where am I? What is happening? Why does it matter? What should I inspect next?
+
+Regression expectation: Shared Investigation State, Focus Mode, Passport, Risk Board, Functional Radar, Timeline, and the NR04 / Horizon Golden Story should remain intact. The canonical manual path remains Executive Signal → Customer Commitment → Operational Issue → Recommendation → Evidence → Source Record → Representative External Document, with deeper continuation only where governed relationships exist.

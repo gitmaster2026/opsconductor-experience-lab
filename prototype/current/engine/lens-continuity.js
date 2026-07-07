@@ -9,7 +9,7 @@
 const RISK_BOARD_ID_PREFIX = 'RB-';
 
 /**
- * @typedef {'select_in_place'|'probe_universe'|'open_passport'|'open_timeline'|'open_evidence'|'open_source'} ContinuityAction
+ * @typedef {'select_in_place'|'probe_universe'|'open_passport'|'open_timeline'|'open_evidence'|'open_source'|'open_document'} ContinuityAction
  */
 
 /**
@@ -63,6 +63,7 @@ export function buildContinuitySteps(objectId) {
     { action: 'open_timeline', objectId, label: 'Timeline' },
     { action: 'open_evidence', objectId, label: 'Evidence' },
     { action: 'open_source', objectId, label: 'Source' },
+    { action: 'open_document', objectId, label: 'Document' },
     { action: 'probe_universe', objectId, label: 'Probe Universe' },
   ];
 }
@@ -87,6 +88,8 @@ export function continuityActionLabel(action) {
       return 'Inspect Evidence';
     case 'open_source':
       return 'Reach Source';
+    case 'open_document':
+      return 'Open Document';
     default:
       return 'Continue investigation';
   }

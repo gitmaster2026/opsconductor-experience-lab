@@ -140,7 +140,7 @@ export function mountSpiderLens(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountSpiderLens: containerEl must be a DOM element');
   }
-  const { getBundle, onSelect, onHover } = callbacks ?? {};
+  const { getBundle, onSelect, onHover, onOpenFunction } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountSpiderLens: callbacks.getBundle is required');
   }
@@ -255,7 +255,9 @@ export function mountSpiderLens(containerEl, callbacks) {
 
     verticesGroup.querySelectorAll('[data-select-id]').forEach((el) => {
       el.addEventListener('click', () => {
-        if (typeof onSelect === 'function') onSelect(el.getAttribute('data-select-id'));
+        const axis = el.getAttribute('data-axis');
+        if (typeof onOpenFunction === 'function' && axis) onOpenFunction(axis);
+        else if (typeof onSelect === 'function') onSelect(el.getAttribute('data-select-id'));
       });
       el.addEventListener('mouseenter', () => {
         if (typeof onHover === 'function') onHover(el.getAttribute('data-select-id'));
@@ -266,7 +268,9 @@ export function mountSpiderLens(containerEl, callbacks) {
       el.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter' || ev.key === ' ') {
           ev.preventDefault();
-          if (typeof onSelect === 'function') onSelect(el.getAttribute('data-select-id'));
+          const axis = el.getAttribute('data-axis');
+          if (typeof onOpenFunction === 'function' && axis) onOpenFunction(axis);
+          else if (typeof onSelect === 'function') onSelect(el.getAttribute('data-select-id'));
         }
       });
     });
