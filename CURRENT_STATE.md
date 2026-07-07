@@ -204,18 +204,21 @@ plan and status.
 ## Next implementation target
 
 **Current: V1-UX-2 Pre-Launch Interaction Completion** (see
-`docs/V1_UX_2_PRELAUNCH_PLAN.md`) — Sprint V1-UX-2A (Universe Focus +
-Investigation Flow) and the first part of V1-UX-2B (Functional Radar) are
-implemented and tested this sprint; Progressive Risk Board enrichment and
-all of V1-UX-2C (Source Handoff + Final UX Finish) remain as documented,
-not-yet-implemented pre-launch work.
+`docs/V1_UX_2_PRELAUNCH_PLAN.md`). V1-UX-2A through V1-UX-2H are
+implemented and tested (see that document's per-sprint sections and the
+session logs below); the two items each sprint has explicitly carried
+forward as still-open (Progressive Risk Board owner/next-action
+enrichment; the `resolveVisibilityForSlice()` t2/t3 gating gap) remain
+open, by deliberate scope decision each time, not by oversight.
 
 With V4's architecture and interaction model built, natural next steps
-beyond V1-UX-2 are visual/interaction polish informed by a first real
-browser pass, plus whichever of the "Future lenses"
-`docs/LENS_SPECIFICATIONS.md` names (supplier network, inventory flow,
-program map, evidence chain, timeline replay) prove most valuable once the
-current surfaces have been used directly.
+beyond V1-UX-2 are a real founder/browser pass across all of V1-UX-2A-2H
+(none of this work has been visually confirmed in a browser - see each
+sprint's own "Known limitations"), the two carried-forward follow-ups
+above, and whichever of the "Future lenses" `docs/LENS_SPECIFICATIONS.md`
+names (supplier network, inventory flow, program map, evidence chain,
+timeline replay) prove most valuable once the current surfaces have been
+used directly.
 
 ## Non-goals
 
@@ -332,3 +335,19 @@ Product intent verified against the source: OpsConductor's `docs/Strategy/UI_IMP
 **Known limitation, stated plainly (consistent with every prior sprint's own convention):** `lenses/universe.js`'s rendering internals (the canvas-transform anchor shift, the scope-transition ease) cannot be exercised by `node:test` (no DOM/Canvas in this sandbox) — verified by careful code reading and reasoning about the exact existing transform chain (`ctx.translate`/`localFor`/`computeEffectiveCentersByStratum`), not visually. A human must run `npm run serve` for the first real browser pass: confirm a selected object visually anchors toward the right with related objects fanned left, the camera flight still feels smooth (not a jump), Collection focus still renders centered as before, Escape/Return-to-Universe/Navigation-History still restore the organic overview, and Passport/Jarvis/Functional Radar/Risk Board/Timeline continue to open and behave exactly as before (this sprint changed zero code in any of those files).
 
 See `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s new "Sprint V1-UX-2G" section for the full acceptance-checklist mapping and golden-path manual QA steps.
+
+## Session log — 2026-07-07 V1-UX-2H Cross-Lens Investigation UX Convergence
+
+Scope: presentation/workspace-integration only. No architecture, schema, ontology, or data-model change. Executed under an explicit tight budget ("integration, not research" - no new research subagents, minimal re-reading, one PR, stop cleanly on budget pressure rather than risk a partial merge).
+
+Full detail (acceptance-checklist mapping, verification method, known limitations) is in `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own new "Sprint V1-UX-2H" section - this entry is a summary pointer, per this file's own established convention of deferring detailed per-sprint narrative to that document.
+
+**What shipped:** Functional Radar promoted from a toggle-flyout into a full-screen per-function workspace (KPI-card Overview, List View via the existing `filterable-table.js`, and an ungated one-hop Relationship View - `buildRelationshipDataset()` was found to be permanently gated empty for all real data by `resolveVisibilityForSlice()`, a real finding caught before it shipped, not assumed). Risk Board gained real, honest recursive narrowing (Enterprise -> Site -> existing card-expand/Probe, using the 2 real sites this codebase's data actually has - the brief's own "Supplier" example has no backing field in this dataset). A new `site`/`siteLabel` field was added to `buildRiskBoardViewModel()` (`engine/derive.js`, additive, registered in `KNOWN_OUTPUT_FIELDS` + `field-map.md`). The Timeline toolbar now shows a live "Snapshot Date" alongside its existing narrative label. A new, second, parallel `engine/investigation-history.js` gives Back AND Forward navigation over workspace/lens/scope/selection/Passport-panel (the exact fields the brief names), coexisting with - not replacing - the older `focusTrail`/`popFocus()`/`nav-history.js` dot rail, surfaced via a new Forward button next to `shared-investigation-state.js`'s existing Back/Return buttons.
+
+**Deliberately not fixed this sprint (documented, pre-existing, carried forward - not new):** the `resolveVisibilityForSlice()` t2/t3 dead-transition bug (V1-UX-2C, restated in the plan doc) and Progressive Risk Board's `ownerName`/`nextActionSummary` enrichment (V1-UX-2B, restated in the plan doc). Neither is a literal V1-UX-2H acceptance item; both would require redesigning logic inside `engine/derive.js` with more verification budget than this integration-scoped sprint had.
+
+**Verification:** a byte-verified local mirror of every touched file plus its full dependency chain was reconstructed and the real regression suites were run locally: `test/derive.test.mjs` 92/92 (the highest-risk file touched, given the direct `buildRiskBoardViewModel()` edit - confirmed no test does a full-object `deepEqual` that the additive fields could break), `test/engine-functional-view.test.mjs` 29/29, `test/lenses-risk-board-layout.test.mjs` 33/33, and the new `test/engine-investigation-history.test.mjs` 16/16 - 170 tests, zero failures. Given this sprint's explicit budget constraints, the remaining ~26 test files covering modules this sprint never touched (`camera.js`, `universe.js`, `universe-layout.js`, etc.) were not reconstructed and run - a deliberate, budget-driven scope decision.
+
+**A real bug caught during implementation, not after:** `engine/investigation-history.js`'s first draft called `engine/state.js`'s `subscribe()` at module load time, which would have thrown and crashed app boot, since `app.js`'s `main()` only calls `initState()` after all modules are already imported. Fixed by making the live-store binding lazy (subscribes on first use from within `goBack`/`goForward`/`canGoBack`/`canGoForward`, all of which are only ever called after a real render has already proven `initState()` succeeded) - caught by tracing the exact import/execution order against `engine/state.js`'s own `assertInitialized()` guard, not by trial and error.
+
+**Known limitations:** no browser available in this sandbox - none of this sprint's new UI (the Functional Radar workspace shell, the Risk Board site-chip strip, the Forward button, the Snapshot Date toolbar text) has been visually confirmed; a human must run `npm run serve` for the first real pass, per this repo's standing convention. See the pull request description for a manual browser QA checklist.

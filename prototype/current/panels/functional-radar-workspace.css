@@ -1,0 +1,443 @@
+/* panels/functional-radar-workspace.css
+ *
+ * V1-UX-2D — Functional Radar becomes a true full-screen workspace.
+ *
+ * A NEW, dedicated stylesheet (linked from index.html alongside styles.css,
+ * shared-investigation-state.css, and operational-visual-grammar.css) so the
+ * already-99KB styles.css is left untouched, following the exact precedent
+ * operational-visual-grammar.css itself set for this codebase's "a big new
+ * feature gets its own linked stylesheet" convention (see that file's own
+ * header comment).
+ *
+ * Every color/spacing/radius/typography value here is either:
+ *   (a) an existing :root custom property already defined in styles.css
+ *       (--text-primary/--text-secondary/--cyan-accent/--panel-bg/
+ *       --panel-border/--panel-blur/--card-bg/--card-bg-hover/--card-border/
+ *       --red/--orange/--yellow/--gray/--font-ui), with a literal fallback
+ *       so this file still degrades gracefully if a token is ever renamed;
+ *   (b) the EXISTING .kpi-card family already defined in styles.css
+ *       (Dashboard's KPI cards) - reused verbatim here via a second,
+ *       ADDITIONAL class (.functional-kpi-card) stacked onto the same
+ *       .kpi-card/.kpi-card--critical/.kpi-card--elevated/.kpi-card--watch
+ *       classes the markup already applies, so this file only adds the
+ *       few layout properties specific to this new grid context (an inline
+ *       marker + title row) rather than re-declaring the whole card look.
+ *
+ * No new color vocabulary, no new base type scale - only new LAYOUT for a
+ * different kind of room, exactly like operational-visual-grammar.css's own
+ * closing line about itself.
+ *
+ * -----------------------------------------------------------------------
+ * Structure of this file
+ * -----------------------------------------------------------------------
+ *   1. Full-screen shell override — makes the SAME #functionalRadarPanel
+ *      element index.html already stamps '.functional-radar-overlay' onto
+ *      fill the screen (instead of centered-flyout) when this module adds
+ *      the '.is-workspace' modifier class, per the brief's "fill the
+ *      screen ... do not continue showing the Enterprise Radar"
+ *      requirement. This does NOT touch styles.css's own
+ *      .functional-radar-overlay rule (still used, unmodified, by the
+ *      original small flyout dialog path) — it only adds a MORE SPECIFIC
+ *      override for the '.is-workspace' combination.
+ *   2. Workspace header/nav (function title, function-switch buttons,
+ *      close button, 3-way Overview/List/Relationship view tabs, active
+ *      KPI-filter chip).
+ *   3. Overview: the KPI card grid (built on the existing .kpi-card
+ *      family).
+ *   4. List View: the filterable-table container (the table itself reuses
+ *      engine/filterable-table.js's own .filterable-table-* classes,
+ *      already styled in styles.css — no new table styling needed here).
+ *   5. Relationship View: grouped relationship cards.
+ */
+
+/* ---------------------------------------------------------------------
+   1. Full-screen shell override
+   --------------------------------------------------------------------- */
+
+.functional-radar-overlay.is-workspace {
+  /* styles.css's base .functional-radar-overlay is `position: fixed;
+     inset: 0; display: flex; align-items: flex-start; justify-content:
+     center; padding-top: 12vh;` (a centered-flyout layout). `inset: 0`
+     already makes the element full-viewport-sized; only the flex
+     alignment/padding need overriding here to turn that into a true
+     full-bleed shell instead of a centered dialog slot. */
+  align-items: stretch;
+  justify-content: stretch;
+  padding-top: 0;
+  /* Sits above the standard flyout backdrop layer (z-index 50 in
+     styles.css) and, per the brief, REPLACES the Enterprise Radar view
+     rather than floating over it - a solid backdrop (not the flyout's
+     translucent one) reinforces that this is now the whole workspace,
+     not an overlay on top of something still visible underneath. */
+  background: var(--bg-void, #04070c);
+}
+
+.functional-workspace-shell {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background-color: var(--bg-void, #04070c);
+  background-image: var(--bg-glow, none);
+  color: var(--text-primary, #e7eef6);
+  font-family: var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif);
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------
+   2. Workspace header / nav
+   --------------------------------------------------------------------- */
+
+.functional-workspace-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 22px 28px 16px;
+  border-bottom: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  background: var(--panel-bg, rgba(16, 22, 32, 0.6));
+  backdrop-filter: blur(var(--panel-blur, 18px));
+  -webkit-backdrop-filter: blur(var(--panel-blur, 18px));
+  flex-shrink: 0;
+}
+
+.functional-workspace-title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.functional-workspace-eyebrow {
+  margin: 0 0 2px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary, #9aa9b8);
+}
+
+.functional-workspace-title {
+  margin: 0 0 4px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.functional-workspace-subtitle {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary, #9aa9b8);
+}
+
+.functional-workspace-critical-flag {
+  color: var(--red, #ef5350);
+  font-weight: 600;
+}
+
+.functional-workspace-fn-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+  max-width: 420px;
+}
+
+.functional-workspace-fn-btn {
+  appearance: none;
+  border: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary, #9aa9b8);
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.functional-workspace-fn-btn:hover {
+  color: var(--text-primary, #e7eef6);
+  border-color: var(--cyan-accent, #5ad1ff);
+}
+
+.functional-workspace-fn-btn.is-active {
+  background: rgba(90, 209, 255, 0.14);
+  color: var(--cyan-accent, #5ad1ff);
+  border-color: var(--cyan-accent, #5ad1ff);
+}
+
+.functional-workspace-close {
+  appearance: none;
+  border: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  background: transparent;
+  color: var(--text-secondary, #9aa9b8);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.functional-workspace-close:hover {
+  color: var(--cyan-accent, #5ad1ff);
+  border-color: var(--cyan-accent, #5ad1ff);
+}
+
+.functional-workspace-view-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  background: rgba(255, 255, 255, 0.015);
+  flex-shrink: 0;
+}
+
+.functional-workspace-view-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary, #9aa9b8);
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.functional-workspace-view-tab:hover {
+  color: var(--text-primary, #e7eef6);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.functional-workspace-view-tab.is-active {
+  background: rgba(90, 209, 255, 0.14);
+  color: var(--cyan-accent, #5ad1ff);
+  border-color: rgba(90, 209, 255, 0.3);
+}
+
+.functional-workspace-active-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  padding: 5px 6px 5px 12px;
+  font-size: 11.5px;
+  color: var(--cyan-accent, #5ad1ff);
+  background: rgba(90, 209, 255, 0.1);
+  border: 1px solid rgba(90, 209, 255, 0.3);
+  border-radius: 999px;
+}
+
+.functional-workspace-clear-filter {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 999px;
+}
+
+.functional-workspace-clear-filter:hover {
+  background: rgba(90, 209, 255, 0.2);
+}
+
+.functional-workspace-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px 28px 32px;
+}
+
+.functional-workspace-empty-note {
+  font-size: 13px;
+  color: var(--text-secondary, #9aa9b8);
+  font-style: italic;
+  margin: 12px 0 0;
+}
+
+/* ---------------------------------------------------------------------
+   3. Overview — KPI card grid
+   --------------------------------------------------------------------- */
+
+.functional-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+/* .functional-kpi-card stacks onto the EXISTING .kpi-card (+
+   .kpi-card--critical/--elevated/--watch) classes from styles.css - this
+   only adds the marker+title row layout specific to this grid, the base
+   card look (background/border/padding/hover) is fully inherited. */
+.functional-kpi-card {
+  gap: 10px;
+}
+
+.functional-kpi-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.functional-kpi-meta-chip {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.functional-kpi-meta-chip--critical {
+  color: var(--red, #ef5350);
+}
+
+.functional-kpi-meta-chip--elevated {
+  color: var(--orange, #f0904a);
+}
+
+.functional-kpi-meta-chip--watch {
+  color: var(--yellow, #e8c34a);
+}
+
+.functional-kpi-meta-chip--stable {
+  color: var(--gray, #7c8896);
+}
+
+.functional-kpi-card.is-active {
+  outline: 2px solid var(--cyan-accent, #5ad1ff);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------------
+   4. List View
+   --------------------------------------------------------------------- */
+
+.functional-list-table-container {
+  /* engine/filterable-table.js's mountFilterableTable() renders its own
+     .filterable-table/.filterable-table-row/etc. markup directly into
+     this container - already fully styled by styles.css's own
+     .filterable-table-* rules, so this container only needs a background/
+     border treatment consistent with this workspace's other panels. */
+  background: var(--card-bg, rgba(255, 255, 255, 0.035));
+  border: 1px solid var(--card-border, rgba(150, 180, 210, 0.14));
+  border-radius: 12px;
+  padding: 4px 14px;
+  overflow-x: auto;
+}
+
+/* ---------------------------------------------------------------------
+   5. Relationship View
+   --------------------------------------------------------------------- */
+
+.functional-relationship-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.functional-relationship-card {
+  background: var(--card-bg, rgba(255, 255, 255, 0.035));
+  border: 1px solid var(--card-border, rgba(150, 180, 210, 0.14));
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.functional-relationship-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+}
+
+.functional-relationship-card-header:hover .functional-relationship-card-title {
+  color: var(--cyan-accent, #5ad1ff);
+}
+
+.functional-relationship-card-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.16s ease;
+}
+
+.functional-relationship-card-noun {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #9aa9b8);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.functional-relationship-edge-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.functional-relationship-edge {
+  /* The <li> wrapper itself carries no visual treatment of its own - the
+     nested .functional-relationship-edge-btn button below owns the full
+     row's padding/hover/click surface, matching the same "wrapper <li> is
+     structural only" pattern the legacy flyout's own
+     .functional-radar-object-row already uses for the identical reason. */
+  display: block;
+}
+
+.functional-relationship-edge-btn {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--text-primary, #e7eef6);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.functional-relationship-edge-btn:hover {
+  background: var(--card-bg-hover, rgba(255, 255, 255, 0.06));
+  border-color: var(--cyan-accent, #5ad1ff);
+}
+
+.functional-relationship-edge-label {
+  flex: 0 0 auto;
+  color: var(--text-secondary, #9aa9b8);
+  font-style: italic;
+}
+
+.functional-relationship-edge-target {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

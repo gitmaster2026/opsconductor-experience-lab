@@ -1248,12 +1248,21 @@ export function buildRiskBoardViewModel(snapshot, sliceIndex, scopeFilter) {
   const recommendations = recordsOf(snapshot.recommendations);
   const evidence = recordsOf(snapshot.evidence);
 
+  // V1-UX-2H: join each cell to its site via the same commitment -> site
+  // join buildScopeHierarchy()/buildScopeFilter() already use (see
+  // commitmentScopeDescriptors() above) - additive, no new join invented.
+  // Enables Risk Board's own LOCAL (non-global-scope) recursive
+  // Enterprise -> Site drill-down without touching engine/state.js's
+  // shared scopeContext (see lenses/risk-board.js).
+  const scopeDescriptors = commitmentScopeDescriptors(snapshot);
+
   const cells = riskBoard.map((cell) => {
     const isVisible = visibility.visibleRiskBoardIds.includes(cell.id);
     const recommendation = recommendations.find((r) => r.demand_signal_id === cell.demand_signal_id) ?? null;
     const evidenceRecord = recommendation
       ? evidence.find((e) => e.source_record_id === recommendation.id) ?? null
       : null;
+    const scopeDescriptor = scopeDescriptors.find((d) => d.cellId === cell.id) ?? null;
 
     return {
       id: cell.id,
@@ -1270,6 +1279,8 @@ export function buildRiskBoardViewModel(snapshot, sliceIndex, scopeFilter) {
       risk_state: cell.risk_state,
       recommendation_category: cell.recommendation_category,
       // Derived (not raw risk-board.json fields):
+      site: scopeDescriptor ? scopeDescriptor.site : null,
+      siteLabel: scopeDescriptor && scopeDescriptor.site ? (PLANT_DISPLAY_LABELS[scopeDescriptor.site] ?? scopeDescriptor.site) : null,
       visibleAtSlice: isVisible,
       recommendationId: recommendation ? recommendation.id : null,
       recommendationStatus: recommendation ? recommendation.status : null,
@@ -3146,6 +3157,8 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   to_id: { category: 'supported', note: 'field-map.md Universe: required relationship field' },
 
   // --- buildRiskBoardViewModel ---
+  site: { category: 'derived_supported', note: 'field-map.md RiskBoard: Site, joined via commitmentScopeDescriptors() same as buildScopeHierarchy() (V1-UX-2H)' },
+  siteLabel: { category: 'derived_supported', note: 'field-map.md RiskBoard: Site, PLANT_DISPLAY_LABELS passthrough (V1-UX-2H)' },
   visibleAtSlice: { category: 'derived_supported', note: 'field-map.md Universe: Timeline Visibility, applied per-cell' },
   recommendationId: { category: 'supported', note: 'field-map.md RiskBoard: Root Cause Summary evidence linkage' },
   recommendationStatus: { category: 'supported', note: 'recommendations.json status passthrough' },

@@ -6,12 +6,22 @@
 // of OpsConductor PR #153 (selected object, scope, time, depth, and
 // back/return controls) in the repository that is authoritative for V1
 // interaction discovery.
+//
+// V1-UX-2H (Cross-Lens Investigation UX Convergence), Workstream 5: the
+// "back" button now drives engine/investigation-history.js's richer,
+// forward-capable history (workspace/lens/scope/selection/Passport
+// panel) instead of engine/state.js's own focusTrail/popFocus (which
+// remains untouched, still driving panels/nav-history.js's separate dot
+// rail - see investigation-history.js's header for why these are two
+// deliberately distinct mechanisms). A new "forward" button is added
+// alongside it, reusing the existing .shared-investigation-nav button
+// styling with no new CSS needed.
 
-import { getState, popFocus, selectObject, setLens, subscribe } from '../engine/state.js';
+import { getState, selectObject, setLens, subscribe } from '../engine/state.js';
+import { goBack, goForward, canGoBack, canGoForward } from '../engine/investigation-history.js';
 import { depthLabel, escapeHtml, scopeLabel, selectedLabel } from './shared-investigation-state-utils.js';
 
 function render(el, state) {
-  const historyCount = Array.isArray(state.focusTrail) ? state.focusTrail.length : 0;
   el.innerHTML = `
     <div class="shared-investigation-chip" title="Selected object">
       <span class="shared-investigation-kicker">Selected</span>
@@ -25,10 +35,18 @@ function render(el, state) {
       type="button"
       class="shared-investigation-nav"
       data-action="back"
-      ${historyCount > 0 ? '' : 'disabled'}
+      ${canGoBack() ? '' : 'disabled'}
       title="Back through investigation history"
       aria-label="Back through investigation history"
     >←</button>
+    <button
+      type="button"
+      class="shared-investigation-nav"
+      data-action="forward"
+      ${canGoForward() ? '' : 'disabled'}
+      title="Forward through investigation history"
+      aria-label="Forward through investigation history"
+    >→</button>
     <button
       type="button"
       class="shared-investigation-nav"
@@ -40,7 +58,9 @@ function render(el, state) {
   `;
 
   const back = el.querySelector('[data-action="back"]');
-  if (back) back.addEventListener('click', () => popFocus());
+  if (back) back.addEventListener('click', () => goBack());
+  const forward = el.querySelector('[data-action="forward"]');
+  if (forward) forward.addEventListener('click', () => goForward());
   const ret = el.querySelector('[data-action="return"]');
   if (ret) {
     ret.addEventListener('click', () => {

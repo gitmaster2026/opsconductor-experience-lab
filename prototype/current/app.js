@@ -134,6 +134,18 @@ function getHighlightedIds() {
   return highlightedIds;
 }
 
+// V1-UX-2H (Timeline context): pure date formatter for the Timeline
+// toolbar's "Snapshot Date" readout. time-slices.json's `date` field (ISO
+// date or date-time string) was already loaded but never surfaced in the
+// toolbar - only the slice's narrative `label` was shown. Returns null
+// (never a fabricated string) when a slice has no real date.
+function formatSnapshotDate(dateStr) {
+  if (!dateStr) return null;
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+}
+
 async function main() {
   const snapshot = await loadAll();
 
@@ -165,7 +177,7 @@ async function main() {
   });
 
   // Calibrate the time slider's range to the ACTUAL number of loaded time
-  // slices (3 in this dataset: t0/t1/t2) rather than a hardcoded max, so
+  // slices (4 in this dataset: t0/t1/t2/t3) rather than a hardcoded max, so
   // this keeps working if a future data update adds/removes a slice.
   els.timeSlider.min = '0';
   els.timeSlider.max = String(Math.max(0, timeSliceRecords.length - 1));
@@ -277,7 +289,12 @@ async function main() {
   // is popped, so "jump to step N" is implemented as however many popFocus()
   // calls it takes to shrink the trail down to that index - popFocus()
   // already restores selectedObjectId/cameraTarget/leftPanelMode per entry
-  // (see engine/state.js), so no new state plumbing is needed here.
+  // (see engine/state.js), so no new state plumbing is needed here. This
+  // rail and its underlying focusTrail/popFocus mechanism are untouched by
+  // V1-UX-2H's new engine/investigation-history.js (a separate, richer,
+  // forward-capable mechanism surfaced via panels/shared-investigation-
+  // state.js's Back/Forward buttons instead - see that module's header for
+  // why the two coexist rather than merging).
   function jumpToTrailIndex(index) {
     const trail = store.getState().focusTrail;
     const popsNeeded = trail.length - index;
@@ -473,6 +490,9 @@ async function main() {
   // SAME bundle.universe.nodes by their real domain field into the five
   // named functions. Selecting an object inside it is a Probe action, same
   // as the search panel above - see panels/functional-radar.js's header.
+  // V1-UX-2H: functional-radar.js's own openFunction() entry points now
+  // additionally set a local full-screen "workspace" flag - see the
+  // isFullScreen() read in applyLensVisibility() below.
   const functionalRadarPanel = mountFunctionalRadarPanel(els.functionalRadarToggle, els.functionalRadarPanel, {
     getBundle: () => timeline.getDerivedBundle(),
     getCurrentLens: () => store.getState().workspaceLens,
@@ -611,7 +631,12 @@ async function main() {
     // Passport left panel and persistent Jarvis panel every other lens
     // shares. So it swaps out the whole `#mainLayout` grid rather than
     // slotting into one of that grid's three columns the way Workbench does.
-    els.mainLayout.classList.toggle('hidden', isConductorStudio);
+    // V1-UX-2H: the Functional Radar workspace (panels/functional-radar.js)
+    // is a second, independent reason to hide #mainLayout - a user can be
+    // inside a full-screen function investigation without being in
+    // Conductor Studio, so the two conditions are combined with OR rather
+    // than one replacing the other.
+    els.mainLayout.classList.toggle('hidden', isConductorStudio || functionalRadarPanel.isFullScreen());
     els.conductorStudioEl.classList.toggle('hidden', !isConductorStudio);
     // Resize/re-render whichever lens just became visible - a canvas (and
     // an absolutely-positioned DOM layout) both need a fresh
@@ -645,7 +670,14 @@ async function main() {
     const sliceIndex = timeSliceRecords.findIndex((s) => s.id === state.timeSliceId);
     if (sliceIndex >= 0) {
       els.timeSlider.value = String(sliceIndex);
-      els.timeLabel.textContent = timeSliceRecords[sliceIndex].label;
+      const slice = timeSliceRecords[sliceIndex];
+      // V1-UX-2H (Timeline context): always show WHAT point in time is
+      // being viewed, not just the slice's narrative label - so the user
+      // always understands "what point in time am I viewing?" as the
+      // slider moves. Degrades honestly to the plain label when a slice
+      // has no real date (formatSnapshotDate returns null).
+      const snapshotDate = formatSnapshotDate(slice.date);
+      els.timeLabel.textContent = snapshotDate ? `${slice.label} · Snapshot Date: ${snapshotDate}` : slice.label;
     }
   }
 

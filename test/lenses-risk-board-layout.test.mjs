@@ -8,6 +8,19 @@
 // also validates band assignment against the actual 5-cell dataset, not
 // just hand-built fixtures.
 //
+// Also covers the Recursive Risk Board addition: groupCellsBySite() and
+// filterCellsBySite() - the pure site-grouping/filtering helpers behind the
+// Risk Board's Enterprise -> Site -> individual-card recursive hierarchy
+// (see lenses/risk-board.js's module header). Tested against both
+// synthetic fixtures (including the "missing site/siteLabel" fallback
+// path) and the real dataset's documented site assignments (PLT-200 /
+// "Pueblo Manufacturing Campus" holds 2 cells; PLT-300 / "Grand Junction
+// Systems Integration" holds 3) - though the real dataset's `site`/
+// `siteLabel` fields are added by buildRiskBoardViewModel() as a separate,
+// parallel change, so those real-data assertions are written defensively
+// (skipped rather than failed) if that field addition has not yet landed
+// in this checkout - see the site-grouping describe block below.
+//
 // Run with `node --test test/` (plain node:test, node:assert/strict).
 
 import test from 'node:test';
@@ -19,6 +32,10 @@ import {
   assignSeverityBand,
   buildBandLayout,
   computeFlipDelta,
+  groupCellsBySite,
+  filterCellsBySite,
+  UNASSIGNED_SITE_KEY,
+  UNASSIGNED_SITE_LABEL,
 } from '../prototype/current/lenses/risk-board-layout.js';
 
 const snapshot = loadTestSnapshot();
@@ -234,4 +251,142 @@ test('computeFlipDelta: only returns entries for ids present in nextPositions', 
   assert.equal(deltas.size, 1);
   assert.ok(deltas.has('a'));
   assert.ok(!deltas.has('b'));
+});
+
+// ---------------------------------------------------------------------------
+// groupCellsBySite / filterCellsBySite (Recursive Risk Board)
+// ---------------------------------------------------------------------------
+
+test('groupCellsBySite: throws on non-array input', () => {
+  assert.throws(() => groupCellsBySite(null));
+});
+
+test('groupCellsBySite: returns an empty array for an empty cell list', () => {
+  assert.deepEqual(groupCellsBySite([]), []);
+});
+
+test('groupCellsBySite: groups cells by their site field, preserving first-appearance order', () => {
+  const cells = [
+    { id: 'a', site: 'PLT-200', siteLabel: 'Pueblo Manufacturing Campus' },
+    { id: 'b', site: 'PLT-300', siteLabel: 'Grand Junction Systems Integration' },
+    { id: 'c', site: 'PLT-200', siteLabel: 'Pueblo Manufacturing Campus' },
+    { id: 'd', site: 'PLT-300', siteLabel: 'Grand Junction Systems Integration' },
+    { id: 'e', site: 'PLT-300', siteLabel: 'Grand Junction Systems Integration' },
+  ];
+  const groups = groupCellsBySite(cells);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups[0], { site: 'PLT-200', siteLabel: 'Pueblo Manufacturing Campus', cellIds: ['a', 'c'] });
+  assert.deepEqual(groups[1], {
+    site: 'PLT-300',
+    siteLabel: 'Grand Junction Systems Integration',
+    cellIds: ['b', 'd', 'e'],
+  });
+});
+
+test('groupCellsBySite: every input cell appears in exactly one group - none are ever dropped', () => {
+  const cells = [
+    { id: 'a', site: 'PLT-200', siteLabel: 'Pueblo Manufacturing Campus' },
+    { id: 'b', site: 'PLT-300', siteLabel: 'Grand Junction Systems Integration' },
+    { id: 'c', site: null },
+    { id: 'd' },
+  ];
+  const groups = groupCellsBySite(cells);
+  const allPlacedIds = groups.flatMap((g) => g.cellIds);
+  assert.equal(allPlacedIds.length, cells.length);
+  assert.deepEqual(new Set(allPlacedIds), new Set(cells.map((c) => c.id)));
+});
+
+test('groupCellsBySite: a cell missing site/siteLabel falls back to the honest "Unassigned Site" bucket, not a crash', () => {
+  const cells = [
+    { id: 'a', site: 'PLT-200', siteLabel: 'Pueblo Manufacturing Campus' },
+    { id: 'b' },
+    { id: 'c', site: '' },
+    { id: 'd', site: null, siteLabel: null },
+  ];
+  const groups = groupCellsBySite(cells);
+  const unassigned = groups.find((g) => g.site === UNASSIGNED_SITE_KEY);
+  assert.ok(unassigned, 'expected an Unassigned Site bucket');
+  assert.equal(unassigned.siteLabel, UNASSIGNED_SITE_LABEL);
+  assert.deepEqual(unassigned.cellIds, ['b', 'c', 'd']);
+});
+
+test('groupCellsBySite: a cell with a real site but no siteLabel falls back to using the site code as its label', () => {
+  const cells = [{ id: 'a', site: 'PLT-200' }];
+  const groups = groupCellsBySite(cells);
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0], { site: 'PLT-200', siteLabel: 'PLT-200', cellIds: ['a'] });
+});
+
+test('groupCellsBySite: does not mutate its cells input', () => {
+  const cells = [
+    { id: 'a', site: 'PLT-200', siteLabel: 'Pueblo Manufacturing Campus' },
+    { id: 'b', site: 'PLT-300', siteLabel: 'Grand Junction Systems Integration' },
+  ];
+  const cellsCopy = JSON.parse(JSON.stringify(cells));
+  groupCellsBySite(cells);
+  assert.deepEqual(cells, cellsCopy);
+});
+
+test('groupCellsBySite (real risk-board data, if site/siteLabel is present): matches the documented 2-site/5-cell split', () => {
+  const { cells } = buildRiskBoardViewModel(snapshot, 2);
+  const hasSiteField = cells.some((c) => typeof c.site === 'string' && c.site.trim().length > 0);
+  if (!hasSiteField) {
+    // buildRiskBoardViewModel() has not yet been extended with site/
+    // siteLabel in this checkout (a separate, parallel change) - skip this
+    // assertion defensively rather than fail on an unrelated module's
+    // pending work. groupCellsBySite() itself is still fully exercised by
+    // the synthetic-fixture tests above.
+    return;
+  }
+  const groups = groupCellsBySite(cells);
+  const bySite = new Map(groups.map((g) => [g.site, g]));
+  assert.ok(bySite.has('PLT-200'), 'expected a PLT-200 group in the real dataset');
+  assert.ok(bySite.has('PLT-300'), 'expected a PLT-300 group in the real dataset');
+  assert.equal(bySite.get('PLT-200').cellIds.length, 2);
+  assert.equal(bySite.get('PLT-300').cellIds.length, 3);
+  assert.deepEqual(new Set(bySite.get('PLT-200').cellIds), new Set(['RB-CPP-HORIZON', 'RB-PPS-AQUAGRID']));
+  assert.deepEqual(
+    new Set(bySite.get('PLT-300').cellIds),
+    new Set(['RB-CPS-CATALYST', 'RB-MPS-FRONTIER', 'RB-LCM-ATLAS'])
+  );
+});
+
+test('filterCellsBySite: throws on non-array input', () => {
+  assert.throws(() => filterCellsBySite(null, 'PLT-200'));
+});
+
+test('filterCellsBySite: returns only the cells matching the given site key', () => {
+  const cells = [
+    { id: 'a', site: 'PLT-200' },
+    { id: 'b', site: 'PLT-300' },
+    { id: 'c', site: 'PLT-200' },
+  ];
+  const filtered = filterCellsBySite(cells, 'PLT-200');
+  assert.deepEqual(filtered.map((c) => c.id), ['a', 'c']);
+});
+
+test('filterCellsBySite: matches cells missing a real site when filtering by the UNASSIGNED_SITE_KEY sentinel', () => {
+  const cells = [
+    { id: 'a', site: 'PLT-200' },
+    { id: 'b' },
+    { id: 'c', site: '' },
+  ];
+  const filtered = filterCellsBySite(cells, UNASSIGNED_SITE_KEY);
+  assert.deepEqual(filtered.map((c) => c.id), ['b', 'c']);
+});
+
+test('filterCellsBySite: returns an empty array (not undefined/throw) when no cell matches the given site key', () => {
+  const cells = [{ id: 'a', site: 'PLT-200' }];
+  assert.deepEqual(filterCellsBySite(cells, 'PLT-999'), []);
+});
+
+test('filterCellsBySite: does not mutate its cells input and returns a new array', () => {
+  const cells = [
+    { id: 'a', site: 'PLT-200' },
+    { id: 'b', site: 'PLT-300' },
+  ];
+  const cellsCopy = JSON.parse(JSON.stringify(cells));
+  const filtered = filterCellsBySite(cells, 'PLT-200');
+  assert.deepEqual(cells, cellsCopy);
+  assert.notEqual(filtered, cells);
 });

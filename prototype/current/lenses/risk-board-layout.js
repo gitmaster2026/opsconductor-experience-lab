@@ -38,6 +38,18 @@
 // dependency, so it lives here as computeFlipDelta(), independently
 // testable without a browser/DOM.
 //
+// V1-UX (Recursive Risk Board) addition: groupCellsBySite() below. The
+// Risk Board's recursive hierarchy (Enterprise -> Site -> individual
+// commitment card, see lenses/risk-board.js's module header) needs one
+// more piece of pure, testable logic - bucketing the (small, honest) real
+// cell set by its site - which belongs here for the same reason the band
+// math does: it's DOM-free grouping logic over the cells array, reused by
+// the DOM mount function but independently verifiable without a browser.
+// It does not change buildBandLayout() or its output shape at all - the
+// recursive-scoping DOM code (lenses/risk-board.js) filters the cells
+// array BEFORE calling buildBandLayout(), so a site-scoped board still
+// bands/sorts exactly like the enterprise-wide one always has.
+//
 // This module makes no DOM/Canvas calls, exactly like the module it
 // replaces.
 
@@ -233,3 +245,102 @@ export const FLIP_DURATION_MS = 500;
 /** docs/V5_DESIGN_SPEC.md §9.1 `--ease-inout` token (camera travel /
  * state-morph easing), reused here for the band-migration glide. */
 export const FLIP_EASING = 'cubic-bezier(0.65, 0, 0.35, 1)';
+
+// ---------------------------------------------------------------------------
+// Recursive Risk Board: group cells by site (pure, DOM-free)
+// ---------------------------------------------------------------------------
+//
+// Ground truth (confirmed directly against src/data/risk-board.json and
+// src/data/commitments.json): the real Risk Board dataset is exactly 5
+// cells, and the only real groupable dimensions beyond severity band are
+// customer (1:1 with cells - no grouping value) and site (exactly 2 real
+// values: PLT-200 / "Pueblo Manufacturing Campus" holds 2 cells, PLT-300 /
+// "Grand Junction Systems Integration" holds 3). There is no real
+// "supplier" concept anywhere in this data model. This function groups
+// whatever cells it is given by their `site` field - it does not know
+// about or hardcode PLT-200/PLT-300 itself, so it stays correct if the
+// dataset ever grows past today's 5 cells or 2 sites.
+//
+// engine/derive.js's buildRiskBoardViewModel() is expected to add `site`
+// (e.g. "PLT-200") and `siteLabel` (e.g. "Pueblo Manufacturing Campus") to
+// every cell. A cell that lacks one or both of those fields (e.g. a stale
+// cached bundle from before that change lands) is grouped into a single
+// honest "Unassigned Site" bucket rather than crashing or silently
+// dropping the cell - this function is just as total as buildBandLayout()
+// above: every input cell appears in exactly one output group.
+
+/** Sentinel key/label used when a cell has no real site/siteLabel yet. */
+export const UNASSIGNED_SITE_KEY = '__unassigned__';
+export const UNASSIGNED_SITE_LABEL = 'Unassigned Site';
+
+/**
+ * @typedef {Object} SiteGroup
+ * @property {string} site - the cell's raw `site` field value (e.g.
+ *   "PLT-200"), or UNASSIGNED_SITE_KEY when absent.
+ * @property {string} siteLabel - the cell's `siteLabel` (e.g. "Pueblo
+ *   Manufacturing Campus"), or UNASSIGNED_SITE_LABEL when absent.
+ * @property {string[]} cellIds - ids of cells at this site, in the SAME
+ *   relative order they appeared in the input array (no re-sorting - the
+ *   caller decides sort/band order downstream via buildBandLayout()).
+ */
+
+/**
+ * Group cells by their `site` field into stable, ordered buckets. Groups
+ * are ordered by first appearance of that site in the input array (a
+ * simple, deterministic order requiring no extra knowledge of "which site
+ * comes first" - callers that want e.g. alphabetical-by-label order can
+ * sort the returned array themselves). Every input cell appears in exactly
+ * one group's cellIds - this function never drops a cell, mirroring
+ * buildBandLayout()'s own totality guarantee.
+ *
+ * @param {Array<{ id: string, site?: string|null, siteLabel?: string|null }>} cells
+ * @returns {SiteGroup[]}
+ */
+export function groupCellsBySite(cells) {
+  if (!Array.isArray(cells)) {
+    throw new Error('groupCellsBySite: cells must be an array');
+  }
+
+  /** @type {Map<string, SiteGroup>} */
+  const bySite = new Map();
+  for (const cell of cells) {
+    const hasSite = typeof cell?.site === 'string' && cell.site.trim().length > 0;
+    const site = hasSite ? cell.site : UNASSIGNED_SITE_KEY;
+    const hasLabel = typeof cell?.siteLabel === 'string' && cell.siteLabel.trim().length > 0;
+    const siteLabel = hasLabel ? cell.siteLabel : hasSite ? cell.site : UNASSIGNED_SITE_LABEL;
+
+    if (!bySite.has(site)) {
+      bySite.set(site, { site, siteLabel, cellIds: [] });
+    }
+    bySite.get(site).cellIds.push(cell.id);
+  }
+
+  return Array.from(bySite.values());
+}
+
+/**
+ * Filter a cells array down to only the cells belonging to a given site
+ * key (the same `site` value groupCellsBySite() groups by, including the
+ * UNASSIGNED_SITE_KEY sentinel). This is the exact pure filter
+ * lenses/risk-board.js applies to the full cell set BEFORE handing the
+ * narrowed array to buildBandLayout() when a Site scope is active -
+ * factored out here (rather than inlined as a one-off .filter() in the DOM
+ * file) so the "what counts as belonging to this site" rule is one small,
+ * independently-testable function instead of logic duplicated wherever a
+ * site-scoped view is needed.
+ *
+ * @param {Array<{ id: string, site?: string|null }>} cells
+ * @param {string} siteKey
+ * @returns {Array<Object>} the subset of `cells` whose resolved site key
+ *   matches `siteKey` - always a NEW array, never a mutation of `cells`.
+ */
+export function filterCellsBySite(cells, siteKey) {
+  if (!Array.isArray(cells)) {
+    throw new Error('filterCellsBySite: cells must be an array');
+  }
+  return cells.filter((cell) => {
+    const hasSite = typeof cell?.site === 'string' && cell.site.trim().length > 0;
+    const resolvedKey = hasSite ? cell.site : UNASSIGNED_SITE_KEY;
+    return resolvedKey === siteKey;
+  });
+}
