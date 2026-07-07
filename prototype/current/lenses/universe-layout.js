@@ -607,6 +607,17 @@ const TWO_PI = Math.PI * 2;
  */
 const STREAM_SECTOR_GAP_FRACTION = 0.22;
 
+/**
+ * The default sector-packing window: the full circle, starting at angle 0.
+ * Every existing caller of packSectorGroups()/computeDecrossedOrbitAngles()
+ * gets exactly this window (unchanged behavior) unless it opts into a
+ * narrower `arc` - see computeDirectionalFocusAngles() further below, this
+ * module's one caller that does.
+ *
+ * @type {{ start: number, span: number }}
+ */
+const FULL_CIRCLE_ARC = Object.freeze({ start: 0, span: TWO_PI });
+
 /** Normalize an angle (radians) into [0, 2*PI). */
 function normalizeAngle(angle) {
   let result = angle % TWO_PI;
@@ -631,18 +642,25 @@ function normalizeAngle(angle) {
  *   laid out around the circle (already sorted/deduplicated by the caller -
  *   this function does not re-sort the sector list itself, only members
  *   within each sector).
+ * @param {{ start: number, span: number }} [arc] - the angular window
+ *   sectors are packed into, defaulting to FULL_CIRCLE_ARC (existing
+ *   behavior, unchanged for every caller that omits this). A caller that
+ *   passes a narrower `span` (e.g. computeDirectionalFocusAngles() below)
+ *   gets every sector packed into that smaller window instead of the full
+ *   circle - the packing math itself (gap fraction, within-sector ordering)
+ *   is identical either way, only the total angular budget changes.
  * @returns {Map<string, number>} id -> resolved angle (radians)
  */
-function packSectorGroups(sectorGroups) {
+function packSectorGroups(sectorGroups, arc = FULL_CIRCLE_ARC) {
   const result = new Map();
   const sectorCount = sectorGroups.length;
   if (sectorCount === 0) return result;
-  const sectorWidth = TWO_PI / sectorCount;
+  const sectorWidth = arc.span / sectorCount;
   const usableWidth = sectorWidth * (1 - STREAM_SECTOR_GAP_FRACTION);
   const margin = (sectorWidth - usableWidth) / 2;
 
   sectorGroups.forEach((group, sectorIndex) => {
-    const sectorStart = sectorIndex * sectorWidth;
+    const sectorStart = arc.start + sectorIndex * sectorWidth;
     const ordered = group.members
       .map((m) => ({ id: m.id, delta: normalizeAngle(m.targetAngle - sectorStart) }))
       .sort((a, b) => (a.delta - b.delta) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -796,15 +814,22 @@ function repairCrossingsBySwapping({ sectorOf, initialAngleById, buildSegments }
  *   member can be discovered via more than one ring-1 parent and
  *   computeOrbitLayout deliberately only tracks relationship_type, not
  *   parent identity).
- * @param {{ ring1Radius?: number, ring2Radius?: number }} [options] - the
- *   radii lenses/universe.js actually renders ring 1/ring 2 at (RING1_
- *   RADIUS_PX/RING2_RADIUS_PX), used only for the before/after crossing
- *   count below (angle resolution itself is radius-independent).
+ * @param {{ ring1Radius?: number, ring2Radius?: number, ring1Arc?: {start:number,span:number}, ring2Arc?: {start:number,span:number} }} [options] - `ring1Radius`/`ring2Radius`
+ *   are the radii lenses/universe.js actually renders ring 1/ring 2 at
+ *   (RING1_RADIUS_PX/RING2_RADIUS_PX), used only for the before/after
+ *   crossing count below (angle resolution itself is radius-independent).
+ *   `ring1Arc`/`ring2Arc` default to FULL_CIRCLE_ARC (existing behavior,
+ *   byte-identical output for every caller that omits them) - passing a
+ *   narrower arc packs that ring's sectors into that window instead of the
+ *   full circle; see computeDirectionalFocusAngles() below, this module's
+ *   one caller that does.
  * @returns {{ ring1AngleById: Map<string,number>, ring2AngleById: Map<string,number>, crossingCount: number, baselineCrossingCount: number }}
  */
 export function computeDecrossedOrbitAngles(orbit, relationships, options = {}) {
   const ring1Radius = Number.isFinite(options.ring1Radius) ? options.ring1Radius : 92;
   const ring2Radius = Number.isFinite(options.ring2Radius) ? options.ring2Radius : 168;
+  const ring1Arc = options.ring1Arc ?? FULL_CIRCLE_ARC;
+  const ring2Arc = options.ring2Arc ?? FULL_CIRCLE_ARC;
   const ring1 = Array.isArray(orbit?.ring1) ? orbit.ring1 : [];
   const ring2 = Array.isArray(orbit?.ring2) ? orbit.ring2 : [];
 
@@ -819,7 +844,7 @@ export function computeDecrossedOrbitAngles(orbit, relationships, options = {}) 
       .filter((m) => m.relationshipType === type)
       .map((m) => ({ id: m.id, targetAngle: m.angle })),
   }));
-  const ring1AngleById = packSectorGroups(ring1Groups);
+  const ring1AngleById = packSectorGroups(ring1Groups, ring1Arc);
 
   // --- Ring 2: find each member's real ring-1 parent from `relationships` ---
   // (deterministic tie-break: smallest parent id wins if more than one
@@ -874,7 +899,7 @@ export function computeDecrossedOrbitAngles(orbit, relationships, options = {}) 
   const ring2BaselineGroups = ring2Types.map((type) => ({
     members: ring2.filter((m) => m.relationshipType === type).map((m) => ({ id: m.id, targetAngle: m.angle })),
   }));
-  const ring2BaselinePacked = packSectorGroups(ring2BaselineGroups);
+  const ring2BaselinePacked = packSectorGroups(ring2BaselineGroups, ring2Arc);
 
   const sectorOf = new Map(ring2.map((m) => [m.id, m.relationshipType]));
   const repaired = repairCrossingsBySwapping({
@@ -902,6 +927,97 @@ export function computeDecrossedOrbitAngles(orbit, relationships, options = {}) 
     crossingCount: repaired.crossingCount,
     baselineCrossingCount,
   };
+}
+
+// ---------------------------------------------------------------------------
+// V1-UX-2G "Logo Flow" Focus Mode (directional, left-to-right investigation
+// layout). Per the product backlog's Logo Flow Focus Mode item ("Focus Mode
+// should become predictable... Relationships -> Selected Object. Information
+// flows toward the selected object... Do not use random orbital layouts
+// while focused"): once RESOLVED, a real single-object focus should read as
+// a stable, directional fan - related objects predominantly to the LEFT,
+// the selected object anchored to the RIGHT - instead of the 360-degree
+// orbital ring computeDecrossedOrbitAngles() resolves by default.
+//
+// This is a pure generalization of the machinery above, not a new
+// algorithm: packSectorGroups()/computeDecrossedOrbitAngles() now accept an
+// optional `arc` window instead of always spanning the full circle (every
+// existing call that omits it keeps the exact byte-identical full-circle
+// result it always had - see FULL_CIRCLE_ARC above). computeOrbitLayout()/
+// assignSectorAngles() (the EXPLORATION-mode angle, i.e. what a node looks
+// like mid-cluster before any focus resolves) are untouched. Overview/
+// organic Universe layout, Collection focus (computeCollectionStreamAngles,
+// below - deliberately NOT given a directional variant; a Collection has no
+// single anchor object to orient a direction against, so it keeps its
+// existing centered, circular peer arrangement), and every other resolved-
+// layout consumer are unaffected by this section.
+//
+// The de-crossing guarantee, determinism, and "never worse than baseline"
+// invariant are all inherited unchanged from computeDecrossedOrbitAngles()
+// above - only the angular window ring 1/ring 2 are packed into changes.
+// Relationship-type sector grouping is still alphabetically stable (same
+// tie-breaks as assignSectorAngles()/packSectorGroups()), satisfying
+// "relationship ordering remains stable" / "deterministic" from this
+// sprint's own acceptance checklist.
+// ---------------------------------------------------------------------------
+
+/**
+ * Center of the directional focus arc: PI radians (180 degrees) is due-LEFT
+ * of the anchor in this module's polar convention (toXY(angle, radius) =
+ * {x: cos(angle)*radius, y: sin(angle)*radius} - any angle strictly between
+ * PI/2 and 3*PI/2 has a negative x component, i.e. left of the anchor at
+ * the origin). Ring 1 and ring 2 are centered on this SAME angle so both
+ * streams stay visually aligned, fanning out together toward the left.
+ */
+const DIRECTIONAL_FOCUS_ARC_CENTER = Math.PI;
+
+/**
+ * Ring 1 (1-hop, typically fewer members, closest to the anchor) gets a
+ * deliberately tighter arc than ring 2 - a documented visual choice, not a
+ * computed optimum, so the immediate relationships read as a focused cone
+ * rather than spreading as wide as the further-out 2-hop members.
+ */
+const DIRECTIONAL_FOCUS_RING1_ARC_SPAN = (Math.PI * 2) / 3; // 120 degrees
+
+/**
+ * Ring 2 (2-hop, typically more members) gets a wider arc than ring 1 to
+ * reduce crowding further from the anchor - still comfortably within the
+ * left hemisphere (90 degrees < angle < 270 degrees always yields a
+ * negative x, i.e. left of the anchor), never approaching due-up/due-down
+ * (which would read as neither clearly left nor right) let alone the
+ * anchor's own due-right side.
+ */
+const DIRECTIONAL_FOCUS_RING2_ARC_SPAN = (Math.PI * 8) / 9; // 160 degrees
+
+/**
+ * @param {number} span - arc width in radians
+ * @returns {{ start: number, span: number }} an arc centered on
+ *   DIRECTIONAL_FOCUS_ARC_CENTER
+ */
+function directionalArc(span) {
+  return { start: DIRECTIONAL_FOCUS_ARC_CENTER - span / 2, span };
+}
+
+/**
+ * Directional ("Logo Flow") Focus Mode variant of computeDecrossedOrbitAngles()
+ * above: identical de-crossing algorithm, determinism, and "never worse
+ * than baseline" guarantee - only ring 1/ring 2 are packed into a left-
+ * facing arc (DIRECTIONAL_FOCUS_ARC_CENTER +/- the two span constants above)
+ * instead of the full circle, so lenses/universe.js can render this
+ * sprint's "Related Objects -> Selected Object" left-to-right investigation
+ * view without duplicating any of the crossing-minimization machinery.
+ *
+ * @param {ReturnType<typeof computeOrbitLayout>} orbit
+ * @param {Array<{ from_id: string, to_id: string }>} relationships
+ * @param {{ ring1Radius?: number, ring2Radius?: number }} [options]
+ * @returns {ReturnType<typeof computeDecrossedOrbitAngles>}
+ */
+export function computeDirectionalFocusAngles(orbit, relationships, options = {}) {
+  return computeDecrossedOrbitAngles(orbit, relationships, {
+    ...options,
+    ring1Arc: directionalArc(DIRECTIONAL_FOCUS_RING1_ARC_SPAN),
+    ring2Arc: directionalArc(DIRECTIONAL_FOCUS_RING2_ARC_SPAN),
+  });
 }
 
 /**
