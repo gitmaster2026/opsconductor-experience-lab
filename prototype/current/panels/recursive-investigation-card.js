@@ -6,6 +6,20 @@
 // mutation, no data fetch, no new ontology, no schema assumptions. Callers
 // can place this card in Risk Board, Functional Radar, Passport, Timeline,
 // or any future viewpoint and pass whichever governed layers are available.
+//
+// Sprint V1-UX-2F follow-up (Operational Visual Grammar in the recursive
+// investigation experience): list items may now be EITHER a plain string
+// (the original, unchanged contract - still escaped and rendered exactly as
+// before, byte-for-byte) OR an `{ html }` object carrying a pre-built,
+// caller-escaped HTML fragment - see panels/passport.js's shared
+// relatedObjectMarker()/evidenceMarker()/recommendationMarker() helpers,
+// which build the IDENTICAL shape+color+badge marker the classic Passport
+// sections render for the same record, so this card's Related Objects/
+// Evidence/Transactions layers show the same object with the same visual
+// identity as the classic list right beside it. This module still authors
+// no grammar/ontology itself - it only trusts an HTML fragment the caller
+// already built and escaped, exactly as it already trusted `layer.summary`/
+// `layer.title` strings to be pre-formatted text.
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -39,12 +53,29 @@ function renderParameterList(parameters) {
   `;
 }
 
+/**
+ * Render one list item. A plain string renders exactly as before (escaped
+ * text, no marker) - the untouched legacy path every pre-existing caller and
+ * pinned test still relies on. An `{ html }` object renders its pre-built
+ * fragment verbatim (already escaped/constructed by the caller - see this
+ * module's header comment).
+ *
+ * @param {string|{html:string}} item
+ * @returns {string}
+ */
+function renderListItem(item) {
+  if (item && typeof item === 'object' && typeof item.html === 'string') {
+    return `<li>${item.html}</li>`;
+  }
+  return `<li>${escapeHtml(item)}</li>`;
+}
+
 function renderList(items, itemClass) {
   const list = Array.isArray(items) ? items.filter(Boolean) : [];
   if (list.length === 0) return '';
   return `
     <ul class="recursive-investigation-list ${itemClass}">
-      ${list.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+      ${list.map(renderListItem).join('')}
     </ul>
   `;
 }
@@ -82,18 +113,28 @@ function renderLayer(layer) {
  * @param {string} model.summary
  * @param {string} [model.businessMeaning]
  * @param {Array<{label: string, value: string|number|null|undefined}>} [model.parameters]
- * @param {string[]} [model.relationships]
+ * @param {Array<string|{html:string}>} [model.relationships] - each entry is
+ *   either plain text (legacy) or a pre-built `{html}` fragment (V1-UX-2F
+ *   follow-up: typically a grammar shape marker + escaped text, so a related
+ *   object shows the same shape/color here as in Passport's own
+ *   Relationships section).
  * @param {string} [model.evidenceConclusion] - a single lead finding
  *   sentence (V1-UX-2E: "lead with conclusions, support with metrics" -
  *   see engine/business-language.js's evidenceConclusion()). Optional so
  *   callers with no real evidence text simply omit it rather than this
  *   component ever synthesizing a finding that isn't backed by data.
- * @param {string[]} [model.evidence] - supporting evidence detail, shown
- *   under the conclusion (or as the whole layer when there is no
- *   conclusion sentence).
- * @param {string[]} [model.transactions]
- * @param {string[]} [model.sourceRecords]
- * @param {string[]} [model.documents]
+ * @param {Array<string|{html:string}>} [model.evidence] - supporting
+ *   evidence detail, shown under the conclusion (or as the whole layer when
+ *   there is no conclusion sentence). Same string-or-{html} contract as
+ *   `relationships`.
+ * @param {Array<string|{html:string}>} [model.transactions] - same
+ *   string-or-{html} contract as `relationships`.
+ * @param {string[]} [model.sourceRecords] - plain text only (deliberately
+ *   not grammar-marked: a source record cites this Lab's own table/id
+ *   lineage, not a registered NR04 canonical object type).
+ * @param {string[]} [model.documents] - plain text only (deliberately not
+ *   grammar-marked: a representative external-system reference, not a
+ *   registered NR04 canonical object type).
  * @param {string} [model.externalHandoff]
  * @param {string} [model.termination]
  * @param {string} [model.extraClass]

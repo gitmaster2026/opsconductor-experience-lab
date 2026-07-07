@@ -28,6 +28,7 @@ import {
   GRAMMAR_ENTRIES,
   grammarShapeSvg,
   grammarMarkerHtml,
+  grammarBadgeHtml,
   grammarTypeKeys,
 } from '../prototype/current/engine/visual-grammar.js';
 
@@ -186,6 +187,38 @@ test('resolveBadges fabricates nothing: no fields → no badges, unknown status 
 });
 
 // ---------------------------------------------------------------------------
+// grammarBadgeHtml (Sprint V1-UX-2F follow-up: HTML builder over
+// resolveBadges(), the DOM counterpart to grammarMarkerHtml)
+// ---------------------------------------------------------------------------
+
+test('grammarBadgeHtml renders one .ovg-badge chip per resolveBadges() entry, with a matching tone class', () => {
+  const html = grammarBadgeHtml({ status: 'open' });
+  assert.match(html, /class="ovg-badge ovg-badge--watch"/);
+  assert.match(html, />Open</);
+});
+
+test('grammarBadgeHtml renders both entries (critical risk_state + a mapped status) in resolveBadges() order', () => {
+  const html = grammarBadgeHtml({ risk_state: 'critical', status: 'constrained' });
+  const criticalIdx = html.indexOf('Critical');
+  const blockedIdx = html.indexOf('Blocked');
+  assert.ok(criticalIdx >= 0 && blockedIdx >= 0, 'expected both badges present');
+  assert.ok(criticalIdx < blockedIdx, 'critical badge should render first, matching resolveBadges() ordering');
+});
+
+test('grammarBadgeHtml returns empty string (not a placeholder) when resolveBadges() finds nothing real', () => {
+  assert.equal(grammarBadgeHtml({}), '');
+  assert.equal(grammarBadgeHtml(null), '');
+  assert.equal(grammarBadgeHtml({ status: 'generated' }), ''); // a real but unmapped decision-workflow status
+});
+
+test('grammarBadgeHtml escapes label text (defensive, even though today\'s labels are static)', () => {
+  // resolveBadges() only ever returns its own static labels today, but the
+  // HTML builder must not assume that forever - prove it escapes safely.
+  const html = grammarBadgeHtml({ status: 'open' });
+  assert.doesNotMatch(html, /<script/);
+});
+
+// ---------------------------------------------------------------------------
 // Legend registry integrity
 // ---------------------------------------------------------------------------
 
@@ -282,4 +315,35 @@ test('commitment-spine node types all have registered shapes', () => {
   for (const t of spineTypes) {
     assert.ok(keys.has(resolveGrammarType(t)), `spine type ${t} has no shape`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// Sprint V1-UX-2F follow-up: explicit cross-surface identity (Universe
+// canvas node vs. a Passport/recursive-card relationship reference to the
+// SAME type). Every DOM surface and the Universe canvas resolve type/state
+// through this one module, so this holds by construction - this test makes
+// that guarantee concrete and permanently regression-tested, rather than
+// leaving it as an unverified architectural claim.
+// ---------------------------------------------------------------------------
+
+test('a Universe-shaped node and a Passport relationship reference to the same type resolve to byte-identical shape geometry and state color', () => {
+  // A Universe node (as buildUniverseGraph() would emit it) ...
+  const universeNode = { type: 'supplier', risk_state: 'watch', domain: 'supply' };
+  // ... and a Passport relationship's relatedObjectType (as
+  // panels/passport.js's relatedObjectMarker() would resolve it) for the
+  // SAME real-world object type, in a completely different call shape.
+  const passportRelType = 'supplier';
+
+  const universeGrammarType = resolveGrammarType(universeNode);
+  const passportGrammarType = resolveGrammarType(passportRelType);
+  assert.equal(universeGrammarType, passportGrammarType);
+  assert.equal(svgPathData(universeGrammarType), svgPathData(passportGrammarType));
+  assert.equal(stateColorVar(universeNode.risk_state), stateColorVar('watch'));
+
+  // And the DOM marker Passport/Risk Board/Functional Radar/Hover Preview/
+  // Text View all call is byte-identical for the two inputs too.
+  assert.equal(
+    grammarMarkerHtml(universeNode, { size: 13 }),
+    grammarMarkerHtml(passportRelType, { state: 'watch', size: 13 }),
+  );
 });

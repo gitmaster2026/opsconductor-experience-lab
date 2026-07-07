@@ -404,6 +404,24 @@ export function resolveBadges(node) {
   return badges.slice(0, 2);
 }
 
+/**
+ * Secondary-status BADGE markup for a node/row, built from resolveBadges()
+ * above. At most two `.ovg-badge` chips (most-important first), each
+ * carrying an `.ovg-badge--{tone}` class that resolves to the SAME
+ * state-color tokens grammarMarkerHtml() uses for shape fill, so a badge
+ * never disagrees with its own marker's color. Returns '' when
+ * resolveBadges() finds nothing real to show for this record's actual
+ * fields - never a placeholder, never fabricated.
+ *
+ * @param {{risk_state?:string|null, severity?:string|null, status?:string|null}} node
+ * @returns {string}
+ */
+export function grammarBadgeHtml(node) {
+  const badges = resolveBadges(node);
+  if (badges.length === 0) return '';
+  return badges.map((b) => `<span class="ovg-badge ovg-badge--${b.tone}">${escapeAttr(b.label)}</span>`).join('');
+}
+
 // ---------------------------------------------------------------------------
 // LEGEND — the canonical "Operational Visual Grammar" key
 // ---------------------------------------------------------------------------

@@ -63,6 +63,21 @@
 .ovg-badge--watch    { color: var(--yellow, #e8c34a); }
 .ovg-badge--neutral  { color: var(--text-secondary, #9aa9b8); }
 
+/* --- Marker/badge + existing-tag grouping ---------------------------------
+ * Sprint V1-UX-2F follow-up: several existing rows (e.g. Passport's
+ * `.passport-entry-head`) use `justify-content: space-between` across
+ * exactly two children. Inserting a new marker/badge as a bare third child
+ * would break that two-group distribution. This class groups a new
+ * marker/badge with its adjacent EXISTING tag/status/citation span into one
+ * flex item, so space-between still sees only two groups and no existing
+ * layout rule needs to change - purely additive, no redesign. */
+.ovg-entry-tag-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 /* --- Timeline history marker: host the event shape in the existing dot --- */
 .passport-history-marker .ovg-marker {
   color: var(--gray, #9aa9b8);
