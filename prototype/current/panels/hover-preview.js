@@ -20,6 +20,7 @@
 
 import { probeLabel } from '../engine/labels.js';
 import { objectNoun, domainLabel, operationalSummary } from '../engine/operational-language.js';
+import { grammarMarkerHtml } from '../engine/visual-grammar.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -198,7 +199,7 @@ export function mountHoverPreview(el, callbacks) {
     const typeDisplay = domainText && domainText !== typeNoun ? `${typeNoun} · ${domainText}` : typeNoun;
 
     el.innerHTML = `
-      <div class="hover-preview-title">${escapeHtml(preview.label ?? preview.objectId)}</div>
+      <div class="hover-preview-title">${grammarMarkerHtml({ type: preview.objectType, objectKey: preview.objectKey, domain: preview.domain }, { state: preview.currentRisk, size: 14, lead: true, title: typeNoun })}${escapeHtml(preview.label ?? preview.objectId)}</div>
       <div class="hover-preview-meta">
         <span class="node-tooltip-risk node-tooltip-risk--${bucket}">${escapeHtml(preview.currentRisk ?? 'neutral')}</span>
         <span class="node-tooltip-type">${escapeHtml(typeDisplay)}</span>

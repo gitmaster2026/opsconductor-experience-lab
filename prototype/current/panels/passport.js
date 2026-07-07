@@ -64,6 +64,7 @@
 
 import { probeLabel } from '../engine/labels.js';
 import { renderRecursiveInvestigationCard } from './recursive-investigation-card.js';
+import { grammarMarkerHtml } from '../engine/visual-grammar.js';
 import {
   relationshipLabel,
   sortRelationshipsStable,
@@ -122,7 +123,7 @@ function renderOverviewSection(overview, businessImpact, nextAction, sourceIdent
   const erpId = formatErpIdentifier(sourceIdentifier, objectKey);
   return `
     <header class="passport-overview">
-      <div class="passport-overview-type">${escapeHtml(typeNoun)}${domainText && domainText !== typeNoun ? ` · ${escapeHtml(domainText)}` : ''}</div>
+      <div class="passport-overview-type">${grammarMarkerHtml({ type: overview.objectType, objectKey, domain: overview.domain, risk_state: overview.risk_state }, { size: 15, lead: true, title: typeNoun })}${escapeHtml(typeNoun)}${domainText && domainText !== typeNoun ? ` · ${escapeHtml(domainText)}` : ''}</div>
       <h2 class="passport-overview-label">${escapeHtml(overview.label ?? overview.objectId ?? 'Untitled')}</h2>
       ${overview.summary ? `<p class="passport-overview-summary">${escapeHtml(overview.summary)}</p>` : ''}
       ${businessImpact ? `<p class="passport-overview-impact"><strong>Why it matters:</strong> ${escapeHtml(businessImpact)}</p>` : ''}
@@ -180,6 +181,7 @@ function renderRelationshipsSection(relationships) {
               return `
           <li>
             <button type="button" class="passport-relationship-item" data-select-id="${escapeHtml(rel.relatedObjectId)}" title="${escapeHtml(probeLabel(rel.relatedObjectType))}">
+              ${grammarMarkerHtml(rel.relatedObjectType, { size: 13, title: probeLabel(rel.relatedObjectType) })}
               <span class="passport-relationship-dir">${rel.direction === 'outgoing' ? '→' : '←'}</span>
               <span class="passport-relationship-body">
                 <strong>${escapeHtml(rel.relatedObjectLabel ?? rel.relatedObjectId)}</strong>
@@ -303,7 +305,7 @@ function renderOperationalHistorySection(operationalHistory) {
           .map(
             (ev) => `
           <li class="passport-history-item">
-            <div class="passport-history-marker"></div>
+            <div class="passport-history-marker">${ev.event_type === 'recommendation_generated' ? grammarMarkerHtml('recommendation', { size: 12, title: 'Recommendation' }) : ''}</div>
             <div class="passport-history-body">
               <div class="passport-history-head">
                 <strong>${escapeHtml(ev.title ?? ev.event_type ?? 'Event')}</strong>

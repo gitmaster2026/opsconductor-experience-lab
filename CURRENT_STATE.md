@@ -268,3 +268,26 @@ Implementation summary:
 Regression note: the one pinned-test change (recursive-investigation-card.test.mjs's "Representative document" → "Supporting documents" assertion) is a correct, intentional update matching this sprint's own explicit rename request, not a silently-tolerated regression.
 
 Known limitations: no browser available in this sandbox — Universe's two-line label stacking under a small selected node, Risk Board's impact-tag wrapping on narrow cards, and Passport's new source-record group spacing are none of them visually confirmed. CI is authoritative; a human should run `npm run serve` for the first real visual/browser pass, per this repo's standing convention.
+
+## Session log — 2026-07-06 V1-UX-2F Operational Visual Grammar
+
+Scope: presentation-layer only. No architecture, ontology, relationships, operational data, recursive investigation, business language, or interaction-model change. Repository evidence remains authoritative.
+
+Goal: a first-time manufacturing executive should recognize operational object *categories* by appearance before reading labels, with the same object rendered identically across Universe, Risk Board, Functional Radar, Timeline, and Passport.
+
+Central design — ONE reusable registry, `engine/visual-grammar.js` (pure, dependency-free, node-importable), the single source of truth for the grammar:
+
+- **Shape = object type.** A unique canonical geometric silhouette per operational object type (37 registered shapes), clean enterprise iconography (no emoji/decoration). Interior detail is expressed as even-odd holes, so the identical geometry reads correctly whether filled on the Universe canvas or as a small DOM marker. One tracer (`traceShape` for canvas Path2D, `svgPathData` for DOM SVG) guarantees canvas and DOM cannot draw a type differently. Type resolution (including the NR04 `other` catch-all via its `objectKey` prefix) mirrors `operational-language.js` `objectNoun()`, so shape and noun always agree.
+- **Color = operational state.** Mirrors `lenses/universe.js` `riskBucket()`/`RISK_COLOR_VAR` exactly (critical→--red, attention/elevated→--orange, watch→--yellow, neutral/info→--gray). Never the only signal — shape + label always carry the meaning too (accessibility).
+- **Badge = secondary status**, derived from existing `status`/`risk_state` only; never fabricated.
+- **Label stays business-first** (V1-UX-2E) and **canonical IDs stay secondary** (never removed).
+
+Governance: introduces no new object type and no new source field (rules #7/#8) — a derived visual attribute keyed on fields `buildUniverseGraph()` already produces. `engine/visual-grammar.js` is never imported by `engine/derive.js` and registers nothing in `KNOWN_OUTPUT_FIELDS`, so `scripts/verify-field-map.mjs` is unaffected (verified PASSED).
+
+Wired into: the Universe node draw (`lenses/universe.js` — silhouette replaces the dot; fill color, halo, selection/highlight stroke, size and circular hit-testing all unchanged), Passport (header, relationship rows, and `recommendation_generated` timeline events), Functional Radar object rows, Risk Board cards (the commitment shield replaces the plain state dot), Hover Preview, and Text View (hierarchy entries + overview kicker). A global toolbar legend — the "Operational Visual Grammar" key (`panels/operational-grammar-legend.js`) — makes shape + state self-explanatory without hovering.
+
+New files: `engine/visual-grammar.js`, `panels/operational-grammar-legend.js`, `operational-visual-grammar.css` (new stylesheet linked in `index.html`, reusing existing tokens — `styles.css` untouched), `test/visual-grammar.test.mjs` (23 tests, incl. a real-snapshot coverage check that every live object type resolves to a registered non-fallback shape), `test/panels-operational-grammar-legend.test.mjs` (7 tests).
+
+Deliberately unchanged: `panels/recursive-investigation-card.js` — its Related-Objects layer consumes pre-formatted strings by design; shaping it would mean restructuring the shared component's caller contract, which edges into "redesign recursive investigation" (out of scope). The Passport's own structured Relationships section carries the grammar instead.
+
+Verification: `npm run build` (check-syntax + verify-field-map + `node --test`) PASSED — 592/592 tests (562 baseline + 30 new). All 37 shapes were also visually validated by rendering the registry to a published preview and screenshotting it (clean, distinct, enterprise, no emoji). Known limitation: the full app's rendered surfaces are not visually confirmed in-sandbox (no browser can reach a local server); CI is authoritative and a human should run `npm run serve` for the first real browser pass, per this repo's standing convention.

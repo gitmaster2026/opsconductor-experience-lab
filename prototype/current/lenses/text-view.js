@@ -51,6 +51,7 @@
 
 import { probeLabel } from '../engine/labels.js';
 import { relationshipLabel, sortRelationshipsStable, objectNoun } from '../engine/operational-language.js';
+import { grammarMarkerHtml } from '../engine/visual-grammar.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -145,6 +146,7 @@ function renderHierarchySection(path) {
           (entry, index) => `
         <li class="text-view-hierarchy-item${entry.isSelected ? ' is-selected' : ''}" style="--depth: ${index}">
           <button type="button" class="text-view-ref text-view-hierarchy-ref" data-select-id="${escapeHtml(entry.id)}">
+            ${grammarMarkerHtml(entry.type, { size: 12, lead: true, title: entry.type })}
             <span class="text-view-hierarchy-type">${escapeHtml(entry.type)}</span>
             <span class="text-view-hierarchy-label">${escapeHtml(entry.label)}</span>
             ${entry.isSelected ? '<span class="text-view-hierarchy-current">selected</span>' : ''}
@@ -388,7 +390,7 @@ export function mountTextViewLens(containerEl, callbacks) {
     containerEl.innerHTML = `
       <div class="text-view-surface">
         <header class="text-view-header">
-          <span class="text-view-kicker">${escapeHtml(typeNoun.toUpperCase())}</span>
+          <span class="text-view-kicker">${grammarMarkerHtml({ type: overview.objectType, objectKey: overview.objectKey, domain: overview.domain, risk_state: overview.risk_state }, { size: 13, lead: true, title: typeNoun })}${escapeHtml(typeNoun.toUpperCase())}</span>
           <h2 class="text-view-title">${escapeHtml(overview.label ?? passport.objectId)}</h2>
           ${overview.summary ? `<p class="text-view-lede">${escapeHtml(overview.summary)}</p>` : ''}
           <span class="text-view-time">${escapeHtml(sliceLabel)}</span>
