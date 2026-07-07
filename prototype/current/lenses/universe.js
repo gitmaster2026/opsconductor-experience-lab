@@ -43,7 +43,7 @@ import {
   computeOrbitLayout,
   mulberry32,
   hashSeed,
-  computeDecrossedOrbitAngles,
+  computeDirectionalFocusAngles,
   computeCollectionStreamAngles,
   resolveFocusTransition,
   focusModeVisibleNodeIds,
@@ -160,6 +160,23 @@ const SCOPE_RECEDE_ALPHA_FACTOR = 0.22;
 /** How much an out-of-scope node shrinks, multiplicatively, alongside the alpha recede above - a subtle additional cue that it sits outside the current scope. */
 const SCOPE_RECEDE_SCALE = 0.82;
 
+/**
+ * V1-UX-2G: when Operational Scope narrows to a new value, the recede
+ * treatment above eases in over this many ms (from "not receded yet" to
+ * "fully receded") rather than snapping instantly - so narrowing scope
+ * feels like entering a context, per this sprint's brief ("Scope dropdown
+ * must trigger the same investigation transition pattern as object focus
+ * where appropriate"). Deliberately a UNIFORM, scene-wide ease (one shared
+ * blend factor, not a per-node before/after crossfade) - simpler, and
+ * cannot produce a flickering inconsistent-per-node state. Exiting scope
+ * (narrowing to none) is intentionally NOT eased - same "instant on the way
+ * out, eased on the way in" asymmetry Focus Mode's own Escape/empty-click
+ * deselect already uses elsewhere in this module.
+ */
+const SCOPE_TRANSITION_MS = 360;
+/** Reduced-motion equivalent, same convention as FOCUS_MODE_FADE_MS_REDUCED. */
+const SCOPE_TRANSITION_MS_REDUCED = 90;
+
 const MIN_USER_SCALE = 0.35;
 const MAX_USER_SCALE = 3.5;
 
@@ -192,6 +209,25 @@ const FLIGHT_PHASE_DURATIONS_MS = Object.freeze({ depart: 200, travel: 600, arri
 /** §2.3: Ring 1 (direct relationships) / Ring 2 (2-hop) orbit radii, in world/layout px (pre camera-scale). */
 const RING1_RADIUS_PX = 92;
 const RING2_RADIUS_PX = 168;
+
+/**
+ * V1-UX-2G "Logo Flow" Focus Mode: once a real single-object selection has
+ * (fully or partially) arrived, the whole assembled scene's screen anchor
+ * blends from the canvas's true center (0.5) toward this fraction of
+ * layoutWidth - i.e. the selected/focused object itself, which always
+ * renders at local (0,0) in its own foreground-stratum frame once resolved
+ * (see computeEffectiveCentersByStratum()'s doc), ends up ANCHORED on the
+ * right rather than dead-center, leaving the left portion of the canvas for
+ * the directional-arc-fanned related objects computeDirectionalFocusAngles()
+ * (universe-layout.js) now positions there. Blended by the SAME
+ * `orbitProgress` value that already drives the orbit-assembly lerp in
+ * computeEffectivePositions(), so the rightward settle and the orbit fan-out
+ * happen in lockstep, not as two disjoint animations. Deliberately NOT
+ * applied to a Collection focus (isCollectionFocus) - a Collection has no
+ * single anchor to orient a direction against, so it keeps rendering
+ * centered with its existing circular peer ring, untouched by this sprint.
+ */
+const DIRECTIONAL_FOCUS_ANCHOR_X_FRACTION = 0.66;
 
 /**
  * §2.2's per-stratum alpha treatment. V5 Phase 2.6+ item C (docs/
@@ -1008,6 +1044,12 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   // three run concurrently but answer different questions.
   const focusModeState = { active: false, since: 0 };
 
+  // V1-UX-2G: mirrors focusModeState's own "since" pattern for Operational
+  // Scope narrowing - `key` is whatever scopeContext.id was last seen;
+  // `since` resets whenever that key changes, driving a uniform ease-in
+  // (see SCOPE_TRANSITION_MS's own header doc) rather than an instant snap.
+  const scopeTransitionState = { key: null, since: 0 };
+
   /**
    * V5 Phase 2.7/2.7.1 (docs/V5_HANDOVER.md §13/§15/§10.2 item H): resolve
    * everything about the current focus/orbit/Focus-Mode/Collection-glyph
@@ -1144,7 +1186,14 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
         ({ orbit, decrossed } = orbitCache.orbitResult);
       } else {
         orbit = computeOrbitLayout(anchorId, currentEdges, currentNodes);
-        decrossed = computeDecrossedOrbitAngles(orbit, currentEdges, {
+        // V1-UX-2G: a real single-object focus resolves into the
+        // directional ("Logo Flow") left-facing arc instead of the plain
+        // full-circle de-crossed orbit - see universe-layout.js's
+        // computeDirectionalFocusAngles() header for the full rationale.
+        // Same de-crossing guarantee/determinism, same options shape;
+        // Collection focus (the other branch above) is deliberately left
+        // calling computeCollectionStreamAngles() unchanged.
+        decrossed = computeDirectionalFocusAngles(orbit, currentEdges, {
           ring1Radius: RING1_RADIUS_PX,
           ring2Radius: RING2_RADIUS_PX,
         });
@@ -1336,6 +1385,12 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     const currentZoomIndex = zoomLevel;
     const { positions, collapsedInto } = computeEffectivePositions(orbitCenter, orbitMemberById, stratumById, currentZoomIndex, progress);
     const centersByStratum = computeEffectiveCentersByStratum(performance.now(), focusTargetId, orbitCenter);
+    // V1-UX-2G: must match draw()'s own focusAnchorX exactly (same
+    // directionalProgress gating on isCollectionFocus, same lerp target) so
+    // a click lands on what the user actually sees - see draw()'s own
+    // DIRECTIONAL_FOCUS_ANCHOR_X_FRACTION comment for the full rationale.
+    const hitTestDirectionalProgress = isCollectionFocus ? 0 : progress;
+    const focusAnchorX = lerp(layoutWidth / 2, layoutWidth * DIRECTIONAL_FOCUS_ANCHOR_X_FRACTION, hitTestDirectionalProgress);
 
     // V5 Phase 2.7.1 (item H): a COLLAPSED Collection (glyph present, not
     // currently expanded) draws its glyph on top of everything else (see
@@ -1368,7 +1423,7 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       const center = centersByStratum[stratum] ?? centersByStratum.midground;
       // Same conversion draw()'s localFor()+ctx transform performs, in
       // reverse: screen -> this node's stratum-relative world coordinate.
-      const nodeWorldX = (screenX - layoutWidth / 2) / camera.scale + center.x;
+      const nodeWorldX = (screenX - focusAnchorX) / camera.scale + center.x;
       const nodeWorldY = (screenY - layoutHeight / 2) / camera.scale + center.y;
       const depth = depthFilter(zoomLevel, node);
       const r = nodeRadiusFor(node, depth) + 4; // small hit-area padding
@@ -1499,6 +1554,24 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     const scope = typeof getScope === 'function' ? getScope() : null;
     const scopedNodeIdSet = scope && !scope.isUnscoped ? new Set(scope.scopedNodeIds) : null;
 
+    // V1-UX-2G: ease the recede treatment in whenever the active scope
+    // KEY changes (narrowing to a new scope, or to a different one),
+    // rather than snapping every out-of-scope node to full recede
+    // strength instantly - see SCOPE_TRANSITION_MS's own header doc for
+    // why this is a uniform, scene-wide blend rather than a per-node
+    // crossfade. resolveFocusPresentation() calls getScopeContext() too,
+    // but as its own local (not shared across this sibling closure), so
+    // this is called again here rather than assumed - cheap (a plain
+    // getter call), not worth threading through as a new return field.
+    const scopeContextForTransition = typeof getScopeContext === 'function' ? getScopeContext() : null;
+    const scopeTransitionKey = scopeContextForTransition?.id ?? null;
+    if (scopeTransitionKey !== scopeTransitionState.key) {
+      scopeTransitionState.key = scopeTransitionKey;
+      scopeTransitionState.since = now;
+    }
+    const scopeTransitionDuration = reducedMotion ? SCOPE_TRANSITION_MS_REDUCED : SCOPE_TRANSITION_MS;
+    const scopeSettleT = easeOutCubic(clamp((now - scopeTransitionState.since) / scopeTransitionDuration, 0, 1));
+
     // --- V5 Phase 2.7 (docs/V5_HANDOVER.md §15): Focus Mode gating. ---
     // Deliberately gated on `focusTargetId` (the REAL current focus target),
     // NOT the orbit's `anchorId` - during a reverse dissolve, `anchorId`
@@ -1526,8 +1599,16 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     const focusModeFullyResolved = focusModeState.active && focusModeT >= 1;
     const focusModeVisibleIds = new Set(orbitIdsForStratum);
 
+    // V1-UX-2G "Logo Flow" Focus Mode: see DIRECTIONAL_FOCUS_ANCHOR_X_FRACTION's
+    // own header doc. `directionalProgress` deliberately zeroes out for a
+    // Collection focus, so this frame's screen anchor stays dead-center
+    // (unchanged behavior) whenever the current focus target is a
+    // Collection rather than a real single object.
+    const directionalProgress = isCollectionFocus ? 0 : orbitProgress;
+    const focusAnchorX = lerp(layoutWidth / 2, layoutWidth * DIRECTIONAL_FOCUS_ANCHOR_X_FRACTION, directionalProgress);
+
     ctx.save();
-    ctx.translate(layoutWidth / 2, layoutHeight / 2);
+    ctx.translate(focusAnchorX, layoutHeight / 2);
     ctx.scale(camera.scale, camera.scale);
     // NOTE: no shared ctx.translate(-camera.x, -camera.y) here - each
     // node/edge endpoint below is drawn relative to ITS OWN stratum's
@@ -1675,7 +1756,10 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       const bucket = riskBucket(node);
       const color = resolveCssVar(canvasEl, RISK_COLOR_VAR[bucket] ?? RISK_COLOR_VAR.neutral, '#9aa7b5');
       const isOutOfScope = Boolean(scopedNodeIdSet && !scopedNodeIdSet.has(node.id));
-      const radius = nodeRadiusFor(node, depth) * (isOutOfScope ? SCOPE_RECEDE_SCALE : 1);
+      // V1-UX-2G: recede EASES in via scopeSettleT (0 right when scope just
+      // changed -> 1 once settled) rather than snapping straight to
+      // SCOPE_RECEDE_SCALE - see SCOPE_TRANSITION_MS's own header doc.
+      const radius = nodeRadiusFor(node, depth) * (isOutOfScope ? lerp(1, SCOPE_RECEDE_SCALE, scopeSettleT) : 1);
       const isSelected = node.id === selectedId;
       const isHovered = node.id === hoveredId;
       const isHighlighted = isHighlightActive && highlightIds.has(node.id);
@@ -1704,9 +1788,11 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       }
       // V5 Phase 3.5: nodes outside the current Operational Scope recede
       // (dim further) rather than disappear outright - composes with the
-      // highlight dimming above rather than replacing it.
+      // highlight dimming above rather than replacing it. V1-UX-2G: eases
+      // in via scopeSettleT rather than snapping, same reasoning as radius
+      // above.
       if (isOutOfScope) {
-        finalAlpha *= SCOPE_RECEDE_ALPHA_FACTOR;
+        finalAlpha *= lerp(1, SCOPE_RECEDE_ALPHA_FACTOR, scopeSettleT);
       }
       // V5 Phase 2.7 (§15): while entering/exiting Focus Mode, everything
       // outside the resolved focus set cross-fades rather than cutting
@@ -1757,7 +1843,8 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       // a receded selection doesn't read as "full brightness text on a dim
       // dot" (selecting an out-of-scope node is still possible via
       // Passport click-through even while scope is narrowed elsewhere).
-      const labelScopeFactor = isOutOfScope ? SCOPE_RECEDE_ALPHA_FACTOR : 1;
+      // V1-UX-2G: eases in via scopeSettleT, matching the node dot above.
+      const labelScopeFactor = isOutOfScope ? lerp(1, SCOPE_RECEDE_ALPHA_FACTOR, scopeSettleT) : 1;
       const tier = labelTierById.get(node.id) ?? 'dot';
       if (tier === 'full') {
         // V1-UX-2E (Operational Language & Progressive Disclosure): lead
