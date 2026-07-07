@@ -83,7 +83,14 @@ function renderLayer(layer) {
  * @param {string} [model.businessMeaning]
  * @param {Array<{label: string, value: string|number|null|undefined}>} [model.parameters]
  * @param {string[]} [model.relationships]
- * @param {string[]} [model.evidence]
+ * @param {string} [model.evidenceConclusion] - a single lead finding
+ *   sentence (V1-UX-2E: "lead with conclusions, support with metrics" -
+ *   see engine/business-language.js's evidenceConclusion()). Optional so
+ *   callers with no real evidence text simply omit it rather than this
+ *   component ever synthesizing a finding that isn't backed by data.
+ * @param {string[]} [model.evidence] - supporting evidence detail, shown
+ *   under the conclusion (or as the whole layer when there is no
+ *   conclusion sentence).
  * @param {string[]} [model.transactions]
  * @param {string[]} [model.sourceRecords]
  * @param {string[]} [model.documents]
@@ -113,6 +120,7 @@ export function renderRecursiveInvestigationCard(model) {
     {
       step: '04',
       title: 'Evidence',
+      summary: model.evidenceConclusion,
       items: model.evidence,
     },
     {
@@ -127,7 +135,7 @@ export function renderRecursiveInvestigationCard(model) {
     },
     {
       step: '07',
-      title: 'Representative document',
+      title: 'Supporting documents',
       items: model.documents,
     },
     {

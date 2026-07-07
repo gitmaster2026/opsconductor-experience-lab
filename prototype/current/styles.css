@@ -4264,3 +4264,83 @@ body {
   padding: 12px;
   transition: background 0.2s ease, border-color 0.2s ease;
 }
+
+/* ---------------------------------------------------------------------
+   V1-UX-2E (Operational Language & Progressive Disclosure) - every rule
+   below reuses existing tokens only (--text-secondary, --cyan-accent,
+   --panel-border, the existing pill/badge shapes already established by
+   .passport-section-count / .demo-derived-badge / .node-tooltip-type) -
+   no new color, radius, or shadow language is introduced.
+   --------------------------------------------------------------------- */
+
+/* Risk Board: named business-impact tags, leading the card ahead of the
+   who/what line - see lenses/risk-board.js's renderCardContent(). */
+.risk-card-impact-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.risk-impact-tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+
+.risk-impact-tag--primary {
+  color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.12);
+  border-color: rgba(90, 209, 255, 0.3);
+}
+
+/* Universe hover tooltip: the raw canonical label, once the tooltip title,
+   is now a secondary muted line beneath the business headline - see
+   lenses/universe.js's updateTooltip(). */
+.node-tooltip-line--muted {
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  opacity: 0.85;
+}
+
+/* Passport Evidence: a single lead finding sentence ahead of the existing
+   supporting entries - see panels/passport.js's renderEvidenceSection(). */
+.passport-evidence-conclusion {
+  margin: 6px 0 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.passport-evidence-conclusion strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Passport Source Records: grouped by business-facing system (Planning /
+   ERP / OpsConductor) instead of one flat list - see panels/passport.js's
+   renderSourceRecordsSection(). */
+.source-record-group {
+  margin-top: 10px;
+}
+
+.source-record-group:first-of-type {
+  margin-top: 6px;
+}
+
+.source-record-group-label {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}

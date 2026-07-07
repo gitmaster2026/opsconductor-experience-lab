@@ -72,6 +72,13 @@ import {
   operationalSummary,
   formatErpIdentifier,
 } from '../engine/operational-language.js';
+import {
+  evidenceConclusion,
+  transactionRecordLabel,
+  sourceSystemCategory,
+  groupSourceRecordsBySystem,
+  documentPurposeLabel,
+} from '../engine/business-language.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -234,9 +241,15 @@ function renderEvidenceSection(evidence) {
       </section>
     `;
   }
+  // V1-UX-2E: lead with the conclusion, then support it with the existing
+  // per-entry metrics/citations below - never inventing a finding, only
+  // promoting the real evidence_summary the list already carries (see
+  // engine/business-language.js's evidenceConclusion()).
+  const { conclusion } = evidenceConclusion(list);
   return `
     <section class="passport-section" data-passport-section="evidence">
       <h3 class="passport-section-title">Evidence <span class="passport-section-count">${list.length}</span></h3>
+      ${conclusion ? `<p class="passport-evidence-conclusion"><strong>Critical Finding:</strong> ${escapeHtml(conclusion)}</p>` : ''}
       <ul class="passport-entry-list">
         ${list
           .map(
@@ -351,21 +364,37 @@ function renderSourceRecordsSection(sourceRecords) {
       </section>
     `;
   }
+  // V1-UX-2E: organize by the business-facing enterprise system that owns
+  // each record (Planning / ERP / OpsConductor - see
+  // engine/business-language.js's groupSourceRecordsBySystem()) rather than
+  // presenting raw table names as a flat, ungrouped list. The raw
+  // sourceTable/sourceRecordId stays fully visible under each group, per
+  // "avoid exposing implementation tables as the primary presentation" -
+  // it becomes supporting reference text, not the lead.
+  const groups = groupSourceRecordsBySystem(list);
   return `
     <section class="passport-section passport-source-records" data-passport-section="source">
       <h3 class="passport-section-title">Source Records <span class="passport-section-count">${list.length}</span></h3>
-      <ul class="source-record-list">
-        ${list
-          .map(
-            (rec) => `
-          <li class="source-record-item">
-            <span class="source-cite">${escapeHtml(rec.sourceTable ?? '—')} / ${escapeHtml(rec.sourceRecordId ?? '—')}</span>
-            ${rec.sourceIdentifier ? `<span class="source-record-identifier">${escapeHtml(rec.sourceIdentifier)}</span>` : ''}
-            ${rec.viaEvidenceId ? `<span class="source-record-via">via ${escapeHtml(rec.viaEvidenceId)}</span>` : ''}
-          </li>`
-          )
-          .join('')}
-      </ul>
+      ${groups
+        .map(
+          (group) => `
+        <div class="source-record-group">
+          <span class="source-record-group-label">${escapeHtml(group.category)}</span>
+          <ul class="source-record-list">
+            ${group.entries
+              .map(
+                (rec) => `
+              <li class="source-record-item">
+                <span class="source-cite">${escapeHtml(rec.sourceTable ?? '—')} / ${escapeHtml(rec.sourceRecordId ?? '—')}</span>
+                ${rec.sourceIdentifier ? `<span class="source-record-identifier">${escapeHtml(rec.sourceIdentifier)}</span>` : ''}
+                ${rec.viaEvidenceId ? `<span class="source-record-via">via ${escapeHtml(rec.viaEvidenceId)}</span>` : ''}
+              </li>`
+              )
+              .join('')}
+          </ul>
+        </div>`
+        )
+        .join('')}
     </section>
   `;
 }
@@ -396,30 +425,38 @@ function renderDocumentsSection(documents) {
   if (list.length === 0) {
     return `
       <section class="passport-section passport-documents" data-passport-section="document">
-        <h3 class="passport-section-title">Documents</h3>
+        <h3 class="passport-section-title">Supporting Documents</h3>
         <div class="dash-section-empty">No representative document references for this object.</div>
       </section>
     `;
   }
+  // V1-UX-2E: lead each entry with its BUSINESS PURPOSE (Customer Contract /
+  // Inspection Report / Engineering Drawing / Supplier Quote / Quality
+  // Report / Supporting Record - see engine/business-language.js's
+  // documentPurposeLabel(), a relabeling of the already-real `system`
+  // assignment, not a new classification). The originating system stays
+  // fully visible in the footer, per "Representative location remains
+  // visible."
   return `
     <section class="passport-section passport-documents" data-passport-section="document">
       <h3 class="passport-section-title">
-        Documents <span class="passport-section-count">${list.length}</span>
+        Supporting Documents <span class="passport-section-count">${list.length}</span>
         <span class="demo-derived-badge" title="Representative link only - illustrative external-system reference, not a real connected document.">Representative</span>
       </h3>
-      <p class="passport-drilldown-note">Representative links to the external enterprise systems (SAP, Windchill, MES, Inspection Reports, SharePoint, network folders) that would hold supporting artifacts for this object in a real deployment - not live connections.</p>
+      <p class="passport-drilldown-note">Representative links to the kind of supporting document a real deployment would hold for this object - a contract, drawing, quote, or report - not live connections.</p>
       <ul class="passport-entry-list">
         ${list
           .map(
             (doc) => `
           <li class="passport-entry">
             <div class="passport-entry-head">
-              <span class="passport-entry-tag">${escapeHtml(doc.system ?? 'Network Folder')}</span>
+              <span class="passport-entry-tag">${escapeHtml(documentPurposeLabel(doc))}</span>
               <span class="passport-entry-status">Representative</span>
             </div>
             <p class="passport-entry-summary"><a href="#" onclick="return false;" title="Representative link only - not a real connected document.">${escapeHtml(doc.path ?? doc.label ?? '—')}</a></p>
             <div class="passport-entry-foot">
-              <span>${escapeHtml(doc.note ?? '')}</span>
+              <span>${escapeHtml(doc.system ?? 'Network Folder')}</span>
+              ${doc.note ? `<span>${escapeHtml(doc.note)}</span>` : ''}
             </div>
           </li>`
           )
@@ -447,20 +484,34 @@ function buildRecursiveModelFromPassport(passport) {
   const relationships = (passport?.relationships ?? [])
     .slice(0, 4)
     .map((rel) => `${rel.relatedObjectLabel ?? rel.relatedObjectId} — ${relationshipLabel(rel.relationshipType, rel.direction)}`);
-  const evidence = (passport?.evidence ?? [])
+  // V1-UX-2E: lead with a real finding sentence (never fabricated - see
+  // engine/business-language.js's evidenceConclusion()); the remaining
+  // entries become supporting detail instead of repeating the lead entry.
+  const { conclusion: leadEvidenceConclusion, supporting: supportingEvidence } = evidenceConclusion(
+    passport?.evidence ?? []
+  );
+  const evidence = supportingEvidence
     .slice(0, 4)
     .map((ev) => ev.evidence_summary ?? ev.id)
     .filter(Boolean);
-  const transactions = (passport?.recommendations ?? [])
-    .slice(0, 3)
-    .map((rec) => rec.status ? `${rec.status} recommendation ${rec.id ?? ''}`.trim() : rec.id)
-    .filter(Boolean);
+  // V1-UX-2E: label what is actually here - a governed Recommendation, one
+  // of the brief's own named transaction types - rather than an order type
+  // this Lab has no real data for; the raw id is demoted to a trailing
+  // reference instead of the row's only identity.
+  const transactions = (passport?.recommendations ?? []).slice(0, 3).map((rec) => {
+    const { primary, reference } = transactionRecordLabel(rec);
+    return reference ? `${primary} · ${reference}` : primary;
+  });
+  // V1-UX-2E: lead with the business-facing system category (Planning/ERP/
+  // OpsConductor), raw table/record id demoted to follow it.
   const sourceRecords = (passport?.sourceRecords ?? [])
     .slice(0, 4)
-    .map((rec) => `${rec.sourceTable ?? 'source'} / ${rec.sourceRecordId ?? 'record'}`);
+    .map((rec) => `${sourceSystemCategory(rec.sourceTable)} — ${rec.sourceTable ?? 'source'} / ${rec.sourceRecordId ?? 'record'}`);
+  // V1-UX-2E: lead with the document's business purpose; system stays
+  // visible as a trailing location note, per "location remains visible."
   const documents = (passport?.documents ?? [])
     .slice(0, 3)
-    .map((doc) => `${doc.system ?? 'Document'} — ${doc.path ?? doc.label ?? 'representative reference'}`);
+    .map((doc) => `${documentPurposeLabel(doc)} — ${doc.path ?? doc.label ?? 'representative reference'} (${doc.system ?? 'Network Folder'})`);
 
   return {
     kicker: 'Recursive Investigation',
@@ -474,6 +525,7 @@ function buildRecursiveModelFromPassport(passport) {
       { label: 'Program', value: overview.program },
     ],
     relationships,
+    evidenceConclusion: leadEvidenceConclusion,
     evidence,
     transactions,
     sourceRecords,

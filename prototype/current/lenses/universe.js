@@ -51,7 +51,8 @@ import {
   resolveCollectionExpansion,
 } from './universe-layout.js';
 import { depthFilter, assignStratum, computeCameraFrame, naturalZoomIndexForNode, DEPTH_STRATA } from '../engine/camera.js';
-import { computeLabelPlan, shortCodeForNode } from '../engine/labels.js';
+import { computeLabelPlan, shortCodeForNode, objectTypeNoun } from '../engine/labels.js';
+import { universeNodeHeadline } from '../engine/business-language.js';
 
 // ---------------------------------------------------------------------------
 // Visual constants
@@ -1748,12 +1749,29 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       const labelScopeFactor = isOutOfScope ? SCOPE_RECEDE_ALPHA_FACTOR : 1;
       const tier = labelTierById.get(node.id) ?? 'dot';
       if (tier === 'full') {
+        // V1-UX-2E (Operational Language & Progressive Disclosure): lead
+        // with business meaning - revenue at risk, a governed business-
+        // impact/next-action summary, or a customer name - rather than the
+        // raw canonical label. The label itself stays fully visible as a
+        // secondary, muted line directly beneath, per the brief's "IDs
+        // remain visible as secondary information." universeNodeHeadline()
+        // is a pure function over fields already on this node (see
+        // engine/business-language.js's header for why neither existing
+        // node shape carries every field, and how it degrades gracefully
+        // to the plain label/noun when the richer fields aren't present).
+        const headline = universeNodeHeadline(node, objectTypeNoun);
         ctx.globalAlpha = clamp(opacity, 0.15, 1) * labelScopeFactor;
         ctx.fillStyle = resolveCssVar(canvasEl, '--label-color', 'rgba(230,240,250,0.92)');
         ctx.font = '600 12px system-ui, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(truncateLabel(String(node.label ?? node.id)), local.x, local.y + radius + 4);
+        ctx.fillText(truncateLabel(headline.primary), local.x, local.y + radius + 4);
+        if (headline.secondary) {
+          ctx.globalAlpha = clamp(opacity, 0.15, 1) * labelScopeFactor * 0.72;
+          ctx.fillStyle = resolveCssVar(canvasEl, '--text-secondary', 'rgba(230,240,250,0.6)');
+          ctx.font = '500 10px system-ui, sans-serif';
+          ctx.fillText(truncateLabel(headline.secondary), local.x, local.y + radius + 19);
+        }
       }
       // tier === 'dot': node circle only, already drawn above, no label -
       // this is now every node except the selected one, with no exception
@@ -1892,6 +1910,13 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     const bucket = riskBucket(node);
     const relationshipCount = currentEdges.filter((e) => e.from_id === node.id || e.to_id === node.id).length;
     const hasRevenue = Number.isFinite(node.revenue_at_risk);
+    // V1-UX-2E: same business-first headline as the on-canvas label, so
+    // hover and selection tell the same story; the raw canonical label
+    // (previously the tooltip's only title) is kept as a secondary line,
+    // and the object type renders as its human noun instead of a raw
+    // domain/snake_case type string.
+    const headline = universeNodeHeadline(node, objectTypeNoun);
+    const revenueAlreadyLeading = headline.primary.startsWith('$');
 
     tooltipEl.classList.remove('hidden');
     // Anchor below-right of the node by default; flip above if too close to
@@ -1902,12 +1927,13 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     tooltipEl.style.top = `${flipAbove ? screenY - radius - 10 : screenY + radius + 10}px`;
 
     tooltipEl.innerHTML = `
-      <div class="node-tooltip-title">${escapeHtml(node.label ?? node.id)}</div>
+      <div class="node-tooltip-title">${escapeHtml(headline.primary)}</div>
       <div class="node-tooltip-meta">
         <span class="node-tooltip-risk node-tooltip-risk--${bucket}">${escapeHtml(bucket)}</span>
-        <span class="node-tooltip-type">${escapeHtml(node.domain ?? node.type ?? '—')}</span>
+        <span class="node-tooltip-type">${escapeHtml(objectTypeNoun(node.type))}</span>
       </div>
-      ${hasRevenue ? `<div class="node-tooltip-line">$${Math.round(node.revenue_at_risk).toLocaleString()} at risk</div>` : ''}
+      ${headline.secondary ? `<div class="node-tooltip-line node-tooltip-line--muted">${escapeHtml(headline.secondary)}</div>` : ''}
+      ${hasRevenue && !revenueAlreadyLeading ? `<div class="node-tooltip-line">$${Math.round(node.revenue_at_risk).toLocaleString()} at risk</div>` : ''}
       <div class="node-tooltip-line">${relationshipCount} relationship${relationshipCount === 1 ? '' : 's'}</div>
       <div class="node-tooltip-hint">Full detail in Passport →</div>
     `;

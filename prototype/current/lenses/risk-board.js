@@ -42,6 +42,7 @@ import {
   FLIP_DURATION_MS,
   FLIP_EASING,
 } from './risk-board-layout.js';
+import { riskImpactTags } from '../engine/business-language.js';
 
 const BAND_LABEL = Object.freeze({
   critical: 'Critical',
@@ -429,7 +430,23 @@ export function mountRiskBoardLens(containerEl, callbacks) {
       `${cell.customer} commitment for ${cell.item_number}, risk state ${bandLabel}, revenue at risk ${formatCurrency(cell.revenue_at_risk, cell.currency)}`
     );
 
+    // V1-UX-2E: lead with WHY this card matters (named business-impact
+    // categories) before the who/what line below. riskImpactTags() always
+    // includes "Revenue at Risk" (a real figure) and "Customer Delivery at
+    // Risk" (true of every Risk Board cell by construction); it adds a
+    // third, more specific cause only when the cell's own evidence text
+    // actually names it - never a guess dressed up as certainty.
+    const impactTags = riskImpactTags(cell);
+
     el.innerHTML = `
+      <div class="risk-card-impact-tags">
+        ${impactTags
+          .map(
+            (tag, i) =>
+              `<span class="risk-impact-tag${i === 0 ? ' risk-impact-tag--primary' : ''}">${escapeHtml(tag)}</span>`
+          )
+          .join('')}
+      </div>
       <div class="risk-card-top">
         <span class="risk-card-dot"></span>
         <span class="risk-card-customer">${escapeHtml(cell.customer ?? '—')}</span>

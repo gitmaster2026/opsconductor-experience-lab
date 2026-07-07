@@ -84,7 +84,7 @@ function renderContextBlock(currentContext) {
                <span class="jarvis-selected-label">Selected</span>
                <p class="jarvis-selected-summary">${escapeHtml(ctx.selectedObjectSummary ?? ctx.selectedObjectId)}</p>
              </div>`
-          : `<p class="panel-note">Nothing selected. Click a node, cell, or Dashboard KPI to give Jarvis a subject.</p>`
+          : `<p class="panel-note">Nothing selected yet. Click any object in Universe, a card in Risk Board, or a KPI on the Dashboard to give Jarvis a subject.</p>`
       }
     </section>
   `;
