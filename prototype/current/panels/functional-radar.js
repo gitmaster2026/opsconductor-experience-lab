@@ -25,7 +25,7 @@
 
 import { buildFunctionalViewGroups } from '../engine/functional-view.js';
 import { buildContinuitySteps, defaultContinuityAction } from '../engine/lens-continuity.js';
-import { objectNoun, operationalSummary } from '../engine/operational-language.js';
+import { objectNoun, operationalSummary, domainLabel } from '../engine/operational-language.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -124,7 +124,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
         data-functional-radar-toggle
         aria-haspopup="dialog"
         aria-expanded="${isOpen ? 'true' : 'false'}"
-      >${activeFunctionKey ? 'Functional Radar · ' + escapeHtml(activeFunctionKey) : 'Functional Radar'}</button>
+      >${activeFunctionKey ? 'Functional Radar · ' + escapeHtml(domainLabel(activeFunctionKey)) : 'Functional Radar'}</button>
     `;
     toggleEl.querySelector('[data-functional-radar-toggle]')?.addEventListener('click', toggleOpen);
   }

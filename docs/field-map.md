@@ -33,6 +33,30 @@ nr04-canonical-universe.json columns: `business_impact_summary`,
 | Hover Preview `domain` / `objectKey` | passthrough of the node's real `domain` / `nr04_object_key` (already on the node via buildUniverseGraph's operational-objects loop), exposed for type-noun resolution | supported |
 | Workbench operational column labels (`FIELD_TERM` map) | presentation-only label overrides for common joined-dataset column names (`item_number` → "Item", `revenue_at_risk` → "Revenue at Risk", etc.) — the underlying column keys are unchanged | derived_supported |
 
+## Sprint V1-UX-2E — Operational Language & Progressive Disclosure additions
+
+Sprint V1-UX-2E is a presentation-layer sprint, same charter as UX-2C: it
+changes how already-supported fields are *rendered* — leading with business
+impact (money, customer, consequence) before implementation identifiers —
+not what fields exist. The new module
+`prototype/current/engine/business-language.js` is a sibling to
+`operational-language.js` (kept separate to preserve that module's own
+narrow "rephrase an existing token" charter): every function is a pure
+read-only transform over values already produced by `engine/derive.js` or
+already present on a Risk Board cell / Universe node. No new snapshot
+field, no new object type, no new relationship type, no schema/ontology
+change, and no `derive.js` edit at all this sprint.
+
+| UI / Presentation Field | Source / Derivation | Status |
+|---|---|---|
+| Universe node business headline (`universeNodeHeadline`) | pure function over the node's own real `revenue_at_risk` / `business_impact_summary` / `next_action_summary` / `customer` / `label` fields (all already on the node via `buildUniverseGraph()` — no single node shape carries all four, so the function degrades gracefully); the existing canonical `label` is kept as a secondary, muted line rather than removed | derived_supported |
+| Risk Board impact tags (`riskImpactTags`) | "Revenue at Risk" from the real `revenue_at_risk` figure; "Customer Delivery at Risk" is structurally true of every Risk Board cell by definition; at most one more specific cause tag (Supplier Delay / Engineering Change Required / Production Interruption) is added only when the cell's own `rootCauseSummary` / `evidenceSummary` text contains a matching keyword — never a guess with no textual support | derived_supported |
+| Evidence conclusion (`evidenceConclusion`) | promotes the first Evidence entry's real `evidence_summary` to a leading "Critical Finding" sentence; remaining entries stay as supporting detail — no new evidence field, no synthesized finding | derived_supported |
+| Transaction record label (`transactionRecordLabel`) | labels a Recommendation honestly as "Recommendation" (one of the brief's own named transaction types) with status/category, since this Lab has no real Sales Order / Purchase Order / Work Order / Reservation data (confirmed absent from `derive.js`) — no fabricated order type | derived_supported |
+| Source-record system category (`sourceSystemCategory`, `groupSourceRecordsBySystem`) | maps each entry's real `sourceTable` value to the business-facing system that already owns it (Planning / ERP / OpsConductor — MES/Quality/Engineering are reserved, unused vocabulary until a real source table maps to them); groups entries for display, raw `sourceTable`/`sourceRecordId` kept fully visible under each group | derived_supported |
+| Document purpose label (`documentPurposeLabel`) | relabels the already-real `system` assignment from `buildDocumentReferencesForObject()` (Windchill/MES/Inspection Reports/SAP/SharePoint/Network Folder) with the business purpose a document from that system would serve (Engineering Drawing / Production Record / Quality Report / Supplier Quote / Customer Contract / Supporting Record); `system` itself stays visible as a footer line | derived_supported |
+| Passport "Documents" section renamed "Supporting Documents"; recursive-investigation-card's "Representative document" layer renamed "Supporting documents" | title-only rename, per the brief; no field/behavior change beyond the label formatting above | derived_supported |
+
 ## V1-A Story Integrity additions
 
 The Experience Lab fixture files may include the following alignment-only fields to keep the HTML prototype synchronized with Sprint V1-A Demo Truth. These are frontend fixture annotations, not new production schema requirements.
