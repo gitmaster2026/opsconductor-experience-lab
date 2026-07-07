@@ -53,6 +53,7 @@ import {
 import { depthFilter, assignStratum, computeCameraFrame, naturalZoomIndexForNode, DEPTH_STRATA } from '../engine/camera.js';
 import { computeLabelPlan, shortCodeForNode, objectTypeNoun } from '../engine/labels.js';
 import { universeNodeHeadline } from '../engine/business-language.js';
+import { traceShape, resolveGrammarType } from '../engine/visual-grammar.js';
 
 // ---------------------------------------------------------------------------
 // Visual constants
@@ -1720,23 +1721,33 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       const renderColor = desaturateColor(color, STRATUM_GRAYSCALE_PCT[stratum] ?? 0);
 
       ctx.globalAlpha = finalAlpha;
-      ctx.beginPath();
-      ctx.arc(local.x, local.y, radius, 0, Math.PI * 2);
+      // Sprint V1-UX-2F (Operational Visual Grammar): draw the object's
+      // canonical SHAPE (its type) instead of a generic dot, so an object's
+      // class is recognizable on the Universe itself without hovering. Fill
+      // color (renderColor / riskBucket → operational state), halo, the
+      // selection/highlight stroke, size (radius) and circular hit-testing
+      // are all UNCHANGED — only the silhouette differs. The SAME
+      // engine/visual-grammar.js geometry feeds the DOM shape markers on
+      // every other surface, so a given object type looks identical
+      // everywhere. Even-odd fill renders interior windows (a ring, a nut,
+      // a folded-corner document) as holes.
+      const shapePath = new Path2D();
+      traceShape(resolveGrammarType(node), shapePath, local.x, local.y, radius);
       ctx.fillStyle = renderColor;
       ctx.shadowColor = isHighlighted ? resolveCssVar(canvasEl, '--cyan-accent', '#5ad1ff') : renderColor;
       ctx.shadowBlur = 6 + haloBoost + focusBoost + highlightBoost;
-      ctx.fill();
+      ctx.fill(shapePath, 'evenodd');
 
       if (isSelected) {
         ctx.lineWidth = 2.5;
         ctx.strokeStyle = resolveCssVar(canvasEl, '--cyan-accent', '#5ad1ff');
         ctx.shadowBlur = 0;
-        ctx.stroke();
+        ctx.stroke(shapePath);
       } else if (isHighlighted) {
         ctx.lineWidth = 1.75;
         ctx.strokeStyle = resolveCssVar(canvasEl, '--cyan-accent', '#5ad1ff');
         ctx.shadowBlur = 0;
-        ctx.stroke();
+        ctx.stroke(shapePath);
       }
       ctx.shadowBlur = 0;
 

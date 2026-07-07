@@ -43,6 +43,7 @@ import {
   FLIP_EASING,
 } from './risk-board-layout.js';
 import { riskImpactTags } from '../engine/business-language.js';
+import { grammarMarkerHtml } from '../engine/visual-grammar.js';
 
 const BAND_LABEL = Object.freeze({
   critical: 'Critical',
@@ -448,7 +449,7 @@ export function mountRiskBoardLens(containerEl, callbacks) {
           .join('')}
       </div>
       <div class="risk-card-top">
-        <span class="risk-card-dot"></span>
+        ${grammarMarkerHtml('commitment', { state: cell.risk_state, size: 14, title: 'Commitment' })}
         <span class="risk-card-customer">${escapeHtml(cell.customer ?? '—')}</span>
         <span class="risk-card-item">${escapeHtml(cell.item_number ?? '—')}</span>
         <span class="risk-card-revenue">${formatCurrency(cell.revenue_at_risk, cell.currency)}</span>

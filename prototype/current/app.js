@@ -65,6 +65,7 @@ import { mountFunctionalRadarPanel } from './panels/functional-radar.js';
 import { mountNavHistoryRail } from './panels/nav-history.js';
 import { mountReturnToUniverseButton } from './panels/return-to-universe.js';
 import { mountRelationshipLegend } from './panels/relationship-legend.js';
+import { mountOperationalGrammarLegend } from './panels/operational-grammar-legend.js';
 import { mountSavedViewsManager } from './engine/saved-views.js';
 import { defaultContinuityAction } from './engine/lens-continuity.js';
 
@@ -103,6 +104,7 @@ const els = {
   navHistoryRail: document.getElementById('navHistoryRail'),
   returnToUniverseControl: document.getElementById('returnToUniverseControl'),
   relationshipLegend: document.getElementById('relationshipLegend'),
+  operationalGrammarLegend: document.getElementById('operationalGrammarLegend'),
   nodeTooltip: document.getElementById('nodeTooltip'),
   hoverPreview: document.getElementById('hoverPreview'),
   savedViewsManager: document.getElementById('savedViewsManager'),
@@ -509,6 +511,13 @@ async function main() {
   const relationshipLegendPanel = mountRelationshipLegend(els.relationshipLegend, {
     getWorkspaceLens: () => store.getState().workspaceLens,
   });
+
+  // Sprint V1-UX-2F: the global "Operational Visual Grammar" legend — the
+  // on-screen key for the per-type shape + operational-state color used on
+  // every surface. Unlike the relationship legend it is NOT lens-gated (the
+  // object grammar appears everywhere), so it is mounted once in the toolbar
+  // and needs no per-render update (the grammar itself never changes).
+  mountOperationalGrammarLegend(els.operationalGrammarLegend);
 
   // --- Generic [data-select-id] hover wiring (V1-UX-1b Task 2) --------------
   //

@@ -355,6 +355,27 @@ live run. It is distinct from `ux_hypothesis` (a desired-but-unapproved UI
 field) - these fields are already approved/contracted by production's own
 Export Contract, just not yet exercised.
 
+## Operational Visual Grammar (V1-UX-2F)
+
+The Operational Visual Grammar (`engine/visual-grammar.js`) is a DERIVED
+VISUAL ATTRIBUTE layer, not a data source. It introduces no new source field
+and no new object type (rules #7 / #8): it maps fields the view-model already
+carries to a shape, a state color, and secondary badges, so an object's class
+is recognizable by appearance on every surface (Universe, Risk Board,
+Functional Radar, Timeline, Passport, Hover Preview, Text View).
+
+| UI attribute | Derived from (existing field) | Note |
+|---|---|---|
+| Object shape | `type` / `object_type` (+ `objectKey` prefix for the NR04 `other` catch-all; `domain` fallback) | Unique canonical silhouette per object type; resolution mirrors `operational-language.js` `objectNoun()`. One geometry is traced by both the Universe canvas (Path2D) and DOM markers (SVG), so a type looks identical everywhere. |
+| State color | `risk_state` (NR04 `severity`) | Mirrors `lenses/universe.js` `riskBucket()`/`RISK_COLOR_VAR` exactly (critical→--red, attention/elevated→--orange, watch→--yellow, neutral/info→--gray). Never the sole signal — shape + label carry meaning too. |
+| Status badge | `status` (open/mitigating/constrained/recovered/closed) + `risk_state='critical'` | Secondary only; derived from existing fields, never fabricated (unknown status → no badge). |
+| Business label | (unchanged) `operational-language.js` / `business-language.js` | Business meaning stays primary (V1-UX-2E). |
+| Canonical identifier | (unchanged) `sourceIdentifier` / `objectKey` / `id` | Stays secondary; never removed. |
+
+`engine/visual-grammar.js` is never imported by `engine/derive.js` and
+registers nothing in `KNOWN_OUTPUT_FIELDS`, so `scripts/verify-field-map.mjs`
+is unaffected (the same isolation the relationship-color language relies on).
+
 ## UX hypotheses
 
 Add any desired but unsupported field here instead of placing it directly in prototypes.

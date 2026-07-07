@@ -62,8 +62,9 @@
 // Relationship rows are additionally labeled with the same Probe verb so
 // the wording is consistent everywhere a related object can be opened.
 
-import { probeLabel } from '../engine/labels.js';
+import { probeLabel, objectTypeNoun } from '../engine/labels.js';
 import { renderRecursiveInvestigationCard } from './recursive-investigation-card.js';
+import { grammarMarkerHtml, grammarBadgeHtml } from '../engine/visual-grammar.js';
 import {
   relationshipLabel,
   sortRelationshipsStable,
@@ -112,6 +113,73 @@ function riskBucketClass(riskState) {
   return 'neutral';
 }
 
+// ---------------------------------------------------------------------------
+// Sprint V1-UX-2F follow-up: shared per-record Operational Visual Grammar
+// helpers.
+//
+// Both the classic Passport sections below (renderRelationshipsSection/
+// renderEvidenceSection/renderRecommendationsSection) AND
+// buildRecursiveModelFromPassport() (which feeds the embedded recursive-
+// investigation card) call these SAME functions for the SAME record kind.
+// That is what makes "the same relationship/evidence/recommendation record
+// has identical shape+color+badge in the classic list and in the recursive
+// card right beside it" true by construction - one call site per record
+// kind - rather than something that merely happens to agree today and could
+// silently drift apart in a future edit to only one of the two call sites.
+//
+// Source Records and Documents deliberately have NO such helper: neither is
+// a registered NR04 canonical object type (Source Records cites this Lab's
+// own table/id lineage; Documents is a synthetic representative external-
+// system link - see docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md) - giving
+// either a grammar shape would invent an object type the canonical data
+// does not have, which this sprint's brief explicitly rules out.
+
+/** Shape+color marker for a Relationships row's related object. No
+ * risk_state is available for the related object on this row today (the
+ * Passport relationship view-model carries relatedObjectType/Label/Id and
+ * the edge's relationshipType/direction only - confirmed against
+ * engine/derive.js - not the target node's own risk_state), so this always
+ * resolves the neutral state tint, exactly matching the shape-only
+ * treatment this section already used before this follow-up. */
+function relatedObjectMarker(rel) {
+  return grammarMarkerHtml(rel.relatedObjectType, { size: 13, title: probeLabel(rel.relatedObjectType) });
+}
+
+/** Shape+color marker for an Evidence entry. Evidence records carry no
+ * risk_state/severity field in this Lab's data (confirmed against
+ * src/data/evidence.json and derive.js's buildPassportViewModel), so this
+ * always resolves the neutral tint - consistent, never fabricated. */
+function evidenceMarker(ev) {
+  return grammarMarkerHtml('evidence', { state: ev?.risk_state ?? ev?.severity ?? null, size: 13, title: objectTypeNoun('evidence') });
+}
+
+/** Secondary badge for an Evidence entry, from whatever real status/risk
+ * fields the record actually carries (resolveBadges() returns '' when none
+ * apply - see engine/visual-grammar.js). */
+function evidenceBadgeHtml(ev) {
+  return grammarBadgeHtml(ev ?? {});
+}
+
+/** Shape+color marker for a Recommendation entry ("Transactions" in the
+ * recursive card, per V1-UX-2E's honest labeling of what this Lab actually
+ * has real data for). */
+function recommendationMarker(rec) {
+  return grammarMarkerHtml('recommendation', { state: rec?.risk_state ?? rec?.severity ?? null, size: 13, title: objectTypeNoun('recommendation') });
+}
+
+/** Secondary badge for a Recommendation entry. Note: this Lab's
+ * recommendations.json uses a decision-workflow status vocabulary
+ * (generated/pending_review_gated/accepted/...) distinct from the
+ * open/mitigating/constrained/recovered/closed operational vocabulary
+ * resolveBadges() recognizes (see engine/visual-grammar.js's STATUS_BADGE),
+ * so this currently renders empty for today's sample recommendation rows -
+ * correct (no invented match), not yet populated. Wired now so a future
+ * recommendation record using the recognized vocabulary renders a badge
+ * identically here and in the recursive card without any further change. */
+function recommendationBadgeHtml(rec) {
+  return grammarBadgeHtml(rec ?? {});
+}
+
 function renderOverviewSection(overview, businessImpact, nextAction, sourceIdentifier, objectKey) {
   // Sprint UX-2C: progressive detail — headline (type + label) first, then
   // the operational explanation (summary), then business context (impact /
@@ -122,7 +190,7 @@ function renderOverviewSection(overview, businessImpact, nextAction, sourceIdent
   const erpId = formatErpIdentifier(sourceIdentifier, objectKey);
   return `
     <header class="passport-overview">
-      <div class="passport-overview-type">${escapeHtml(typeNoun)}${domainText && domainText !== typeNoun ? ` · ${escapeHtml(domainText)}` : ''}</div>
+      <div class="passport-overview-type">${grammarMarkerHtml({ type: overview.objectType, objectKey, domain: overview.domain, risk_state: overview.risk_state }, { size: 15, lead: true, title: typeNoun })}${escapeHtml(typeNoun)}${domainText && domainText !== typeNoun ? ` · ${escapeHtml(domainText)}` : ''}</div>
       <h2 class="passport-overview-label">${escapeHtml(overview.label ?? overview.objectId ?? 'Untitled')}</h2>
       ${overview.summary ? `<p class="passport-overview-summary">${escapeHtml(overview.summary)}</p>` : ''}
       ${businessImpact ? `<p class="passport-overview-impact"><strong>Why it matters:</strong> ${escapeHtml(businessImpact)}</p>` : ''}
@@ -180,6 +248,7 @@ function renderRelationshipsSection(relationships) {
               return `
           <li>
             <button type="button" class="passport-relationship-item" data-select-id="${escapeHtml(rel.relatedObjectId)}" title="${escapeHtml(probeLabel(rel.relatedObjectType))}">
+              ${relatedObjectMarker(rel)}
               <span class="passport-relationship-dir">${rel.direction === 'outgoing' ? '→' : '←'}</span>
               <span class="passport-relationship-body">
                 <strong>${escapeHtml(rel.relatedObjectLabel ?? rel.relatedObjectId)}</strong>
@@ -215,8 +284,8 @@ function renderRecommendationsSection(recommendations) {
             (rec) => `
           <li class="passport-entry ${rec.visibleAtSlice ? '' : 'is-dormant'}">
             <div class="passport-entry-head">
-              <span class="passport-entry-tag">${escapeHtml((rec.category ?? 'recommendation').replace(/_/g, ' '))}</span>
-              <span class="passport-entry-status">${escapeHtml(rec.status ?? '—')}</span>
+              <span class="ovg-entry-tag-group">${recommendationMarker(rec)}<span class="passport-entry-tag">${escapeHtml((rec.category ?? 'recommendation').replace(/_/g, ' '))}</span></span>
+              <span class="ovg-entry-tag-group">${recommendationBadgeHtml(rec)}<span class="passport-entry-status">${escapeHtml(rec.status ?? '—')}</span></span>
             </div>
             ${rec.evidence_summary ? `<p class="passport-entry-summary">${escapeHtml(rec.evidence_summary)}</p>` : ''}
             <div class="passport-entry-foot">
@@ -256,8 +325,8 @@ function renderEvidenceSection(evidence) {
             (ev) => `
           <li class="passport-entry ${ev.visibleAtSlice ? '' : 'is-dormant'}">
             <div class="passport-entry-head">
-              <span class="passport-entry-tag">${escapeHtml((ev.evidence_type ?? 'evidence').replace(/_/g, ' '))}</span>
-              <span class="citation-chip">${escapeHtml(ev.id ?? '')}</span>
+              <span class="ovg-entry-tag-group">${evidenceMarker(ev)}<span class="passport-entry-tag">${escapeHtml((ev.evidence_type ?? 'evidence').replace(/_/g, ' '))}</span></span>
+              <span class="ovg-entry-tag-group">${evidenceBadgeHtml(ev)}<span class="citation-chip">${escapeHtml(ev.id ?? '')}</span></span>
             </div>
             ${ev.evidence_summary ? `<p class="passport-entry-summary">${escapeHtml(ev.evidence_summary)}</p>` : ''}
             <div class="passport-entry-foot">
@@ -303,7 +372,7 @@ function renderOperationalHistorySection(operationalHistory) {
           .map(
             (ev) => `
           <li class="passport-history-item">
-            <div class="passport-history-marker"></div>
+            <div class="passport-history-marker">${ev.event_type === 'recommendation_generated' ? grammarMarkerHtml('recommendation', { size: 12, title: 'Recommendation' }) : ''}</div>
             <div class="passport-history-body">
               <div class="passport-history-head">
                 <strong>${escapeHtml(ev.title ?? ev.event_type ?? 'Event')}</strong>
@@ -481,9 +550,19 @@ function renderDocumentsSection(documents) {
 
 function buildRecursiveModelFromPassport(passport) {
   const overview = passport?.overview ?? {};
-  const relationships = (passport?.relationships ?? [])
-    .slice(0, 4)
-    .map((rel) => `${rel.relatedObjectLabel ?? rel.relatedObjectId} — ${relationshipLabel(rel.relationshipType, rel.direction)}`);
+  // Sprint V1-UX-2F follow-up: Related Objects/Evidence/Transactions now
+  // carry the SAME shape+color+badge marker as the classic sections below
+  // (relatedObjectMarker()/evidenceMarker()+evidenceBadgeHtml()/
+  // recommendationMarker()+recommendationBadgeHtml() - the exact shared
+  // functions those sections call), wrapped as a pre-built `{html}` item
+  // recursive-investigation-card.js's renderList() now knows how to render
+  // verbatim. This is what makes a given relationship/evidence/
+  // recommendation record show IDENTICAL visual identity here and in the
+  // classic list beside it - one call site per record kind, not two
+  // independently-formatted copies.
+  const relationships = (passport?.relationships ?? []).slice(0, 4).map((rel) => ({
+    html: `${relatedObjectMarker(rel)}${escapeHtml(`${rel.relatedObjectLabel ?? rel.relatedObjectId} — ${relationshipLabel(rel.relationshipType, rel.direction)}`)}`,
+  }));
   // V1-UX-2E: lead with a real finding sentence (never fabricated - see
   // engine/business-language.js's evidenceConclusion()); the remaining
   // entries become supporting detail instead of repeating the lead entry.
@@ -492,23 +571,42 @@ function buildRecursiveModelFromPassport(passport) {
   );
   const evidence = supportingEvidence
     .slice(0, 4)
-    .map((ev) => ev.evidence_summary ?? ev.id)
-    .filter(Boolean);
+    .filter((ev) => Boolean(ev?.evidence_summary ?? ev?.id))
+    .map((ev) => {
+      // Sprint V1-UX-2F follow-up: keep the secondary ID visible even when a
+      // summary exists, mirroring the Transactions layer's own established
+      // "primary · reference" pattern just below (V1-UX-2E: "the raw id is
+      // demoted to a trailing reference instead of the row's only
+      // identity") - previously this branch DROPPED the id entirely once a
+      // summary was present, unlike the classic Evidence section (which
+      // always shows id in its own .citation-chip regardless of summary).
+      // Closes that gap so the secondary ID stays visible here too.
+      const text = ev.evidence_summary && ev.id && ev.evidence_summary !== ev.id
+        ? `${ev.evidence_summary} · ${ev.id}`
+        : (ev.evidence_summary ?? ev.id);
+      return { html: `${evidenceMarker(ev)}${evidenceBadgeHtml(ev)}${escapeHtml(text)}` };
+    });
   // V1-UX-2E: label what is actually here - a governed Recommendation, one
   // of the brief's own named transaction types - rather than an order type
   // this Lab has no real data for; the raw id is demoted to a trailing
   // reference instead of the row's only identity.
   const transactions = (passport?.recommendations ?? []).slice(0, 3).map((rec) => {
     const { primary, reference } = transactionRecordLabel(rec);
-    return reference ? `${primary} · ${reference}` : primary;
+    const text = reference ? `${primary} · ${reference}` : primary;
+    return { html: `${recommendationMarker(rec)}${recommendationBadgeHtml(rec)}${escapeHtml(text)}` };
   });
   // V1-UX-2E: lead with the business-facing system category (Planning/ERP/
-  // OpsConductor), raw table/record id demoted to follow it.
+  // OpsConductor), raw table/record id demoted to follow it. Deliberately
+  // plain text, no grammar marker - Source Records is not a registered NR04
+  // canonical object type (see the shared-helpers header comment above).
   const sourceRecords = (passport?.sourceRecords ?? [])
     .slice(0, 4)
     .map((rec) => `${sourceSystemCategory(rec.sourceTable)} — ${rec.sourceTable ?? 'source'} / ${rec.sourceRecordId ?? 'record'}`);
   // V1-UX-2E: lead with the document's business purpose; system stays
   // visible as a trailing location note, per "location remains visible."
+  // Deliberately plain text, no grammar marker - same reasoning as
+  // sourceRecords above (Documents is not a registered NR04 canonical
+  // object type either).
   const documents = (passport?.documents ?? [])
     .slice(0, 3)
     .map((doc) => `${documentPurposeLabel(doc)} — ${doc.path ?? doc.label ?? 'representative reference'} (${doc.system ?? 'Network Folder'})`);

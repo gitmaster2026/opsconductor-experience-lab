@@ -1,0 +1,220 @@
+/* operational-visual-grammar.css
+ *
+ * Sprint V1-UX-2F — Operational Visual Grammar presentation layer.
+ *
+ * A NEW stylesheet (linked from index.html alongside styles.css and
+ * shared-investigation-state.css) so the 99KB styles.css is left untouched.
+ * Everything here reuses the existing design tokens (--red/--orange/
+ * --yellow/--gray for operational state, --panel-*/--card-*/--text-* for
+ * chrome), with literal fallbacks so it degrades gracefully if a token is
+ * absent. No new color/type/radius language is introduced.
+ *
+ * Two concerns:
+ *   1. .ovg-marker — the inline object-type shape marker used on every DOM
+ *      surface (Passport, Risk Board, Functional Radar, Timeline, Hover
+ *      Preview, Text View). Shape fill is currentColor; the state class sets
+ *      the color, so shape (type) and color (state) are independent — color
+ *      is never the only signal.
+ *   2. The "Operational Visual Grammar" legend (toolbar toggle + flyout).
+ */
+
+/* --- Inline shape marker ------------------------------------------------- */
+.ovg-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  line-height: 0;
+  color: var(--gray, #9aa9b8);
+  flex: none;
+}
+.ovg-marker .ovg-shape-svg {
+  display: block;
+}
+/* When a marker leads a label/title, give it breathing room. */
+.ovg-marker--lead {
+  margin-right: 7px;
+}
+
+/* State tint — the SAME tokens lenses/universe.js fills nodes with, so a
+ * shape's color is identical on the canvas and in a list. */
+.ovg-state-critical { color: var(--red, #ef5350); }
+.ovg-state-elevated { color: var(--orange, #f0904a); }
+.ovg-state-watch    { color: var(--yellow, #e8c34a); }
+.ovg-state-neutral  { color: var(--gray, #9aa9b8); }
+
+/* --- Secondary status badges --------------------------------------------- */
+.ovg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.ovg-badge--critical { color: var(--red, #ef5350); }
+.ovg-badge--elevated { color: var(--orange, #f0904a); }
+.ovg-badge--watch    { color: var(--yellow, #e8c34a); }
+.ovg-badge--neutral  { color: var(--text-secondary, #9aa9b8); }
+
+/* --- Marker/badge + existing-tag grouping ---------------------------------
+ * Sprint V1-UX-2F follow-up: several existing rows (e.g. Passport's
+ * `.passport-entry-head`) use `justify-content: space-between` across
+ * exactly two children. Inserting a new marker/badge as a bare third child
+ * would break that two-group distribution. This class groups a new
+ * marker/badge with its adjacent EXISTING tag/status/citation span into one
+ * flex item, so space-between still sees only two groups and no existing
+ * layout rule needs to change - purely additive, no redesign. */
+.ovg-entry-tag-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* --- Timeline history marker: host the event shape in the existing dot --- */
+.passport-history-marker .ovg-marker {
+  color: var(--gray, #9aa9b8);
+}
+
+/* --- The "Operational Visual Grammar" legend (toolbar) ------------------- */
+.ovg-legend {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.ovg-legend-toggle {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-secondary, #9aa9b8);
+  background: var(--card-bg, rgba(255, 255, 255, 0.035));
+  border: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  border-radius: 8px;
+  padding: 5px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.ovg-legend-toggle:hover,
+.ovg-legend-toggle[aria-expanded='true'] {
+  color: var(--text-primary, #e6f0fa);
+  border-color: var(--cyan-accent, #5ad1ff);
+  background: var(--card-bg-hover, rgba(255, 255, 255, 0.06));
+}
+.ovg-legend-toggle:focus-visible {
+  outline: 2px solid var(--cyan-accent, #5ad1ff);
+  outline-offset: 2px;
+}
+
+.ovg-legend-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: 580px;
+  max-width: min(580px, calc(100vw - 32px));
+  max-height: 72vh;
+  overflow-y: auto;
+  background: var(--panel-bg, rgba(14, 21, 33, 0.98));
+  border: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 20px 54px -14px rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: default;
+}
+.ovg-legend-intro {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary, #9aa9b8);
+  margin-bottom: 14px;
+}
+.ovg-legend-intro strong {
+  color: var(--text-primary, #e6f0fa);
+  font-weight: 600;
+}
+.ovg-legend-family {
+  margin-top: 14px;
+}
+.ovg-legend-family:first-of-type {
+  margin-top: 0;
+}
+.ovg-legend-family-title {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #9aa9b8);
+  border-bottom: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  padding-bottom: 5px;
+}
+.ovg-legend-items {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 16px;
+}
+.ovg-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--text-primary, #e6f0fa);
+}
+.ovg-legend-item .ovg-marker {
+  color: var(--label-color, rgba(230, 240, 250, 0.92));
+}
+.ovg-legend-item-label {
+  min-width: 0;
+}
+
+.ovg-legend-states {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+.ovg-legend-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.ovg-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: currentColor;
+  flex: none;
+  box-shadow: 0 0 8px 0 currentColor;
+}
+.ovg-legend-state-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.ovg-legend-state-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary, #e6f0fa);
+}
+.ovg-legend-state-note {
+  font-size: 10.5px;
+  color: var(--text-secondary, #9aa9b8);
+}
+
+@media (max-width: 640px) {
+  .ovg-legend-panel {
+    right: auto;
+    left: 0;
+  }
+  .ovg-legend-items,
+  .ovg-legend-states {
+    grid-template-columns: 1fr;
+  }
+}

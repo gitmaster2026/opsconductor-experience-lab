@@ -26,6 +26,7 @@
 import { buildFunctionalViewGroups } from '../engine/functional-view.js';
 import { buildContinuitySteps, defaultContinuityAction } from '../engine/lens-continuity.js';
 import { objectNoun, operationalSummary, domainLabel } from '../engine/operational-language.js';
+import { grammarMarkerHtml } from '../engine/visual-grammar.js';
 
 function escapeHtml(value) {
   return String(value)
@@ -191,6 +192,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
                       <li class="functional-radar-object-row">
                         <button type="button" class="functional-radar-object" data-select-id="${escapeHtml(obj.id)}" data-continuity-action="default">
                           <span class="functional-radar-object-top">
+                            ${grammarMarkerHtml({ type: obj.type, objectKey: obj.objectKey, domain: obj.domain, risk_state: obj.riskState }, { size: 13, lead: true, title: typeNoun })}
                             <span class="functional-radar-object-label">${escapeHtml(obj.label)}</span>
                             ${typeNoun && typeNoun !== group.label ? `<span class="functional-radar-object-type">${escapeHtml(typeNoun)}</span>` : ''}
                             ${riskBadgeHtml(obj.riskState)}
