@@ -40,6 +40,31 @@
 // (the SAME bundle.universe.nodes every lens already reads) rather than
 // the raw snapshot, so this module never duplicates buildUniverseGraph()'s
 // own joins/merges.
+//
+// V1-UX-2D (Functional Radar becomes a full-screen workspace): this module
+// gained a second entry point, buildFunctionalKpiCards(), alongside the
+// original buildFunctionalViewGroups() above. buildFunctionalViewGroups()'s
+// existing output shape/behavior is UNCHANGED - it still groups by raw
+// `domain` and returns a risk-ranked, capped topObjects list per function,
+// exactly as before (its own test suite, test/engine-functional-view.test.mjs,
+// asserts this). buildFunctionalKpiCards() is a NEW, separate view over the
+// same domain-filtered member set: it groups those members by their
+// RESOLVED grammar type (engine/visual-grammar.js's resolveGrammarType(),
+// not the raw object_type string) so a KPI card exists per distinct real
+// object CLASS within the function, not per raw type token. This matters
+// because several real objects in this dataset carry object_type: 'other'
+// (a NR04-canonical catch-all) - grouping by the raw type would collapse
+// e.g. Manufacturing's 4 real Plant objects and 3 real Work Center objects
+// (all object_type: 'other') into one undifferentiated "Other" bucket,
+// which is exactly the failure mode this function exists to avoid.
+//
+// The same riskUrgencyRank()-based tally logic buildFunctionalViewGroups()
+// already used inline for its own `riskCounts` field is now factored out
+// into the shared riskBucketCounts(members) helper below, so both
+// functions share one implementation rather than keeping two copies of the
+// same critical/elevated/watch fold in sync by hand.
+
+import { resolveGrammarType } from './visual-grammar.js';
 
 /**
  * The five functions named in the V1-UX-2B brief, each mapped to the real
@@ -80,6 +105,42 @@ const RISK_URGENCY_RANK_FALLBACK = 4;
 function riskUrgencyRank(node) {
   const riskState = String(node.risk_state ?? node.riskState ?? '').toLowerCase();
   return RISK_URGENCY_RANK[riskState] ?? RISK_URGENCY_RANK_FALLBACK;
+}
+
+/**
+ * @typedef {Object} RiskBucketCounts
+ * @property {number} critical
+ * @property {number} elevated - includes the real "attention" synonym.
+ * @property {number} watch
+ */
+
+/**
+ * Tally a member list into the shared critical/elevated/watch risk-bucket
+ * counts. This is the ONE implementation both buildFunctionalViewGroups()
+ * (its `riskCounts` field) and buildFunctionalKpiCards() (its per-card
+ * criticalCount/elevatedCount/watchCount fields) call, extracted so the
+ * critical/elevated("attention")/watch fold is defined in exactly one
+ * place rather than duplicated inline in two functions that must agree.
+ *
+ * Pure, deterministic, never mutates `members`. Ignores any risk_state
+ * value outside the three named buckets (normal/green/unset/anything
+ * else) - those members still count toward a group's total `count`
+ * wherever the caller tracks that separately, they simply do not
+ * contribute to any of these three named buckets.
+ *
+ * @param {Array<{ risk_state?: string|null, riskState?: string|null }>} members
+ * @returns {RiskBucketCounts}
+ */
+export function riskBucketCounts(members) {
+  const counts = { critical: 0, elevated: 0, watch: 0 };
+  if (!Array.isArray(members)) return counts;
+  for (const node of members) {
+    const riskState = String(node?.risk_state ?? node?.riskState ?? '').toLowerCase();
+    if (riskState === 'critical') counts.critical += 1;
+    else if (riskState === 'elevated' || riskState === 'attention') counts.elevated += 1;
+    else if (riskState === 'watch') counts.watch += 1;
+  }
+  return counts;
 }
 
 /**
@@ -139,13 +200,7 @@ export function buildFunctionalViewGroups(nodes, options) {
       (node) => node && typeof node.id === 'string' && group.domainValues.includes(String(node.domain ?? ''))
     );
 
-    const riskCounts = { critical: 0, elevated: 0, watch: 0 };
-    for (const node of members) {
-      const riskState = String(node.risk_state ?? node.riskState ?? '').toLowerCase();
-      if (riskState === 'critical') riskCounts.critical += 1;
-      else if (riskState === 'elevated' || riskState === 'attention') riskCounts.elevated += 1;
-      else if (riskState === 'watch') riskCounts.watch += 1;
-    }
+    const riskCounts = riskBucketCounts(members);
 
     const sortedMembers = [...members].sort((a, b) => {
       const urgencyDiff = riskUrgencyRank(a) - riskUrgencyRank(b);
@@ -179,4 +234,167 @@ export function buildFunctionalViewGroups(nodes, options) {
       topObjects,
     };
   });
+}
+
+// ---------------------------------------------------------------------------
+// buildFunctionalKpiCards() - V1-UX-2D Functional Radar workspace
+// ---------------------------------------------------------------------------
+
+/**
+ * @typedef {Object} FunctionalKpiCard
+ * @property {string} objectType - the RESOLVED grammar type key (e.g.
+ *   'plant', 'work_center', 'purchase_order') - never the raw object_type
+ *   string when that raw value is the 'other' catch-all. Use this as the
+ *   stable identity for `activeObjectTypeFilter` (panels/functional-
+ *   radar.js): filtering the function's List View to this card means
+ *   "every member whose OWN resolved grammar type equals this value",
+ *   computed identically via resolveGrammarType(member) at filter time.
+ * @property {string} noun - display noun for the card title (operational-
+ *   language.js's objectNoun(), given the resolved objectType and, when
+ *   useful, a representative member so an `other`-typed member's noun can
+ *   still disambiguate via its own domain/object_key - see objectNoun()'s
+ *   own `other` handling).
+ * @property {number} count - total members of this resolved grammar type
+ *   within the function (not capped/truncated - a KPI card always reports
+ *   its true total, unlike topObjects above).
+ * @property {number} criticalCount
+ * @property {number} elevatedCount - includes the real "attention" synonym.
+ * @property {number} watchCount
+ */
+
+/**
+ * Build one KPI card per distinct RESOLVED grammar type present among a
+ * single function's member objects - the Functional Radar workspace's
+ * default Overview view (see panels/functional-radar.js). Each card's
+ * `count`/`criticalCount`/`elevatedCount`/`watchCount` are real object-
+ * count and risk_state-bucket metrics (this dataset carries no
+ * `revenue_at_risk` field on these narrative/NR04-canonical objects - that
+ * field only exists on the structurally different commitment_risk_cell
+ * nodes Risk Board consumes - so a KPI card here never fabricates a dollar
+ * figure it cannot support).
+ *
+ * Deliberately groups by resolveGrammarType(member), NOT by the raw
+ * `type`/`object_type` string: several real objects in this dataset carry
+ * `object_type: 'other'` (the NR04-canonical catch-all for
+ * plant/work-center/customer/supplier/product/program/asset/employee
+ * directory rows) - grouping by the raw string would collapse all of a
+ * function's `other`-typed objects (which can be several genuinely
+ * different real-world classes, e.g. Manufacturing's real Plant objects
+ * and real Work Center objects both carry object_type: 'other') into one
+ * undifferentiated "Other" card. resolveGrammarType() already knows how to
+ * disambiguate `other` via the object's `objectKey`/`nr04_object_key`
+ * prefix or its `domain` (see engine/visual-grammar.js), so grouping by its
+ * return value gives one precise card per real object class instead.
+ *
+ * Pure function: never mutates `nodes`; deterministic ordering (by
+ * descending count, then alphabetically by noun, then by objectType key -
+ * see below - so ties never depend on object insertion order in a way a
+ * caller could not reproduce by re-sorting the same fields).
+ *
+ * Never drops or crashes on a thin function (e.g. Planning's single real
+ * object in the current dataset still produces exactly one KPI card with
+ * count: 1) - this mirrors buildFunctionalViewGroups()'s own "gracefully
+ * degrade, never omit" contract above, just at the per-type-within-
+ * function granularity instead of the per-function granularity.
+ *
+ * @param {Array<Object>} nodes - the SAME buildUniverseGraph() output
+ *   nodes buildFunctionalViewGroups() takes (bundle.universe.nodes).
+ * @param {string} functionKey - one of FUNCTIONAL_VIEW_GROUPS' `key`
+ *   values ('engineering'|'planning'|'manufacturing'|'procurement'|
+ *   'quality'). An unrecognized key returns an empty array rather than
+ *   throwing, since a caller may pass a still-loading/transient value.
+ * @returns {FunctionalKpiCard[]}
+ */
+export function buildFunctionalKpiCards(nodes, functionKey) {
+  if (!Array.isArray(nodes)) {
+    throw new Error('buildFunctionalKpiCards: nodes must be an array');
+  }
+  const group = FUNCTIONAL_VIEW_GROUPS.find((g) => g.key === functionKey);
+  if (!group) return [];
+
+  const members = nodes.filter(
+    (node) => node && typeof node.id === 'string' && group.domainValues.includes(String(node.domain ?? ''))
+  );
+
+  /** @type {Map<string, Object[]>} resolved grammar type -> its member nodes */
+  const membersByType = new Map();
+  for (const node of members) {
+    const grammarType = resolveGrammarType(node);
+    if (!membersByType.has(grammarType)) membersByType.set(grammarType, []);
+    membersByType.get(grammarType).push(node);
+  }
+
+  const cards = [...membersByType.entries()].map(([objectType, typeMembers]) => {
+    const counts = riskBucketCounts(typeMembers);
+    // objectNoun() takes the raw type token, not the resolved grammar
+    // type - engine/operational-language.js's own gap-filler map is keyed
+    // on the SAME grammar-type vocabulary (eco/ncr/capa/mrb/work_order/
+    // purchase_order/plant/work_center/...) for exactly this reason (see
+    // that module's header: "kept 1:1 with engine/visual-grammar.js's
+    // resolveGrammarType() so shape and noun always agree"), so passing
+    // the resolved type straight through gives the correct noun without
+    // this module needing its own noun table.
+    return {
+      objectType,
+      noun: resolveCardNoun(objectType),
+      count: typeMembers.length,
+      criticalCount: counts.critical,
+      elevatedCount: counts.elevated,
+      watchCount: counts.watch,
+    };
+  });
+
+  return cards.sort((a, b) => {
+    const countDiff = b.count - a.count;
+    if (countDiff !== 0) return countDiff;
+    const nounDiff = a.noun.localeCompare(b.noun);
+    if (nounDiff !== 0) return nounDiff;
+    return a.objectType.localeCompare(b.objectType);
+  });
+}
+
+// Deliberately a tiny, self-contained noun table (rather than importing
+// engine/operational-language.js's objectNoun() here) so this module keeps
+// its existing "pure primitives, zero sibling-engine imports beyond
+// visual-grammar.js" contract (the SAME contract this file's own header
+// already documents: "no import of engine/state.js or engine/derive.js").
+// Every key here is a resolveGrammarType() output value actually observed
+// in the real merged dataset for these 5 functions (see
+// test/engine-functional-view.test.mjs's real-dataset regression tests);
+// an unrecognized resolved type still degrades to a readable title-cased
+// label rather than throwing or rendering blank.
+const CARD_NOUN = Object.freeze({
+  eco: 'Engineering Change',
+  validation_plan: 'Validation Plan',
+  work_center: 'Work Center',
+  evidence: 'Evidence',
+  recommendation: 'Recommendation',
+  work_order: 'Work Order',
+  plant: 'Site',
+  item: 'Item',
+  demand_signal: 'Demand Signal',
+  allocation: 'Allocation',
+  inventory: 'Inventory Position',
+  shortage_exception: 'Shortage Exception',
+  purchase_order: 'Purchase Order',
+  ncr: 'NCR',
+  capa: 'CAPA',
+  mrb: 'Material Review Board',
+  commitment: 'Commitment',
+  customer: 'Customer',
+  supplier: 'Supplier',
+  organization: 'Organization',
+  asset: 'Asset Group',
+  program: 'Program',
+  shipment: 'Shipment',
+  employee: 'Person',
+  operational_object: 'Operational Object',
+});
+
+function resolveCardNoun(resolvedGrammarType) {
+  if (CARD_NOUN[resolvedGrammarType]) return CARD_NOUN[resolvedGrammarType];
+  return String(resolvedGrammarType)
+    .split('_')
+    .map((part) => (part.length > 0 ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(' ');
 }

@@ -1,0 +1,186 @@
+/* risk-board-recursion.css
+ *
+ * Recursive Risk Board — site-entry strip + scope breadcrumb.
+ *
+ * A NEW stylesheet (linked from index.html alongside styles.css,
+ * shared-investigation-state.css, and operational-visual-grammar.css) so
+ * the 99KB styles.css is left untouched, mirroring this codebase's own
+ * precedent (operational-visual-grammar.css / shared-investigation-state.css
+ * both put substantial new feature CSS in their own linked file rather
+ * than growing styles.css).
+ *
+ * Every color/spacing/radius value here reuses an existing design token
+ * from styles.css's :root block (--text-primary/--text-secondary/
+ * --cyan-accent/--panel-bg/--panel-border/--card-bg/--card-bg-hover, plus
+ * the shared risk tokens --red/--orange/--yellow/--green/--gray) or an
+ * existing sizing convention lifted directly from lenses/risk-board.js's
+ * own .risk-card/.risk-band-row rules in styles.css (10px card radius,
+ * the 9.5px-12.5px font-size range, the .risk-card-ref mono/secondary
+ * treatment, the cyan-accent selection glow) — no new color or type
+ * vocabulary is introduced. Literal fallbacks are included throughout so
+ * this degrades gracefully if a token is ever renamed/removed, matching
+ * operational-visual-grammar.css's own fallback convention.
+ *
+ * Two concerns:
+ *   1. .risk-site-strip / .risk-site-chip — the Level 0 "Enterprise" site
+ *      entry points (2 real sites: PLT-200 / PLT-300), business-first
+ *      (the site's business name leads; the plant code is demoted to
+ *      small secondary reference text, the same treatment
+ *      .risk-card-ref already gives the RB-* commitment id).
+ *   2. .risk-scope-breadcrumb — the Level 1 "Enterprise › <Site>" back
+ *      affordance shown only while a site scope is active.
+ */
+
+/* --- Site-entry strip (Level 0 only) -------------------------------------- */
+
+.risk-site-strip {
+  border-bottom: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  padding: 2px 0 18px;
+  margin-bottom: 4px;
+}
+
+.risk-site-strip.hidden {
+  display: none;
+}
+
+/* Fewer than 2 real sites to narrow by (e.g. a stale bundle before the
+   site/siteLabel fields land, or a future dataset with only one site) —
+   stay honest and render nothing rather than a single meaningless chip. */
+.risk-site-strip.is-empty {
+  display: none;
+}
+
+.risk-site-strip-header {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary, #9aa9b8);
+  margin-bottom: 10px;
+}
+
+.risk-site-strip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.risk-site-chip {
+  appearance: none;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  border-radius: 10px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.035));
+  color: var(--text-primary, #e7eef6);
+  cursor: pointer;
+  padding: 9px 14px 9px 11px;
+  min-width: 220px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.risk-site-chip:hover,
+.risk-site-chip:focus-visible {
+  background: var(--card-bg-hover, rgba(255, 255, 255, 0.06));
+  border-color: var(--cyan-accent, #5ad1ff);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--cyan-accent, #5ad1ff);
+}
+
+.risk-site-chip .ovg-marker {
+  color: var(--cyan-accent, #5ad1ff);
+  flex-shrink: 0;
+}
+
+.risk-site-chip-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Business-first: the site's real name is the prominent line. */
+.risk-site-chip-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary, #e7eef6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The plant code + count are demoted secondary metadata, matching
+   .risk-card-ref's muted/mono treatment of the RB-* commitment id. */
+.risk-site-chip-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--text-secondary, #9aa9b8);
+}
+
+.risk-site-chip-code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  opacity: 0.85;
+}
+
+.risk-site-chip-meta-sep {
+  opacity: 0.6;
+}
+
+.risk-site-chip-count {
+  white-space: nowrap;
+}
+
+/* --- Scope breadcrumb (Level 1 only) -------------------------------------- */
+
+.risk-scope-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  margin-bottom: 14px;
+}
+
+.risk-scope-breadcrumb.hidden {
+  display: none;
+}
+
+.risk-scope-breadcrumb-back {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 3px 4px;
+  margin: -3px -4px;
+  color: var(--cyan-accent, #5ad1ff);
+  cursor: pointer;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.risk-scope-breadcrumb-back:hover,
+.risk-scope-breadcrumb-back:focus-visible {
+  background: rgba(90, 209, 255, 0.1);
+  outline: none;
+}
+
+.risk-scope-breadcrumb-sep {
+  color: var(--text-secondary, #9aa9b8);
+  opacity: 0.6;
+}
+
+.risk-scope-breadcrumb-current {
+  color: var(--text-primary, #e7eef6);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .risk-site-chip {
+    min-width: 0;
+    width: 100%;
+  }
+}

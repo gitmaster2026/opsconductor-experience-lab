@@ -143,6 +143,7 @@ The Risk Board is a commitment-level lens over the same operational dataset.
 | Required Date | commitment / demand signal date | supported |
 | Root Cause Summary | related purchase order, inventory, allocation, engineering change, quality event, or evidence summary | derived_supported |
 | Risk Board Sparkline | per-commitment risk_state sequence across all time_slices, derived from `risk-board.json` risk_state at each `time-slices.json` slice | derived_supported |
+| Site (V1-UX-2H) | joined via `commitmentScopeDescriptors()` (the same commitment -> site join `buildScopeHierarchy()`/`buildScopeFilter()` already use), site code (`PLT-200`/`PLT-300`) plus `PLANT_DISPLAY_LABELS` display name - powers Risk Board's own LOCAL Enterprise -> Site recursive narrowing (`lenses/risk-board.js`), independent of the shared global Operational Scope | derived_supported |
 
 ## Commitment Health Radar fields
 
@@ -208,6 +209,28 @@ field, no renamed/invented domain value, no change to `engine/derive.js`.
 | Function group risk counts (critical/elevated/watch) | `risk_state` passthrough, tallied per group - same field Risk Board / Universe already use | derived_supported |
 | Per-object owner / next action / business impact | `owner_name` / `next_action_summary` / `business_impact_summary` passthrough, identical real columns to Hover Passport Preview below | supported |
 | Empty-function state (0 matching nodes) | explicit, honest per-function empty note - never a fabricated or hidden row | derived_supported |
+
+### V1-UX-2H additions (Functional Radar workspace)
+
+The Functional Radar workspace conversion (full-screen per-function
+investigation, KPI-card overview, List View, Relationship View) adds no
+new snapshot field and no `engine/derive.js` change - `buildFunctionalKpiCards()`
+(new, `engine/functional-view.js`) is a pure re-grouping of the SAME nodes
+`buildFunctionalViewGroups()` already reads, keyed by each object's
+resolved Operational Visual Grammar type (`engine/visual-grammar.js`'s
+`resolveGrammarType()`) rather than the raw `object_type` string, so
+`object_type: "other"` objects split into their true resolved classes
+instead of collapsing into one undifferentiated card. The List View reuses
+`engine/filterable-table.js`; the Relationship View is a one-hop walk over
+the already-derived `bundle.universe.nodes`/`edges` (not
+`buildRelationshipDataset()`, which is gated by the timeline's reveal logic
+and would render empty for real data at every slice - a one-hop walk over
+the merged graph avoids that gate honestly rather than working around it).
+
+| UI Field | Source / Derivation | Status |
+|---|---|---|
+| KPI card counts / critical-elevated-watch sub-metrics | `object_type`(resolved)/`risk_state` passthrough and tally, identical fields to the existing Functional Radar group counts above | derived_supported |
+| Relationship View entries | one-hop edges from `bundle.universe.edges` among the current function's own object ids | derived_supported |
 
 ## Hover Passport Preview fields
 
@@ -375,6 +398,23 @@ Functional Radar, Timeline, Passport, Hover Preview, Text View).
 `engine/visual-grammar.js` is never imported by `engine/derive.js` and
 registers nothing in `KNOWN_OUTPUT_FIELDS`, so `scripts/verify-field-map.mjs`
 is unaffected (the same isolation the relationship-color language relies on).
+
+## V1-UX-2H — Cross-Lens Investigation UX Convergence
+
+Presentation/workspace-integration sprint over the SAME governed fields
+already listed above. Three of its five workstreams introduce no new field
+at all (Risk Board recursion's UI shell, business-first titles, Timeline's
+date-label readout - `time-slices.json`'s real `date` field was already
+loaded, just not previously surfaced in the toolbar). The two exceptions
+are documented at their own point in this file: the Risk Board "Site"
+field (Risk Board fields table above) and the Functional Radar workspace's
+KPI-card/Relationship-View fields (Functional Radar fields, "V1-UX-2H
+additions" above). `engine/investigation-history.js` (Back/Forward
+navigation) introduces no snapshot field either - it is a pure
+presentation-state coordinator over `engine/state.js`'s existing
+`selectedObjectId`/`workspaceLens`/`scopeContext`/`leftPanelMode` fields,
+never imported by `derive.js`, so it is likewise unaffected by
+`scripts/verify-field-map.mjs`.
 
 ## UX hypotheses
 

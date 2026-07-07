@@ -12,7 +12,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTestSnapshot } from './fixtures/load-snapshot.mjs';
 import { buildUniverseGraph } from '../prototype/current/engine/derive.js';
-import { buildFunctionalViewGroups, FUNCTIONAL_VIEW_GROUPS } from '../prototype/current/engine/functional-view.js';
+import {
+  buildFunctionalViewGroups,
+  FUNCTIONAL_VIEW_GROUPS,
+  buildFunctionalKpiCards,
+  riskBucketCounts,
+} from '../prototype/current/engine/functional-view.js';
 
 const snapshot = loadTestSnapshot();
 const realGraph = buildUniverseGraph(snapshot);
@@ -218,5 +223,197 @@ test('buildFunctionalViewGroups: on the real dataset, no node appears in more th
         seen.add(node.id);
       }
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// riskBucketCounts() - the shared tally helper extracted for V1-UX-2D
+// ---------------------------------------------------------------------------
+
+test('riskBucketCounts: tallies critical/elevated (including "attention")/watch and ignores normal/unset, matching buildFunctionalViewGroups\' own riskCounts fold', () => {
+  const members = [
+    { risk_state: 'critical' },
+    { risk_state: 'elevated' },
+    { risk_state: 'attention' },
+    { risk_state: 'watch' },
+    { risk_state: 'normal' },
+    {},
+  ];
+  assert.deepEqual(riskBucketCounts(members), { critical: 1, elevated: 2, watch: 1 });
+});
+
+test('riskBucketCounts: returns all-zero counts for an empty or non-array input, never throws', () => {
+  assert.deepEqual(riskBucketCounts([]), { critical: 0, elevated: 0, watch: 0 });
+  assert.deepEqual(riskBucketCounts(null), { critical: 0, elevated: 0, watch: 0 });
+  assert.deepEqual(riskBucketCounts(undefined), { critical: 0, elevated: 0, watch: 0 });
+});
+
+test('riskBucketCounts: also reads the camelCase riskState field (same fallback buildFunctionalViewGroups\' internal riskUrgencyRank() already supports)', () => {
+  const members = [{ riskState: 'critical' }, { riskState: 'watch' }];
+  assert.deepEqual(riskBucketCounts(members), { critical: 1, elevated: 0, watch: 1 });
+});
+
+test('buildFunctionalViewGroups: every group\'s riskCounts is produced by the SAME riskBucketCounts() helper (no drift between the two)', () => {
+  const nodes = [
+    { id: 'c1', domain: 'quality', label: 'Critical one', risk_state: 'critical' },
+    { id: 'e1', domain: 'quality', label: 'Elevated one', risk_state: 'elevated' },
+    { id: 'w1', domain: 'quality', label: 'Watch one', risk_state: 'watch' },
+  ];
+  const groups = groupByKey(buildFunctionalViewGroups(nodes));
+  const quality = groups.get('quality');
+  const qualityMembers = nodes.filter((n) => n.domain === 'quality');
+  assert.deepEqual(quality.riskCounts, riskBucketCounts(qualityMembers));
+});
+
+// ---------------------------------------------------------------------------
+// buildFunctionalKpiCards() - V1-UX-2D Functional Radar workspace
+// ---------------------------------------------------------------------------
+
+test('buildFunctionalKpiCards: throws when nodes is not an array', () => {
+  assert.throws(() => buildFunctionalKpiCards(null, 'engineering'));
+  assert.throws(() => buildFunctionalKpiCards('nope', 'engineering'));
+});
+
+test('buildFunctionalKpiCards: an unrecognized functionKey returns an empty array rather than throwing', () => {
+  assert.deepEqual(buildFunctionalKpiCards([{ id: 'a', domain: 'engineering' }], 'not_a_real_function'), []);
+  assert.deepEqual(buildFunctionalKpiCards([], 'engineering'), []);
+});
+
+test('buildFunctionalKpiCards: groups a function\'s objects by their RESOLVED grammar type, not the raw object_type string', () => {
+  // Two synthetic 'other'-typed objects that resolve to two DIFFERENT
+  // grammar types via their objectKey prefix (mirrors the real
+  // Manufacturing plant/work-center 'other' split confirmed against the
+  // live dataset below) - grouping by raw object_type would wrongly
+  // collapse both into a single "other" bucket; grouping by resolved
+  // grammar type must keep them as two separate cards.
+  const nodes = [
+    { id: 'p1', domain: 'manufacturing', type: 'other', objectKey: 'plant:PLT-100', label: 'Plant one' },
+    { id: 'p2', domain: 'manufacturing', type: 'other', objectKey: 'plant:PLT-200', label: 'Plant two' },
+    { id: 'wc1', domain: 'manufacturing', type: 'other', objectKey: 'work-center:PLT-200:FAB-WELD', label: 'Work center one' },
+  ];
+  const cards = buildFunctionalKpiCards(nodes, 'manufacturing');
+  const byType = new Map(cards.map((c) => [c.objectType, c]));
+  assert.equal(cards.length, 2, 'must produce 2 distinct cards, not 1 collapsed "other" card');
+  assert.equal(byType.get('plant').count, 2);
+  assert.equal(byType.get('work_center').count, 1);
+  assert.ok(!byType.has('other'), 'must never key a card on the raw "other" string');
+});
+
+test('buildFunctionalKpiCards: a thin function (a single real object) still produces exactly one non-crashing card, matching buildFunctionalViewGroups\' own "never drop a thin function" contract', () => {
+  const nodes = [
+    {
+      id: 'nr04:recommendation-context:NR-GOU-CPP-RECOVERY',
+      type: 'other',
+      domain: 'planning',
+      objectKey: 'recommendation-context:NR-GOU-CPP-RECOVERY',
+      risk_state: 'critical',
+      status: 'watch',
+      label: 'Recommendation Context',
+    },
+  ];
+  const cards = buildFunctionalKpiCards(nodes, 'planning');
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].count, 1);
+  assert.equal(cards[0].criticalCount, 1);
+  assert.equal(cards[0].objectType, 'recommendation');
+});
+
+test('buildFunctionalKpiCards: every card reports objectType/noun/count/criticalCount/elevatedCount/watchCount and never a revenue_at_risk-shaped field', () => {
+  const nodes = [
+    { id: 'a', domain: 'quality', type: 'ncr', risk_state: 'critical', label: 'NCR A' },
+    { id: 'b', domain: 'quality', type: 'ncr', risk_state: 'watch', label: 'NCR B' },
+  ];
+  const cards = buildFunctionalKpiCards(nodes, 'quality');
+  assert.equal(cards.length, 1);
+  const card = cards[0];
+  assert.deepEqual(Object.keys(card).sort(), ['count', 'criticalCount', 'elevatedCount', 'noun', 'objectType', 'watchCount'].sort());
+  assert.equal(card.objectType, 'ncr');
+  assert.equal(card.noun, 'NCR');
+  assert.equal(card.count, 2);
+  assert.equal(card.criticalCount, 1);
+  assert.equal(card.watchCount, 1);
+});
+
+test('buildFunctionalKpiCards: is deterministic (same inputs -> identical output across repeated calls)', () => {
+  const nodes = [
+    { id: 'a', domain: 'quality', type: 'ncr', risk_state: 'critical', label: 'NCR A' },
+    { id: 'b', domain: 'quality', type: 'capa', risk_state: 'watch', label: 'CAPA B' },
+  ];
+  const first = buildFunctionalKpiCards(nodes, 'quality');
+  const second = buildFunctionalKpiCards(nodes, 'quality');
+  assert.deepEqual(first, second);
+});
+
+// ---------------------------------------------------------------------------
+// Regression against the real dataset (buildFunctionalKpiCards)
+// ---------------------------------------------------------------------------
+//
+// These counts are verified directly against the real, live merged graph
+// (test/fixtures/load-snapshot.mjs's buildUniverseGraph() output) rather
+// than the sprint brief's own paraphrase, per this workstream's explicit
+// "verify by fetching fresh, don't just trust this paraphrase" instruction.
+// One real discrepancy worth flagging here: the brief describes Procurement
+// as "4 (4 purchase_orders)", but buildFunctionalViewGroups'/
+// buildFunctionalKpiCards' Procurement group intentionally includes BOTH
+// the real "procurement" domain (4 purchase_order objects) AND the real
+// "supply" domain (25 more objects: 5 each of item/demand_signal/
+// allocation/inventory/shortage_exception) - this dual-domain mapping is
+// pre-existing, documented, and already covered by this file's own
+// "Procurement includes both real observed domain values" test above. The
+// brief's "4" figure describes only the domain:"procurement" subset, not
+// the function's full real membership; the assertions below use the true,
+// verified total (29) so this suite stays honest about what the live
+// dataset actually contains.
+
+test('buildFunctionalKpiCards: on the real dataset, Quality resolves into exactly the real 3-way ncr/capa/mrb split (5/4/1)', () => {
+  const cards = buildFunctionalKpiCards(realGraph.nodes, 'quality');
+  const byType = new Map(cards.map((c) => [c.objectType, c]));
+  assert.equal(cards.length, 3, 'Quality must resolve into exactly 3 distinct real object classes');
+  assert.equal(byType.get('ncr')?.count, 5);
+  assert.equal(byType.get('capa')?.count, 4);
+  assert.equal(byType.get('mrb')?.count, 1);
+  const totalCounted = cards.reduce((sum, c) => sum + c.count, 0);
+  assert.equal(totalCounted, 10, 'card counts must sum to Quality\'s real total of 10');
+});
+
+test('buildFunctionalKpiCards: on the real dataset, Procurement\'s real purchase_order card reports the documented count of 4 (within the function\'s true, larger 29-object membership)', () => {
+  const cards = buildFunctionalKpiCards(realGraph.nodes, 'procurement');
+  const byType = new Map(cards.map((c) => [c.objectType, c]));
+  assert.equal(byType.get('purchase_order')?.count, 4);
+  // The function's real total membership (procurement + supply domains)
+  // is larger than just the purchase orders - confirms this function is
+  // reading the SAME two-domain group buildFunctionalViewGroups() already
+  // uses, not a narrower single-domain slice.
+  const totalCounted = cards.reduce((sum, c) => sum + c.count, 0);
+  const expectedGroupCount = buildFunctionalViewGroups(realGraph.nodes).find((g) => g.key === 'procurement').count;
+  assert.equal(totalCounted, expectedGroupCount);
+  assert.ok(totalCounted > 4, 'Procurement\'s real membership includes real supply-domain objects beyond just purchase orders');
+});
+
+test('buildFunctionalKpiCards: on the real dataset, the thin Planning function (1 real object) is not dropped and is not crashed on', () => {
+  const cards = buildFunctionalKpiCards(realGraph.nodes, 'planning');
+  assert.equal(cards.length, 1);
+  const totalCounted = cards.reduce((sum, c) => sum + c.count, 0);
+  const expectedGroupCount = buildFunctionalViewGroups(realGraph.nodes).find((g) => g.key === 'planning').count;
+  assert.equal(totalCounted, expectedGroupCount);
+  assert.equal(totalCounted, 1);
+});
+
+test('buildFunctionalKpiCards: on the real dataset, Manufacturing\'s real object_type:"other" objects resolve into distinct plant/work_center cards rather than one collapsed "other" card', () => {
+  const cards = buildFunctionalKpiCards(realGraph.nodes, 'manufacturing');
+  const byType = new Map(cards.map((c) => [c.objectType, c]));
+  assert.ok(!byType.has('other'), 'must never produce a raw "other" card key');
+  assert.ok(byType.has('plant'), 'Manufacturing\'s real other-typed Plant objects must resolve to a plant card');
+  assert.ok(byType.has('work_center'), 'Manufacturing\'s real other-typed Work Center objects must resolve to a work_center card');
+  assert.ok(byType.get('plant').count > 0);
+  assert.ok(byType.get('work_center').count > 0);
+});
+
+test('buildFunctionalKpiCards: on the real dataset, every card\'s counted total matches buildFunctionalViewGroups\' own group count for every one of the 5 functions (no double count, no drop)', () => {
+  for (const spec of FUNCTIONAL_VIEW_GROUPS) {
+    const cards = buildFunctionalKpiCards(realGraph.nodes, spec.key);
+    const totalCounted = cards.reduce((sum, c) => sum + c.count, 0);
+    const expectedGroupCount = buildFunctionalViewGroups(realGraph.nodes).find((g) => g.key === spec.key).count;
+    assert.equal(totalCounted, expectedGroupCount, `function "${spec.key}" card total mismatch`);
   }
 });

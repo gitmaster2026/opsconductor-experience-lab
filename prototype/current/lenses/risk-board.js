@@ -24,15 +24,49 @@
 // translate() that makes it glide from old to new position over 500ms
 // instead of snapping.
 //
+// Recursive Risk Board (this revision): "Risk Board should behave exactly
+// like Functional Radar, but organized by risk... recursively narrow while
+// remaining inside the Risk workspace. Do not jump back into Universe."
+// The real, honest hierarchy this dataset supports (5 total cells; ground
+// truth confirmed directly against src/data/risk-board.json and
+// src/data/commitments.json - there is no real "supplier" concept
+// anywhere in this data model, and every cell's customer already maps
+// 1:1 to exactly one cell, so customer has no grouping value beyond what
+// the existing card-per-cell rendering already provides):
+//
+//   Level 0 "Enterprise" (currentScope === null): the existing exact
+//     5-band severity view (UNCHANGED default), plus a new small site-
+//     entry strip above the bands showing the 2 real sites (PLT-200
+//     "Pueblo Manufacturing Campus" / PLT-300 "Grand Junction Systems
+//     Integration") as clickable chips.
+//   Level 1 "Site" (currentScope = { type: 'site', key, label }): the
+//     SAME 5-band layout, FLIP animation, and card-click/expand behavior,
+//     re-rendered over ONLY that site's cells (filtered via
+//     risk-board-layout.js's filterCellsBySite() BEFORE buildBandLayout()
+//     ever sees them - the banding/sort algorithm itself is completely
+//     unaware a scope is even active), with a breadcrumb back to
+//     Enterprise.
+//   Level 2: the existing individual-card expand-in-place behavior
+//     (buildExpandedDetail(), UNCHANGED) and its existing "Probe
+//     Commitment in Universe" button remain the ONLY path out of this
+//     lens into Universe - the recursive scoping added here is 100%
+//     local to this lens's own closure state (currentScope below) and
+//     NEVER reads/writes engine/state.js's shared scopeContext, so
+//     narrowing the Risk Board to a site never re-scopes Universe/
+//     Dashboard/Jarvis, and this lens never jumps to Universe on its own.
+//
 // Like the module it replaces, this file knows nothing about
-// engine/state.js - app.js wires its onSelect/onHover callbacks to store
-// mutators, and its only external data dependency is bundle.riskBoard
-// (from engine/derive.js's buildRiskBoardViewModel(), via
-// engine/timeline.js) - it never reaches into raw snapshot.* fields
-// itself. The mountRiskBoardLens(containerEl, callbacks) contract
-// (getBundle/getSelectedId/getHighlightIds/onSelect/onHover, returning
-// { render, resize, destroy }) is UNCHANGED from the constellation
-// version, so app.js needs no changes for this rewrite.
+// engine/state.js beyond that explicit non-interaction - app.js wires its
+// onSelect/onHover callbacks to store mutators, and its only external data
+// dependency is bundle.riskBoard (from engine/derive.js's
+// buildRiskBoardViewModel(), via engine/timeline.js) - it never reaches
+// into raw snapshot.* fields itself. The mountRiskBoardLens(containerEl,
+// callbacks) contract (getBundle/getSelectedId/getHighlightIds/onSelect/
+// onHover, returning { render, resize, destroy }) is UNCHANGED - app.js
+// needs no new callbacks for this revision, since every field the new
+// site-recursion UI needs (cell.site/cell.siteLabel) already arrives on
+// the same bundle.riskBoard.cells array the existing callbacks.getBundle()
+// already provides.
 
 import {
   SEVERITY_BANDS,
@@ -41,6 +75,8 @@ import {
   computeFlipDelta,
   FLIP_DURATION_MS,
   FLIP_EASING,
+  groupCellsBySite,
+  filterCellsBySite,
 } from './risk-board-layout.js';
 import { riskImpactTags } from '../engine/business-language.js';
 import { grammarMarkerHtml } from '../engine/visual-grammar.js';
@@ -194,6 +230,150 @@ export function mountRiskBoardLens(containerEl, callbacks) {
   surface.className = 'risk-editorial-surface';
   containerEl.appendChild(surface);
 
+  // -------------------------------------------------------------------
+  // Recursive Risk Board: LOCAL scope state.
+  //
+  // Deliberately NOT engine/state.js's shared scopeContext - that context
+  // is read by Universe/Dashboard/Jarvis too, and writing to it here would
+  // incorrectly re-scope the whole app to one site whenever a user drills
+  // into the Risk Board, rather than narrowing only this lens's own view
+  // as the brief requires ("The Risk Board should recursively narrow
+  // while remaining inside the Risk workspace"). currentScope is read and
+  // written ONLY inside this closure.
+  //
+  // null            -> Level 0, "Enterprise" (today's unscoped 5-band view).
+  // { type: 'site', key, label } -> Level 1, narrowed to one real site.
+  // -------------------------------------------------------------------
+  /** @type {{ type: 'site', key: string, label: string }|null} */
+  let currentScope = null;
+
+  // Breadcrumb (Level 1 only) - "Enterprise > <Site business name>", with
+  // the "Enterprise" segment a real, focusable, keyboard-usable <button>
+  // that resets currentScope to null and re-renders.
+  const breadcrumbEl = document.createElement('nav');
+  breadcrumbEl.className = 'risk-scope-breadcrumb hidden';
+  breadcrumbEl.setAttribute('aria-label', 'Risk Board scope');
+  const breadcrumbBackBtn = document.createElement('button');
+  breadcrumbBackBtn.type = 'button';
+  breadcrumbBackBtn.className = 'risk-scope-breadcrumb-back';
+  breadcrumbBackBtn.textContent = 'Enterprise';
+  breadcrumbBackBtn.addEventListener('click', () => {
+    currentScope = null;
+    render();
+  });
+  const breadcrumbSep = document.createElement('span');
+  breadcrumbSep.className = 'risk-scope-breadcrumb-sep';
+  breadcrumbSep.setAttribute('aria-hidden', 'true');
+  breadcrumbSep.textContent = '›';
+  const breadcrumbCurrentEl = document.createElement('span');
+  breadcrumbCurrentEl.className = 'risk-scope-breadcrumb-current';
+  breadcrumbEl.appendChild(breadcrumbBackBtn);
+  breadcrumbEl.appendChild(breadcrumbSep);
+  breadcrumbEl.appendChild(breadcrumbCurrentEl);
+  surface.appendChild(breadcrumbEl);
+
+  // Site-entry strip (Level 0 only) - one small card per real site,
+  // business-first (site business name leads; the PLT-200/PLT-300 code is
+  // demoted to secondary reference text, per this sprint's cross-cutting
+  // "Always lead with business meaning" rule - the same rule
+  // riskImpactTags() already applies to every risk card below).
+  const siteStripEl = document.createElement('section');
+  siteStripEl.className = 'risk-site-strip';
+  siteStripEl.setAttribute('aria-label', 'Narrow Risk Board by site');
+  const siteStripHeaderEl = document.createElement('div');
+  siteStripHeaderEl.className = 'risk-site-strip-header';
+  siteStripHeaderEl.textContent = 'Narrow by site';
+  siteStripEl.appendChild(siteStripHeaderEl);
+  const siteStripListEl = document.createElement('div');
+  siteStripListEl.className = 'risk-site-strip-list';
+  siteStripEl.appendChild(siteStripListEl);
+  surface.appendChild(siteStripEl);
+
+  /** @type {Map<string, HTMLElement>} */
+  const siteChipElements = new Map();
+
+  function ensureSiteChipElement(siteKey) {
+    let el = siteChipElements.get(siteKey);
+    if (el) return el;
+    el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'risk-site-chip';
+    el.dataset.siteKey = siteKey;
+    el.addEventListener('click', () => {
+      const group = el.__siteGroup;
+      if (!group) return;
+      currentScope = { type: 'site', key: group.site, label: group.siteLabel };
+      render();
+    });
+    siteChipElements.set(siteKey, el);
+    return el;
+  }
+
+  /**
+   * Render (or hide) the Level 0 site-entry strip from the FULL,
+   * unfiltered cell set (site narrowing is only ever offered as a way IN
+   * to a site scope, so its chip counts always reflect the whole board,
+   * never an already-narrowed subset).
+   *
+   * @param {Array<Object>} allCells
+   */
+  function renderSiteStrip(allCells) {
+    const isEnterpriseLevel = currentScope === null;
+    siteStripEl.classList.toggle('hidden', !isEnterpriseLevel);
+    if (!isEnterpriseLevel) return;
+
+    const groups = groupCellsBySite(allCells);
+    const seenKeys = new Set(groups.map((g) => g.site));
+
+    for (const [key, el] of siteChipElements) {
+      if (!seenKeys.has(key)) {
+        el.remove();
+        siteChipElements.delete(key);
+      }
+    }
+
+    // Nothing to narrow by (e.g. every cell fell into the defensive
+    // "Unassigned Site" bucket because site/siteLabel hasn't landed on
+    // the bundle yet, or there is genuinely only one real site) - the
+    // strip stays honest and simply shows nothing rather than a
+    // single meaningless "narrow by the only site there is" chip.
+    siteStripEl.classList.toggle('is-empty', groups.length < 2);
+    if (groups.length < 2) return;
+
+    for (const group of groups) {
+      const el = ensureSiteChipElement(group.site);
+      el.__siteGroup = group;
+      const count = group.cellIds.length;
+      el.setAttribute(
+        'aria-label',
+        `Narrow Risk Board to ${group.siteLabel}, ${count} commitment${count === 1 ? '' : 's'}`
+      );
+      // Business-first: the site's business name leads; the plant code
+      // (PLT-200/PLT-300) is demoted to small secondary reference text,
+      // exactly mirroring how risk-card-ref demotes the RB-* id below.
+      el.innerHTML = `
+        ${grammarMarkerHtml('plant', { title: 'Site' })}
+        <span class="risk-site-chip-text">
+          <span class="risk-site-chip-name">${escapeHtml(group.siteLabel)}</span>
+          <span class="risk-site-chip-meta">
+            <span class="risk-site-chip-code">${escapeHtml(group.site)}</span>
+            <span class="risk-site-chip-meta-sep">·</span>
+            <span class="risk-site-chip-count">${count} commitment${count === 1 ? '' : 's'}</span>
+          </span>
+        </span>
+      `;
+      siteStripListEl.appendChild(el);
+    }
+  }
+
+  /** Show/hide + populate the Level 1 breadcrumb for the active scope. */
+  function renderBreadcrumb() {
+    const isScoped = currentScope !== null;
+    breadcrumbEl.classList.toggle('hidden', !isScoped);
+    if (!isScoped) return;
+    breadcrumbCurrentEl.textContent = currentScope.label;
+  }
+
   const emptyNotice = document.createElement('div');
   emptyNotice.className = 'risk-editorial-empty';
   emptyNotice.textContent = 'No risk-board cells at this time slice.';
@@ -339,24 +519,37 @@ export function mountRiskBoardLens(containerEl, callbacks) {
   }
 
   /**
-   * Render (or re-render) every band row and card. Recomputes layout on
-   * every call since the cell set / risk states / visibility may have
-   * changed (time slider) - the FLIP measure-move-measure-animate sequence
-   * below runs every render, but only actually plays an animation for
-   * cards whose band (and therefore DOM position) changed since the last
-   * render; a card that stayed in the same band gets a zero delta and is
-   * left alone.
+   * Render (or re-render) the site strip, breadcrumb, and every band row
+   * and card. Recomputes layout on every call since the cell set / risk
+   * states / visibility / active scope may have changed (time slider, a
+   * site chip click, a breadcrumb "back" click) - the FLIP
+   * measure-move-measure-animate sequence below runs every render, but
+   * only actually plays an animation for cards whose band (and therefore
+   * DOM position) changed since the last render; a card that stayed in
+   * the same band gets a zero delta and is left alone.
    */
   function render() {
     const bundle = getBundle();
     const riskBoard = bundle?.riskBoard ?? { cells: [] };
-    const cells = Array.isArray(riskBoard.cells) ? riskBoard.cells : [];
+    const allCells = Array.isArray(riskBoard.cells) ? riskBoard.cells : [];
     const selectedId = typeof getSelectedId === 'function' ? getSelectedId() : null;
     const highlightList = typeof getHighlightIds === 'function' ? getHighlightIds() : null;
     const highlightIds = new Set(Array.isArray(highlightList) ? highlightList : []);
     const isHighlightActive = highlightIds.size > 0;
 
+    renderSiteStrip(allCells);
+    renderBreadcrumb();
+
+    // Recursive Risk Board: when a Site scope is active, narrow the cell
+    // set BEFORE it ever reaches buildBandLayout() - the band-assignment/
+    // sort algorithm below runs identically whether it was handed all 5
+    // cells or a site's subset; it has no awareness a scope even exists.
+    const cells = currentScope ? filterCellsBySite(allCells, currentScope.key) : allCells;
+
     emptyNotice.classList.toggle('hidden', cells.length > 0);
+    emptyNotice.textContent = currentScope
+      ? `No risk-board cells for ${currentScope.label} at this time slice.`
+      : 'No risk-board cells at this time slice.';
 
     const currentIds = new Set(cells.map((c) => c.id));
     // FLIP "First": measure every card still at its PRE-update position
@@ -480,7 +673,10 @@ export function mountRiskBoardLens(containerEl, callbacks) {
    * (full evidence summary, recommendation status, the qty/coverage
    * breakdown behind coverage_pct). All fields already exist on the cell
    * view-model (buildRiskBoardViewModel(), engine/derive.js) - this adds
-   * no new data, only a fuller inline rendering of it.
+   * no new data, only a fuller inline rendering of it. This remains the
+   * ONE place this lens ever reaches toward Universe (via the Probe
+   * button's onProbe callback) - the site-scoping recursion added
+   * elsewhere in this file never bypasses it.
    *
    * @param {Object} cell
    * @returns {string}
@@ -527,9 +723,13 @@ export function mountRiskBoardLens(containerEl, callbacks) {
   function destroy() {
     for (const el of cardElements.values()) el.remove();
     cardElements.clear();
+    for (const el of siteChipElements.values()) el.remove();
+    siteChipElements.clear();
     for (const { rowEl } of bandRows.values()) rowEl.remove();
     bandRows.clear();
     emptyNotice.remove();
+    siteStripEl.remove();
+    breadcrumbEl.remove();
     surface.remove();
     containerEl.classList.remove('risk-editorial');
   }
