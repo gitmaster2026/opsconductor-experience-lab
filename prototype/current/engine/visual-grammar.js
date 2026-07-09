@@ -107,9 +107,22 @@ export const STATE_LEGEND_ENTRIES = Object.freeze([
 // resolves to via its object_key prefix. Kept 1:1 with
 // operational-language.js's objectNoun() so shape and noun always agree.
 
-/** commitment_risk_cell is the same operational class as a commitment. */
+/**
+ * commitment_risk_cell is the same operational class as a commitment. The
+ * Sprint 4 manufacturing-execution types below are real, distinct object
+ * types with no dedicated shape of their own; each aliases to the closest
+ * existing shape family rather than inventing new geometry.
+ */
 const TYPE_ALIASES = Object.freeze({
   commitment_risk_cell: 'commitment',
+  drawing_revision: 'eco', // engineering change-style artifact
+  asn: 'shipment', // advance shipment notice
+  expedite: 'premium_freight',
+  production_order: 'work_order',
+  quality_hold: 'ncr', // quality disposition, same family as NCR
+  machine_constraint: 'work_center',
+  work_center_constraint: 'work_center',
+  lead_time_change: 'supplier_advisory', // supplier promise/lead-time revision
 });
 
 /**
@@ -136,6 +149,8 @@ const OTHER_PREFIX_TYPE = Object.freeze({
   signal: 'demand_signal',
   commitment: 'commitment',
   'recommendation-context': 'recommendation',
+  demand: 'demand_signal',
+  lot: 'inventory',
 });
 
 /** Domain fallback for an `other` node with no recognized key prefix. */
@@ -148,6 +163,8 @@ const DOMAIN_TYPE = Object.freeze({
   logistics: 'shipment',
   procurement: 'supplier',
   finance: 'finance',
+  planning: 'recommendation',
+  inventory: 'inventory',
 });
 
 /** The registry's neutral fallback shape/type. */
