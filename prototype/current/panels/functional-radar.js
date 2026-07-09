@@ -188,8 +188,11 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
 
   // The List View's mounted filterable table instance (workspace-only;
   // created/destroyed alongside the workspace markup itself, since the
-  // flyout path never needs it).
+  // flyout path never needs it). listTableContainerEl tracks which DOM
+  // node `listTable` is actually mounted into - see mountOrUpdateListTable()
+  // below for why this identity check exists (List View stability fix).
   let listTable = null;
+  let listTableContainerEl = null;
 
   function toggleOpen() {
     isOpen = !isOpen;
@@ -533,7 +536,34 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     return `<div class="functional-list-table-container" id="functionalListTableContainer"></div>`;
   }
 
+  /**
+   * Mount (or reuse) the shared filterable table for List View.
+   *
+   * renderWorkspace() rebuilds panelEl.innerHTML from scratch on EVERY
+   * render() call - including re-renders triggered by store changes that
+   * have nothing to do with this workspace (e.g. hovering a list row: every
+   * row carries data-select-id, and app.js's document-level `mouseover`
+   * listener turns that into a store.setHovered() call, which fires
+   * timeline's onUpdate -> renderAll() -> this module's render() again).
+   * That means `containerEl` is a BRAND NEW DOM node on every such
+   * re-render, even though List View never stopped being the active view
+   * mode. Reusing the old `listTable` instance against that stale,
+   * now-detached container (the old `if (!listTable)` guard did exactly
+   * this) silently updates DOM nobody can see, while the fresh container
+   * actually in the live DOM stays permanently empty - this was the "List
+   * View loads, then disappears after a few seconds" regression: the first
+   * incidental hover after mount detached the table from the page.
+   *
+   * Comparing containerEl against the node `listTable` is currently
+   * mounted into (rather than just checking truthiness) makes remounting
+   * track DOM reality: reuse the instance when the container is genuinely
+   * the same node, remount fresh whenever it isn't.
+   */
   function mountOrUpdateListTable(containerEl, rows) {
+    if (listTable && listTableContainerEl !== containerEl) {
+      listTable.destroy();
+      listTable = null;
+    }
     if (!listTable) {
       listTable = mountFilterableTable(containerEl, {
         columns: [...LIST_COLUMNS],
@@ -548,6 +578,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
           if (typeof onProbe === 'function') onProbe(row.id);
         },
       });
+      listTableContainerEl = containerEl;
     }
     listTable.setRows(rows);
   }
@@ -725,6 +756,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       // replacement above already discarded the old container node).
       listTable.destroy();
       listTable = null;
+      listTableContainerEl = null;
     }
 
     // Relationship View: every related-object row and every member header
@@ -764,6 +796,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       if (listTable) {
         listTable.destroy();
         listTable = null;
+        listTableContainerEl = null;
       }
       return;
     }
@@ -777,6 +810,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     if (listTable) {
       listTable.destroy();
       listTable = null;
+      listTableContainerEl = null;
     }
     const bundle = getBundle();
     const nodes = bundle?.universe?.nodes ?? [];
@@ -828,6 +862,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     if (listTable) {
       listTable.destroy();
       listTable = null;
+      listTableContainerEl = null;
     }
     toggleEl.innerHTML = '';
     panelEl.innerHTML = '';
