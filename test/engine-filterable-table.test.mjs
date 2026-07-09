@@ -153,6 +153,49 @@ test('filterRows: does not mutate the input array', () => {
 });
 
 // ---------------------------------------------------------------------------
+// filterRows: governed multi-select columns (`filterType: 'multiselect'`) -
+// UX hardening item 2 (Functional Radar List View's Risk/Type/Owner
+// dropdowns). Uses its own column list (MULTISELECT_COLUMNS) rather than
+// mutating the shared COLUMNS/ROWS fixtures above, so the plain-text-filter
+// tests above stay provably unaffected by this new column shape.
+// ---------------------------------------------------------------------------
+
+const MULTISELECT_COLUMNS = [
+  { key: 'name', label: 'Name' },
+  { key: 'category', label: 'Category', filterType: 'multiselect' },
+];
+
+test('filterRows: multiselect column with an empty selection array imposes no constraint', () => {
+  const result = filterRows(ROWS, MULTISELECT_COLUMNS, { category: [] });
+  assert.equal(result.length, ROWS.length);
+});
+
+test('filterRows: multiselect column keeps only rows whose value is in the selected set', () => {
+  const result = filterRows(ROWS, MULTISELECT_COLUMNS, { category: ['vegetable'] });
+  assert.deepEqual(result.map((r) => r.id).sort(), ['c', 'e']); // Carrot, Eggplant
+});
+
+test('filterRows: multiselect column with multiple selected values is an OR within that column', () => {
+  const result = filterRows(ROWS, MULTISELECT_COLUMNS, { category: ['vegetable', 'fruit'] });
+  assert.equal(result.length, ROWS.length); // every row is one or the other
+});
+
+test('filterRows: multiselect column ANDed with a plain text column on a different column', () => {
+  const result = filterRows(ROWS, MULTISELECT_COLUMNS, { category: ['fruit'], name: 'an' });
+  assert.deepEqual(result.map((r) => r.id).sort(), ['b']); // Banana: fruit AND contains "an"
+});
+
+test('filterRows: multiselect selection matching no row returns an empty array', () => {
+  const result = filterRows(ROWS, MULTISELECT_COLUMNS, { category: ['mineral'] });
+  assert.deepEqual(result, []);
+});
+
+test('filterRows: a plain string (not an array) under a multiselect column key is treated as no constraint (never crashes)', () => {
+  const result = filterRows(ROWS, MULTISELECT_COLUMNS, { category: 'fruit' });
+  assert.equal(result.length, ROWS.length);
+});
+
+// ---------------------------------------------------------------------------
 // applyTable: filter-then-sort pipeline
 // ---------------------------------------------------------------------------
 

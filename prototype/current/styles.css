@@ -139,14 +139,30 @@ body {
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
+  gap: 10px 18px;
   padding: 10px 20px;
   background: var(--panel-bg);
   backdrop-filter: blur(var(--panel-blur));
   -webkit-backdrop-filter: blur(var(--panel-blur));
   border-bottom: 1px solid var(--panel-border);
   z-index: 10;
+  /* Viewport stability fix: this row accumulates a lot of conditional
+     content (shared-investigation-state chips, nav history dots, the
+     Return to Universe control) that only appears once something is
+     selected/focused - Universe Focus Mode included. With the old
+     `nowrap` behavior, that extra content pushed the trailing zoom/time
+     sliders (and the timeline slider specifically) past the right edge
+     of the viewport, where body's `overflow: hidden` clipped them
+     entirely rather than just visually compressing the row. Wrapping
+     keeps every control on screen (worst case: a taller, 2-row toolbar)
+     instead of silently losing controls off the right edge - and since
+     `.layout` below is `flex: 1` inside #app's column flexbox, it always
+     fills whatever vertical space the toolbar leaves, in BOTH normal and
+     Focus Mode, so the workspace viewport calculation itself never
+     differs between the two - only the (now harmless) toolbar height
+     does. */
 }
 
 .brand {
@@ -242,6 +258,34 @@ body {
   display: grid;
   grid-template-columns: 280px 1fr 300px;
   min-height: 0;
+}
+
+/* app.js's applyLensVisibility(): a commitment focused in Universe with
+   Passport open reorders the SAME three grid regions (canvas / #leftPanel /
+   #jarvisPanel) - canvas moves to track 1 so the node it renders (already
+   anchored toward the right portion of that canvas by Universe's own Logo
+   Flow Focus Mode) sits immediately next to the Passport detail panel, now
+   in track 2, instead of on the opposite side of the screen from it. Track
+   WIDTHS stay 280px/1fr/300px either way (a 280px column and a 300px column
+   simply trade places relative to the always-1fr canvas track), so the
+   canvas never gains or loses space - only which side the detail panel
+   reads on changes. */
+.layout.commitment-focus-detail-right {
+  grid-template-columns: 1fr 280px 300px;
+}
+
+.layout.commitment-focus-detail-right .workspace {
+  order: 1;
+}
+
+.layout.commitment-focus-detail-right .left-panel {
+  order: 2;
+  border-right: none;
+  border-left: 1px solid var(--panel-border);
+}
+
+.layout.commitment-focus-detail-right .jarvis-panel {
+  order: 3;
 }
 
 .panel {
@@ -860,6 +904,161 @@ body {
 
 .filterable-table-empty.hidden {
   display: none;
+}
+
+/* ---------------------------------------------------------------------
+   engine/filterable-table.js's governed multi-select filter (UX hardening
+   item 2, opt-in per column via `filterType: 'multiselect'` - Functional
+   Radar List View's Risk/Type/Owner columns): an "Excel filter" style
+   dropdown instead of the plain `.filterable-table-filter-input` free-text
+   box every other column keeps. `.filterable-table th.filterable-table-
+   filter-cell` overrides the generic `.filterable-table th` rule's
+   overflow/white-space/max-width (needed so the OPEN dropdown panel, a
+   fixed-position popover, is never visually clipped by its own header
+   cell - the exact class of bug the toolbar overflow fix elsewhere in this
+   sprint also addresses).
+   --------------------------------------------------------------------- */
+
+.filterable-table th.filterable-table-filter-cell {
+  overflow: visible;
+  white-space: normal;
+  max-width: none;
+}
+
+.filterable-table-multiselect {
+  position: relative;
+}
+
+.filterable-table-multiselect-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  text-align: left;
+}
+
+.filterable-table-multiselect-toggle:hover {
+  border-color: var(--cyan-accent);
+}
+
+.filterable-table-multiselect-toggle.is-active {
+  color: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+  background: rgba(90, 209, 255, 0.1);
+}
+
+.filterable-table-multiselect-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filterable-table-multiselect-caret {
+  flex: none;
+  opacity: 0.7;
+  font-size: 9px;
+}
+
+/* `position: fixed` (with top/left set in JS against the toggle button's
+   live viewport rect - see positionMultiselectPanel()) escapes every
+   scrollable/clipping ancestor, including Functional Radar's own
+   scrollable List View container - the panel is never clipped the way the
+   toolbar used to clip the timeline slider before this sprint's item-4 fix. */
+.filterable-table-multiselect-panel {
+  position: fixed;
+  min-width: 220px;
+  max-width: 280px;
+  background: var(--bg-void);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  padding: 8px;
+  z-index: 500;
+  white-space: normal;
+}
+
+.filterable-table-multiselect-panel.hidden {
+  display: none;
+}
+
+.filterable-table-multiselect-search-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  font-family: inherit;
+  margin-bottom: 6px;
+}
+
+.filterable-table-multiselect-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.filterable-table-multiselect-actions button {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  padding: 3px 8px;
+  font-size: 10.5px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.filterable-table-multiselect-actions button:hover {
+  color: var(--text-primary);
+  border-color: var(--cyan-accent);
+}
+
+.filterable-table-multiselect-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filterable-table-multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+}
+
+.filterable-table-multiselect-option:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.filterable-table-multiselect-empty {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 6px 4px;
+  font-style: italic;
 }
 
 .workbench-chart-panel {

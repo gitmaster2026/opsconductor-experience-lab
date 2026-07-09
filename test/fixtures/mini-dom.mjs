@@ -105,6 +105,10 @@ class MiniElement {
     for (const handler of this.listeners.get('click') ?? []) handler(fakeEvent);
   }
 
+  getBoundingClientRect() {
+    return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 };
+  }
+
   querySelector(selector) {
     return findAll(this, selector)[0] ?? null;
   }
@@ -248,15 +252,32 @@ function parseHTML(html) {
 }
 
 /**
- * Install a fresh MiniDocument as `globalThis.document` for the duration of
- * one test. Both consumer modules only touch `document` inside function
- * bodies at call time (never at import time), so this just needs to run
- * before the mounting call, not before the `import` statements.
+ * A minimal stand-in for `window` - Node's global object, unlike a real
+ * browser's, is not itself an EventTarget (no addEventListener), but
+ * engine/filterable-table.js's governed multi-select dropdown (UX
+ * hardening item 2) calls `window.addEventListener('resize', ...)` /
+ * `removeEventListener` to close an open dropdown on viewport resize,
+ * matching this app's existing `window.setTimeout`/`window.setInterval`
+ * usage elsewhere. Nothing in this test ever resizes a real viewport, so
+ * this only needs to accept the calls without throwing, not actually fire.
+ */
+class MiniWindow {
+  addEventListener() {}
+  removeEventListener() {}
+}
+
+/**
+ * Install a fresh MiniDocument as `globalThis.document` (and a MiniWindow as
+ * `globalThis.window`) for the duration of one test. Both consumer modules
+ * only touch `document`/`window` inside function bodies at call time (never
+ * at import time), so this just needs to run before the mounting call, not
+ * before the `import` statements.
  *
  * @returns {MiniDocument}
  */
 export function installMiniDocument() {
   const doc = new MiniDocument();
   globalThis.document = doc;
+  globalThis.window = new MiniWindow();
   return doc;
 }

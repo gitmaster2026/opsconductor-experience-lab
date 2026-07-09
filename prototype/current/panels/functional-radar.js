@@ -193,6 +193,22 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   // below for why this identity check exists (List View stability fix).
   let listTable = null;
   let listTableContainerEl = null;
+  // UX hardening item 2: the List View's own sort/multi-select-filter
+  // selections, lifted OUT of the filterable-table instance itself and
+  // into this module's longer-lived closure state. Necessary because
+  // mountOrUpdateListTable() (see its own header doc) remounts a BRAND NEW
+  // filterable-table instance on every re-render - a fresh instance starts
+  // with empty filter/sort state by default, which would otherwise silently
+  // drop the user's selections on the very next data refresh/focus
+  // transition/investigation/Passport update. Captured via onStateChange
+  // below and handed back in as initialFilterState/initialSortState on the
+  // next mount, so selections persist exactly like activeViewMode/
+  // activeObjectTypeFilter already do. Reset at the same points those two
+  // reset (switching function, closing the workspace) - a filter scoped to
+  // one function's own column values has no meaning for a different
+  // function or a fresh open.
+  let listTableFilterState = {};
+  let listTableSortState = null;
 
   function toggleOpen() {
     isOpen = !isOpen;
@@ -204,6 +220,8 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       activeFunctionKey = null;
       activeViewMode = 'overview';
       activeObjectTypeFilter = null;
+      listTableFilterState = {};
+      listTableSortState = null;
     }
     render();
   }
@@ -226,6 +244,8 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     activeFunctionKey = null;
     activeViewMode = 'overview';
     activeObjectTypeFilter = null;
+    listTableFilterState = {};
+    listTableSortState = null;
     render();
   }
 
@@ -247,6 +267,8 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     activeFunctionKey = functionKey ?? null;
     activeViewMode = 'overview';
     activeObjectTypeFilter = null;
+    listTableFilterState = {};
+    listTableSortState = null;
     render();
   }
 
@@ -266,6 +288,8 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   function switchToFunction(functionKey) {
     activeFunctionKey = functionKey;
     activeObjectTypeFilter = null;
+    listTableFilterState = {};
+    listTableSortState = null;
     render();
   }
 
@@ -513,11 +537,19 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     `;
   }
 
+  // UX hardening item 2: Type/Risk/Owner are genuinely categorical (a small,
+  // repeated set of real values across rows), so they get engine/filterable-
+  // table.js's governed multi-select dropdown instead of a free-text box -
+  // "Excel filter" style: searchable, checkbox multi-select, options
+  // populated from whatever is actually in the current rows (never a
+  // hardcoded enum). Object/Reference stay free-text: both are closer to
+  // unique per-row descriptive text than a small repeated value set, so a
+  // dropdown wouldn't help there ("where appropriate", not universally).
   const LIST_COLUMNS = Object.freeze([
     { key: 'headline', label: 'Object', accessor: (row) => row.__headlinePrimary },
-    { key: 'noun', label: 'Type', accessor: (row) => row.__noun },
-    { key: 'riskState', label: 'Risk', accessor: (row) => row.risk_state ?? row.riskState ?? null },
-    { key: 'ownerName', label: 'Owner', accessor: (row) => row.owner_name ?? null },
+    { key: 'noun', label: 'Type', accessor: (row) => row.__noun, filterType: 'multiselect' },
+    { key: 'riskState', label: 'Risk', accessor: (row) => row.risk_state ?? row.riskState ?? null, filterType: 'multiselect' },
+    { key: 'ownerName', label: 'Owner', accessor: (row) => row.owner_name ?? null, filterType: 'multiselect' },
     { key: 'identifier', label: 'Reference', accessor: (row) => row.__secondaryIdentifier },
   ]);
 
@@ -567,6 +599,12 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     if (!listTable) {
       listTable = mountFilterableTable(containerEl, {
         columns: [...LIST_COLUMNS],
+        initialFilterState: listTableFilterState,
+        initialSortState: listTableSortState,
+        onStateChange: () => {
+          listTableFilterState = listTable.getFilterState();
+          listTableSortState = listTable.getSortState();
+        },
         getRowSelectId: (row) => (typeof row.id === 'string' ? row.id : null),
         getRowProbeType: (row) => (typeof row.type === 'string' ? row.type : null),
         onRowClick: (row) => {
