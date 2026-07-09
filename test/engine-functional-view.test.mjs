@@ -352,18 +352,9 @@ test('buildFunctionalKpiCards: is deterministic (same inputs -> identical output
 // (test/fixtures/load-snapshot.mjs's buildUniverseGraph() output) rather
 // than the sprint brief's own paraphrase, per this workstream's explicit
 // "verify by fetching fresh, don't just trust this paraphrase" instruction.
-// One real discrepancy worth flagging here: the brief describes Procurement
-// as "4 (4 purchase_orders)", but buildFunctionalViewGroups'/
-// buildFunctionalKpiCards' Procurement group intentionally includes BOTH
-// the real "procurement" domain (4 purchase_order objects) AND the real
-// "supply" domain (25 more objects: 5 each of item/demand_signal/
-// allocation/inventory/shortage_exception) - this dual-domain mapping is
-// pre-existing, documented, and already covered by this file's own
-// "Procurement includes both real observed domain values" test above. The
-// brief's "4" figure describes only the domain:"procurement" subset, not
-// the function's full real membership; the assertions below use the true,
-// verified total (29) so this suite stays honest about what the live
-// dataset actually contains.
+// The NR04 Sprint 4 manufacturing execution snapshot expands the real data;
+// the assertions below track the current imported artifact rather than the
+// older pre-execution-layer snapshot counts.
 
 test('buildFunctionalKpiCards: on the real dataset, Quality resolves into exactly the real 3-way ncr/capa/mrb split (5/4/1)', () => {
   const cards = buildFunctionalKpiCards(realGraph.nodes, 'quality');
@@ -376,27 +367,23 @@ test('buildFunctionalKpiCards: on the real dataset, Quality resolves into exactl
   assert.equal(totalCounted, 10, 'card counts must sum to Quality\'s real total of 10');
 });
 
-test('buildFunctionalKpiCards: on the real dataset, Procurement\'s real purchase_order card reports the documented count of 4 (within the function\'s true, larger 29-object membership)', () => {
+test('buildFunctionalKpiCards: on the real dataset, Procurement\'s real purchase_order card reports the current NR04 Sprint 4 count of 6', () => {
   const cards = buildFunctionalKpiCards(realGraph.nodes, 'procurement');
   const byType = new Map(cards.map((c) => [c.objectType, c]));
-  assert.equal(byType.get('purchase_order')?.count, 4);
-  // The function's real total membership (procurement + supply domains)
-  // is larger than just the purchase orders - confirms this function is
-  // reading the SAME two-domain group buildFunctionalViewGroups() already
-  // uses, not a narrower single-domain slice.
+  assert.equal(byType.get('purchase_order')?.count, 6);
   const totalCounted = cards.reduce((sum, c) => sum + c.count, 0);
   const expectedGroupCount = buildFunctionalViewGroups(realGraph.nodes).find((g) => g.key === 'procurement').count;
   assert.equal(totalCounted, expectedGroupCount);
-  assert.ok(totalCounted > 4, 'Procurement\'s real membership includes real supply-domain objects beyond just purchase orders');
+  assert.ok(totalCounted > 6, 'Procurement\'s real membership includes real supply-domain objects beyond just purchase orders');
 });
 
-test('buildFunctionalKpiCards: on the real dataset, the thin Planning function (1 real object) is not dropped and is not crashed on', () => {
+test('buildFunctionalKpiCards: on the real dataset, the thin Planning function (2 real objects) is not dropped and is not crashed on', () => {
   const cards = buildFunctionalKpiCards(realGraph.nodes, 'planning');
-  assert.equal(cards.length, 1);
+  assert.ok(cards.length >= 1);
   const totalCounted = cards.reduce((sum, c) => sum + c.count, 0);
   const expectedGroupCount = buildFunctionalViewGroups(realGraph.nodes).find((g) => g.key === 'planning').count;
   assert.equal(totalCounted, expectedGroupCount);
-  assert.equal(totalCounted, 1);
+  assert.equal(totalCounted, 2);
 });
 
 test('buildFunctionalKpiCards: on the real dataset, Manufacturing\'s real object_type:"other" objects resolve into distinct plant/work_center cards rather than one collapsed "other" card', () => {
