@@ -126,8 +126,8 @@ test('nr04-golden-operational-universe.snapshot.json: input sections reflect the
   assert.equal(snapshot.sections.demandSignals.length, 8);
   assert.equal(snapshot.sections.demandSignalValues.length, 8);
   assert.equal(snapshot.sections.inventoryPositions.length, 5);
-  assert.equal(snapshot.sections.domainObjects.length, 94);
-  assert.equal(snapshot.sections.domainObjectLinks.length, 127);
+  assert.equal(snapshot.sections.domainObjects.length, 161);
+  assert.equal(snapshot.sections.domainObjectLinks.length, 265);
 });
 
 test('nr04-canonical-universe.json: every link resolves to an object present in the same document (no dangling references)', () => {

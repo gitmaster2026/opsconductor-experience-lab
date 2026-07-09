@@ -184,10 +184,10 @@ test(`buildUniverseGraph: includes all 5 real commitments, all 6 real customers,
   assert.equal(commitmentNodes.length, 5);
   assert.equal(customerNodes.length, 6);
   assert.equal(curatedNodesFound.length, 9);
-  // The real NR04 Golden Operational Universe domain objects (94), merged in
-  // by engine/snapshot-adapter.js from src/data/nr04-canonical-universe.json.
-  assert.equal(canonicalIds.size, 94);
-  assert.equal(canonicalNodesFound.length, 94);
+  // The real NR04 Golden Operational Universe domain objects (161, Sprint 4),
+  // merged in by engine/snapshot-adapter.js from src/data/nr04-canonical-universe.json.
+  assert.equal(canonicalIds.size, 161);
+  assert.equal(canonicalNodesFound.length, 161);
   // Sample a couple of real NR04 object ids to confirm this is genuinely
   // canonical-snapshot data, not just a count coincidence.
   assert.ok(graph.nodes.some((n) => n.id === 'nr04:signal:EXEC-NR-GOU-001'));
