@@ -638,6 +638,23 @@ async function main() {
     // than one replacing the other.
     els.mainLayout.classList.toggle('hidden', isConductorStudio || functionalRadarPanel.isFullScreen());
     els.conductorStudioEl.classList.toggle('hidden', !isConductorStudio);
+    // UX hardening: when a commitment is the current Universe focus (the
+    // Passport panel is open on that same commitment), the detail panel
+    // should read as "operational network -> selected commitment ->
+    // investigation details" left to right, matching where Universe's own
+    // existing Logo Flow Focus Mode (lenses/universe.js's
+    // DIRECTIONAL_FOCUS_ANCHOR_X_FRACTION) already settles the focused node
+    // - toward the right portion of the canvas. Today the Passport/detail
+    // aside is always the FIRST grid column (to the canvas's left), which
+    // puts it on the opposite side from the node it describes. This swaps
+    // which of the SAME three existing grid regions (#leftPanel/.workspace/
+    // #jarvisPanel) sits in which grid-template-columns track via a single
+    // class - it does not add a new panel, does not touch Universe's own
+    // animation/anchor logic, and reverts the instant the commitment is no
+    // longer both selected and the visible Passport subject.
+    const isCommitmentFocus =
+      isUniverse && state.leftPanelMode === 'passport' && timeline.getDerivedBundle().passport?.overview?.objectType === 'commitment';
+    els.mainLayout.classList.toggle('commitment-focus-detail-right', isCommitmentFocus);
     // Resize/re-render whichever lens just became visible - a canvas (and
     // an absolutely-positioned DOM layout) both need a fresh
     // measurement/redraw after being un-hidden, since a hidden element's

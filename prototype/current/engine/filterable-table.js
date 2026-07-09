@@ -138,28 +138,51 @@ export function sortRows(rows, columns, sortState) {
 }
 
 /**
- * Filter `rows` by one case-insensitive substring query per column. A row
- * passes only if EVERY active filter matches (AND across columns) - empty/
- * whitespace-only queries are ignored (that column imposes no constraint).
+ * Filter `rows` by one constraint per column. A row passes only if EVERY
+ * active filter matches (AND across columns) - an empty/absent constraint
+ * imposes no restriction for that column.
+ *
+ * Two constraint shapes, selected per-column by that column's own
+ * `filterType` (see mountFilterableTable()'s "governed multi-select"
+ * section below):
+ *   - default (no `filterType`, or `filterType !== 'multiselect'`):
+ *     `filterState[column.key]` is a case-insensitive substring query
+ *     string, exactly as before this shape was introduced. Whitespace-only
+ *     strings are ignored (no constraint).
+ *   - `filterType: 'multiselect'`: `filterState[column.key]` is an array of
+ *     exact raw cell values (as produced by `String(getCellValue(row,
+ *     column))`) - a row passes when its own value is a member of that
+ *     array. An empty array is ignored (no constraint), matching the
+ *     "nothing selected = show everything" convention every other filter
+ *     shape here already uses.
  *
  * @param {Array<Object>} rows
- * @param {{ key: string, accessor?: (row: Object) => any }[]} columns
- * @param {Record<string, string>} filterState - columnKey -> query text.
+ * @param {{ key: string, accessor?: (row: Object) => any, filterType?: 'text'|'multiselect' }[]} columns
+ * @param {Record<string, string|string[]>} filterState - columnKey -> query
+ *   text (text columns) or selected raw values (multiselect columns).
  * @returns {Array<Object>}
  */
 export function filterRows(rows, columns, filterState) {
   if (!Array.isArray(rows)) throw new Error('filterRows: rows must be an array');
-  const activeFilters = Object.entries(filterState ?? {}).filter(([, q]) => String(q ?? '').trim() !== '');
-  if (activeFilters.length === 0) return [...rows];
-
   const columnByKey = new Map((columns ?? []).map((c) => [c.key, c]));
 
+  const activeFilters = Object.entries(filterState ?? {}).filter(([columnKey, value]) => {
+    if (columnByKey.get(columnKey)?.filterType === 'multiselect') {
+      return Array.isArray(value) && value.length > 0;
+    }
+    return String(value ?? '').trim() !== '';
+  });
+  if (activeFilters.length === 0) return [...rows];
+
   return rows.filter((row) =>
-    activeFilters.every(([columnKey, query]) => {
+    activeFilters.every(([columnKey, value]) => {
       const column = columnByKey.get(columnKey) ?? { key: columnKey };
-      const value = getCellValue(row, column);
-      const haystack = value === null || value === undefined ? '' : String(value);
-      return haystack.toLowerCase().includes(String(query).trim().toLowerCase());
+      const cellValue = getCellValue(row, column);
+      const haystack = cellValue === null || cellValue === undefined ? '' : String(cellValue);
+      if (column.filterType === 'multiselect') {
+        return value.includes(haystack);
+      }
+      return haystack.toLowerCase().includes(String(value).trim().toLowerCase());
     })
   );
 }
@@ -172,7 +195,7 @@ export function filterRows(rows, columns, filterState) {
  *
  * @param {Array<Object>} rows
  * @param {{ key: string, accessor?: (row: Object) => any }[]} columns
- * @param {{ sortState?: {columnKey: string, direction: 'asc'|'desc'}|null, filterState?: Record<string,string> }} state
+ * @param {{ sortState?: {columnKey: string, direction: 'asc'|'desc'}|null, filterState?: Record<string, string|string[]> }} state
  * @returns {Array<Object>}
  */
 export function applyTable(rows, columns, state = {}) {
@@ -259,11 +282,22 @@ function formatCellValue(value) {
  *   column at all, matching every other optional hook in this config.
  * @param {(row: Object) => void} [config.onProbe] - the Probe button's
  *   click handler; ignored if `getRowProbeType` is not also provided.
+ * @param {{columnKey: string, direction: 'asc'|'desc'}|null} [config.initialSortState] -
+ *   seeds sortState at mount instead of starting unsorted. Together with
+ *   `initialFilterState` below, this lets a caller that remounts a fresh
+ *   table instance against a new container (functional-radar.js's
+ *   renderWorkspace() rebuilds panelEl.innerHTML - and therefore this
+ *   table's container - on every render()) hand back whatever the PREVIOUS
+ *   instance's `getSortState()`/`getFilterState()` returned, so sort/filter
+ *   selections survive a remount instead of resetting to "no filter" every
+ *   time.
+ * @param {Record<string, string|string[]>} [config.initialFilterState] -
+ *   seeds filterState at mount; see `initialSortState` above.
  * @returns {{
  *   setRows: (rows: Array<Object>) => void,
  *   setColumns: (columns: Array<Object>) => void,
  *   getSortState: () => ({columnKey: string, direction: 'asc'|'desc'}|null),
- *   getFilterState: () => Record<string,string>,
+ *   getFilterState: () => Record<string, string|string[]>,
  *   destroy: () => void
  * }}
  */
@@ -286,9 +320,20 @@ export function mountFilterableTable(containerEl, config = {}) {
   const probeColumnActive = Boolean(getRowProbeType && onProbe);
 
   /** @type {{columnKey: string, direction: 'asc'|'desc'}|null} */
-  let sortState = null;
-  /** @type {Record<string, string>} */
-  let filterState = {};
+  let sortState = config.initialSortState ? { ...config.initialSortState } : null;
+  /** @type {Record<string, string|string[]>} */
+  let filterState = config.initialFilterState ? { ...config.initialFilterState } : {};
+
+  // --- Governed multi-select filter (a column with `filterType:
+  // 'multiselect'`, e.g. panels/functional-radar.js's List View Risk/Type/
+  // Owner columns) - an "Excel filter" style dropdown instead of the plain
+  // free-text input every OTHER column keeps by default. One entry per
+  // multiselect column: DOM refs + its own transient (not persisted -
+  // resets each time the dropdown reopens, same as Excel's own filter
+  // search box) option-search query.
+  /** @type {Map<string, { buttonEl: HTMLElement, panelEl: HTMLElement, searchInputEl: HTMLElement, listEl: HTMLElement, searchQuery: string, optionLabelByValue: Map<string,string> }>} */
+  const multiselectState = new Map();
+  let openMultiselectColumnKey = null;
 
   containerEl.classList.add('filterable-table-root');
   containerEl.innerHTML = '';
@@ -323,9 +368,267 @@ export function mountFilterableTable(containerEl, config = {}) {
     if (onStateChange) onStateChange();
   }
 
+  // --- Governed multi-select filter: pure-state helpers -------------------
+
+  function getSelectedValues(column) {
+    const value = filterState[column.key];
+    return Array.isArray(value) ? new Set(value) : new Set();
+  }
+
+  function setSelectedValues(column, values) {
+    const next = { ...filterState };
+    if (values.length === 0) delete next[column.key];
+    else next[column.key] = [...values];
+    filterState = next;
+  }
+
+  /**
+   * The option list for one multiselect column: every DISTINCT raw value
+   * actually present among rows that pass every OTHER active filter (this
+   * column's own filter is excluded on purpose - an "Excel filter" always
+   * lets you see/deselect a value you already picked even if every other
+   * filter would otherwise hide rows carrying it). Computed fresh every
+   * time - "never hardcode values" - so a data refresh, a different
+   * function, or a KPI-card filter change all immediately reflect in the
+   * option list.
+   */
+  function distinctColumnValues(column) {
+    const otherFilterState = { ...filterState };
+    delete otherFilterState[column.key];
+    const candidateRows = filterRows(rows, columns, otherFilterState);
+    const labelByValue = new Map();
+    for (const row of candidateRows) {
+      const raw = getCellValue(row, column);
+      const value = raw === null || raw === undefined ? '' : String(raw);
+      if (!labelByValue.has(value)) labelByValue.set(value, formatCellValue(raw));
+    }
+    return [...labelByValue.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  function visibleMultiselectOptions(column) {
+    const state = multiselectState.get(column.key);
+    const options = distinctColumnValues(column);
+    state.optionLabelByValue = new Map(options.map((o) => [o.value, o.label]));
+    const query = state.searchQuery.trim().toLowerCase();
+    return query ? options.filter((o) => o.label.toLowerCase().includes(query)) : options;
+  }
+
+  function multiselectSummaryText(column) {
+    const selected = getSelectedValues(column);
+    if (selected.size === 0) return 'All';
+    const state = multiselectState.get(column.key);
+    const labels = [...selected].map((v) => state.optionLabelByValue.get(v) ?? v);
+    if (labels.length <= 2) return labels.join(', ');
+    return `${labels.slice(0, 2).join(', ')} +${labels.length - 2} more`;
+  }
+
+  function updateMultiselectSummary(column) {
+    const state = multiselectState.get(column.key);
+    state.buttonEl.textContent = '';
+    const summary = document.createElement('span');
+    summary.className = 'filterable-table-multiselect-summary';
+    summary.textContent = multiselectSummaryText(column);
+    const caret = document.createElement('span');
+    caret.className = 'filterable-table-multiselect-caret';
+    caret.textContent = '▾';
+    state.buttonEl.appendChild(summary);
+    state.buttonEl.appendChild(caret);
+    state.buttonEl.classList.toggle('is-active', getSelectedValues(column).size > 0);
+  }
+
+  function renderMultiselectOptionsList(column) {
+    const state = multiselectState.get(column.key);
+    const options = visibleMultiselectOptions(column);
+    const selected = getSelectedValues(column);
+
+    state.listEl.innerHTML = '';
+    if (options.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'filterable-table-multiselect-empty';
+      empty.textContent = 'No matching values.';
+      state.listEl.appendChild(empty);
+      return;
+    }
+    for (const option of options) {
+      const label = document.createElement('label');
+      label.className = 'filterable-table-multiselect-option';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selected.has(option.value);
+      checkbox.addEventListener('change', () => {
+        const next = getSelectedValues(column);
+        if (checkbox.checked) next.add(option.value);
+        else next.delete(option.value);
+        setSelectedValues(column, [...next]);
+        updateMultiselectSummary(column);
+        renderBody();
+        if (onStateChange) onStateChange();
+      });
+      const text = document.createElement('span');
+      text.textContent = option.label;
+      label.appendChild(checkbox);
+      label.appendChild(text);
+      state.listEl.appendChild(label);
+    }
+  }
+
+  function closeAllMultiselectDropdowns() {
+    for (const state of multiselectState.values()) {
+      state.panelEl.classList.add('hidden');
+      state.buttonEl.setAttribute('aria-expanded', 'false');
+    }
+    openMultiselectColumnKey = null;
+  }
+
+  function positionMultiselectPanel(column) {
+    const state = multiselectState.get(column.key);
+    // `position: fixed` (set in CSS) escapes every scrollable/clipping
+    // ancestor - including Functional Radar's own scrollable List View
+    // container - so the dropdown is never clipped the way the toolbar
+    // used to clip the timeline slider. Positioned here (against the
+    // button's live viewport rect) rather than relying on normal in-flow
+    // layout, which `position: fixed` deliberately opts out of.
+    const rect = state.buttonEl.getBoundingClientRect();
+    state.panelEl.style.top = `${rect.bottom + 4}px`;
+    state.panelEl.style.left = `${rect.left}px`;
+    state.panelEl.style.minWidth = `${Math.max(rect.width, 220)}px`;
+  }
+
+  function toggleMultiselectDropdown(column) {
+    const willOpen = openMultiselectColumnKey !== column.key;
+    closeAllMultiselectDropdowns();
+    if (!willOpen) return;
+    const state = multiselectState.get(column.key);
+    openMultiselectColumnKey = column.key;
+    state.searchQuery = '';
+    state.searchInputEl.value = '';
+    positionMultiselectPanel(column);
+    state.panelEl.classList.remove('hidden');
+    state.buttonEl.setAttribute('aria-expanded', 'true');
+    renderMultiselectOptionsList(column);
+    state.searchInputEl.focus();
+  }
+
+  function onDocumentPointerDown(ev) {
+    if (openMultiselectColumnKey === null) return;
+    const state = multiselectState.get(openMultiselectColumnKey);
+    if (state && (state.panelEl.contains(ev.target) || state.buttonEl.contains(ev.target))) return;
+    closeAllMultiselectDropdowns();
+  }
+  // Capture phase + stopPropagation: a host panel that mounts this table
+  // (e.g. panels/functional-radar.js's List View) commonly has its OWN
+  // bubble-phase Escape handler that closes the whole panel/workspace -
+  // that handler must never ALSO fire just because this dropdown was open,
+  // or dismissing a filter would surprise-close the entire host. Capture-
+  // phase listeners on `document` always run before bubble-phase listeners
+  // on `document` regardless of registration order, so this reliably wins
+  // the race and (via stopPropagation) prevents the event from ever
+  // reaching the host's own bubble-phase handler - but ONLY when a dropdown
+  // was actually open; Escape with nothing open is untouched and still
+  // reaches the host normally.
+  function onDocumentKeydown(ev) {
+    if (ev.key !== 'Escape' || openMultiselectColumnKey === null) return;
+    closeAllMultiselectDropdowns();
+    ev.stopPropagation();
+  }
+  document.addEventListener('mousedown', onDocumentPointerDown);
+  document.addEventListener('keydown', onDocumentKeydown, true);
+  containerEl.addEventListener('scroll', closeAllMultiselectDropdowns);
+  window.addEventListener('resize', closeAllMultiselectDropdowns);
+
+  /**
+   * Build one column's governed multi-select control: a closed-state
+   * toggle button (always showing the current selection - "selected values
+   * remain visible" - never just a bare icon) plus its dropdown panel
+   * (search box, Select All / Clear All, checkbox list).
+   */
+  function buildMultiselectControl(column) {
+    const wrap = document.createElement('div');
+    wrap.className = 'filterable-table-multiselect';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'filterable-table-multiselect-toggle';
+    button.setAttribute('aria-haspopup', 'listbox');
+    button.setAttribute('aria-expanded', 'false');
+    button.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      toggleMultiselectDropdown(column);
+    });
+
+    const panel = document.createElement('div');
+    panel.className = 'filterable-table-multiselect-panel hidden';
+
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search values…';
+    searchInput.className = 'filterable-table-multiselect-search-input';
+    searchInput.addEventListener('input', () => {
+      multiselectState.get(column.key).searchQuery = searchInput.value;
+      renderMultiselectOptionsList(column);
+    });
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'filterable-table-multiselect-search';
+    searchWrap.appendChild(searchInput);
+
+    const selectAllBtn = document.createElement('button');
+    selectAllBtn.type = 'button';
+    selectAllBtn.textContent = 'Select All';
+    selectAllBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const next = getSelectedValues(column);
+      for (const option of visibleMultiselectOptions(column)) next.add(option.value);
+      setSelectedValues(column, [...next]);
+      renderMultiselectOptionsList(column);
+      updateMultiselectSummary(column);
+      renderBody();
+      if (onStateChange) onStateChange();
+    });
+    const clearAllBtn = document.createElement('button');
+    clearAllBtn.type = 'button';
+    clearAllBtn.textContent = 'Clear All';
+    clearAllBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      setSelectedValues(column, []);
+      renderMultiselectOptionsList(column);
+      updateMultiselectSummary(column);
+      renderBody();
+      if (onStateChange) onStateChange();
+    });
+    const actions = document.createElement('div');
+    actions.className = 'filterable-table-multiselect-actions';
+    actions.appendChild(selectAllBtn);
+    actions.appendChild(clearAllBtn);
+
+    const list = document.createElement('div');
+    list.className = 'filterable-table-multiselect-list';
+    list.setAttribute('role', 'listbox');
+
+    panel.appendChild(searchWrap);
+    panel.appendChild(actions);
+    panel.appendChild(list);
+    wrap.appendChild(button);
+    wrap.appendChild(panel);
+
+    multiselectState.set(column.key, {
+      buttonEl: button,
+      panelEl: panel,
+      searchInputEl: searchInput,
+      listEl: list,
+      searchQuery: '',
+      optionLabelByValue: new Map(),
+    });
+    updateMultiselectSummary(column);
+    return wrap;
+  }
+
   function renderHeader() {
     headerRow.innerHTML = '';
     filterRow.innerHTML = '';
+    multiselectState.clear();
+    openMultiselectColumnKey = null;
     for (const column of columns) {
       const th = document.createElement('th');
       th.className = 'filterable-table-th';
@@ -341,17 +644,21 @@ export function mountFilterableTable(containerEl, config = {}) {
 
       const filterTh = document.createElement('th');
       filterTh.className = 'filterable-table-filter-cell';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = 'Filter…';
-      input.className = 'filterable-table-filter-input';
-      input.value = filterState[column.key] ?? '';
-      input.addEventListener('input', () => {
-        filterState = { ...filterState, [column.key]: input.value };
-        renderBody();
-        if (onStateChange) onStateChange();
-      });
-      filterTh.appendChild(input);
+      if (column.filterType === 'multiselect') {
+        filterTh.appendChild(buildMultiselectControl(column));
+      } else {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Filter…';
+        input.className = 'filterable-table-filter-input';
+        input.value = filterState[column.key] ?? '';
+        input.addEventListener('input', () => {
+          filterState = { ...filterState, [column.key]: input.value };
+          renderBody();
+          if (onStateChange) onStateChange();
+        });
+        filterTh.appendChild(input);
+      }
       filterRow.appendChild(filterTh);
     }
 
@@ -457,6 +764,10 @@ export function mountFilterableTable(containerEl, config = {}) {
       return { ...filterState };
     },
     destroy() {
+      document.removeEventListener('mousedown', onDocumentPointerDown);
+      document.removeEventListener('keydown', onDocumentKeydown, true);
+      containerEl.removeEventListener('scroll', closeAllMultiselectDropdowns);
+      window.removeEventListener('resize', closeAllMultiselectDropdowns);
       containerEl.innerHTML = '';
       containerEl.classList.remove('filterable-table-root');
     },
