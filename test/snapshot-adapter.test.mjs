@@ -126,8 +126,24 @@ test('nr04-golden-operational-universe.snapshot.json: input sections reflect the
   assert.equal(snapshot.sections.demandSignals.length, 8);
   assert.equal(snapshot.sections.demandSignalValues.length, 8);
   assert.equal(snapshot.sections.inventoryPositions.length, 5);
-  assert.equal(snapshot.sections.domainObjects.length, 161);
-  assert.equal(snapshot.sections.domainObjectLinks.length, 265);
+  // V1-CI-1: was 161/265 (Sprint 4) before the 2026-07-10 "Add files via
+  // upload" re-export legitimately added one new domainObject (the
+  // CPP-1000 prior drawing revision, object_key
+  // "drawing:DWG-NR-CPP-1000-210-REVB") plus the 8 relationship links that
+  // wire it into the existing ECO/recommendation/executive-briefing chain
+  // - confirmed via this file's own envelope.recordCounts
+  // (domainObjects: 162, domainObjectLinks: 273) and a fresh
+  // generatedAt/contentHash, i.e. a real production snapshot re-export,
+  // not a hand-edited count. See V1-CI-1's PR description for the full
+  // trace.
+  assert.equal(snapshot.sections.domainObjects.length, 162);
+  assert.equal(snapshot.sections.domainObjectLinks.length, 273);
+  // Pins the specific new object (not just the total) - see the derive.js
+  // test's matching assertion for the same rationale.
+  assert.ok(
+    snapshot.sections.domainObjects.some((o) => o.object_key === 'drawing:DWG-NR-CPP-1000-210-REVB'),
+    'the CPP-1000 prior drawing revision (Rev B) added by the 2026-07-10 NR04 re-export must be present'
+  );
 });
 
 test('nr04-canonical-universe.json: every link resolves to an object present in the same document (no dangling references)', () => {
