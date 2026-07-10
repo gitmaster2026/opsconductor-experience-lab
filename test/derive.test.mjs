@@ -184,14 +184,28 @@ test(`buildUniverseGraph: includes all 5 real commitments, all 6 real customers,
   assert.equal(commitmentNodes.length, 5);
   assert.equal(customerNodes.length, 6);
   assert.equal(curatedNodesFound.length, 9);
-  // The real NR04 Golden Operational Universe domain objects (161, Sprint 4),
-  // merged in by engine/snapshot-adapter.js from src/data/nr04-canonical-universe.json.
-  assert.equal(canonicalIds.size, 161);
-  assert.equal(canonicalNodesFound.length, 161);
+  // The real NR04 Golden Operational Universe domain objects (162, as of
+  // the 2026-07-10 "Add files via upload" re-export - see V1-CI-1's PR
+  // description for the full provenance trace), merged in by
+  // engine/snapshot-adapter.js from src/data/nr04-canonical-universe.json.
+  // Was 161 (Sprint 4) before that export added one legitimate new object:
+  // nr04:drawing:DWG-NR-CPP-1000-210-REVB (a prior drawing revision in the
+  // CPP-1000 engineering-change chain, fully wired into the existing graph
+  // via 8 new relationship links - not a duplicate or malformed row; see
+  // the assertion below, which pins the specific object rather than only
+  // the total, so a future accidental count drift can't silently pass by
+  // just updating this number again).
+  assert.equal(canonicalIds.size, 162);
+  assert.equal(canonicalNodesFound.length, 162);
   // Sample a couple of real NR04 object ids to confirm this is genuinely
   // canonical-snapshot data, not just a count coincidence.
   assert.ok(graph.nodes.some((n) => n.id === 'nr04:signal:EXEC-NR-GOU-001'));
   assert.ok(graph.nodes.some((n) => n.id === 'nr04:commitment:CUST-HORIZON-CPP-2026-09'));
+  // Pins the specific 162nd object (not just the total) - see V1-CI-1.
+  assert.ok(
+    graph.nodes.some((n) => n.id === 'nr04:drawing:DWG-NR-CPP-1000-210-REVB'),
+    'the CPP-1000 prior drawing revision (Rev B) added by the 2026-07-10 NR04 re-export must be present'
+  );
 });
 
 test(`buildUniverseGraph: derives a has_recommendation-equivalent edge (has_risk_state -> recommendation chain) for all 5 risk-board cells, including the 2 missing explicit relationships.json rows`, () => {
