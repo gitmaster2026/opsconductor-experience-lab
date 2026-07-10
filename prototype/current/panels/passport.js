@@ -282,16 +282,18 @@ function renderRecommendationsSection(recommendations) {
         ${list
           .map(
             (rec) => `
-          <li class="passport-entry ${rec.visibleAtSlice ? '' : 'is-dormant'}">
-            <div class="passport-entry-head">
-              <span class="ovg-entry-tag-group">${recommendationMarker(rec)}<span class="passport-entry-tag">${escapeHtml((rec.category ?? 'recommendation').replace(/_/g, ' '))}</span></span>
-              <span class="ovg-entry-tag-group">${recommendationBadgeHtml(rec)}<span class="passport-entry-status">${escapeHtml(rec.status ?? '—')}</span></span>
-            </div>
-            ${rec.evidence_summary ? `<p class="passport-entry-summary">${escapeHtml(rec.evidence_summary)}</p>` : ''}
-            <div class="passport-entry-foot">
-              <span>${formatDate(rec.created_at)}</span>
-              ${!rec.visibleAtSlice ? '<span class="dormant-tag">not yet visible at this time slice</span>' : ''}
-            </div>
+          <li>
+            <button type="button" class="passport-entry passport-entry-select ${rec.visibleAtSlice ? '' : 'is-dormant'}" ${rec.id ? `data-select-id="${escapeHtml(rec.id)}"` : 'disabled'}>
+              <div class="passport-entry-head">
+                <span class="ovg-entry-tag-group">${recommendationMarker(rec)}<span class="passport-entry-tag">${escapeHtml((rec.category ?? 'recommendation').replace(/_/g, ' '))}</span></span>
+                <span class="ovg-entry-tag-group">${recommendationBadgeHtml(rec)}<span class="passport-entry-status">${escapeHtml(rec.status ?? '—')}</span></span>
+              </div>
+              ${rec.evidence_summary ? `<p class="passport-entry-summary">${escapeHtml(rec.evidence_summary)}</p>` : ''}
+              <div class="passport-entry-foot">
+                <span>${formatDate(rec.created_at)}</span>
+                ${!rec.visibleAtSlice ? '<span class="dormant-tag">not yet visible at this time slice</span>' : ''}
+              </div>
+            </button>
           </li>`
           )
           .join('')}
@@ -323,16 +325,18 @@ function renderEvidenceSection(evidence) {
         ${list
           .map(
             (ev) => `
-          <li class="passport-entry ${ev.visibleAtSlice ? '' : 'is-dormant'}">
-            <div class="passport-entry-head">
-              <span class="ovg-entry-tag-group">${evidenceMarker(ev)}<span class="passport-entry-tag">${escapeHtml((ev.evidence_type ?? 'evidence').replace(/_/g, ' '))}</span></span>
-              <span class="ovg-entry-tag-group">${evidenceBadgeHtml(ev)}<span class="citation-chip">${escapeHtml(ev.id ?? '')}</span></span>
-            </div>
-            ${ev.evidence_summary ? `<p class="passport-entry-summary">${escapeHtml(ev.evidence_summary)}</p>` : ''}
-            <div class="passport-entry-foot">
-              <span class="source-cite">${escapeHtml(ev.source_table ?? '—')} · ${escapeHtml(ev.source_record_id ?? '—')}</span>
-              ${!ev.visibleAtSlice ? '<span class="dormant-tag">not yet visible at this time slice</span>' : ''}
-            </div>
+          <li>
+            <button type="button" class="passport-entry passport-entry-select ${ev.visibleAtSlice ? '' : 'is-dormant'}" ${ev.id ? `data-select-id="${escapeHtml(ev.id)}"` : 'disabled'}>
+              <div class="passport-entry-head">
+                <span class="ovg-entry-tag-group">${evidenceMarker(ev)}<span class="passport-entry-tag">${escapeHtml((ev.evidence_type ?? 'evidence').replace(/_/g, ' '))}</span></span>
+                <span class="ovg-entry-tag-group">${evidenceBadgeHtml(ev)}<span class="citation-chip">${escapeHtml(ev.id ?? '')}</span></span>
+              </div>
+              ${ev.evidence_summary ? `<p class="passport-entry-summary">${escapeHtml(ev.evidence_summary)}</p>` : ''}
+              <div class="passport-entry-foot">
+                <span class="source-cite">${escapeHtml(ev.source_table ?? '—')} · ${escapeHtml(ev.source_record_id ?? '—')}</span>
+                ${!ev.visibleAtSlice ? '<span class="dormant-tag">not yet visible at this time slice</span>' : ''}
+              </div>
+            </button>
           </li>`
           )
           .join('')}
@@ -629,7 +633,19 @@ function buildRecursiveModelFromPassport(passport) {
     sourceRecords,
     documents,
     externalHandoff: documents.length > 0 ? 'Representative external document path is available above; no live connector is implied in the Lab.' : null,
-    termination: relationships.length === 0 ? 'No deeper governed relationship is available for this object. The investigation terminates at evidence, source records, and representative documents.' : undefined,
+    // V1-UX-3: recursive-investigation-card.js's own default termination
+    // text claims "evidence, source records, or representative external
+    // reference shown above" - true whenever at least one of those layers
+    // actually rendered, but previously ALSO shown when relationships
+    // existed yet every deeper layer (evidence/transactions/source
+    // records/documents) was empty, silently overclaiming content that
+    // was never on screen. Now computed from what actually rendered.
+    termination:
+      relationships.length === 0
+        ? 'No deeper governed relationship is available for this object. The investigation terminates at evidence, source records, and representative documents.'
+        : evidence.length === 0 && transactions.length === 0 && sourceRecords.length === 0 && documents.length === 0
+          ? 'No deeper evidence, source record, or representative document is available for this object below its relationships.'
+          : undefined,
     extraClass: 'passport-recursive-investigation',
   };
 }

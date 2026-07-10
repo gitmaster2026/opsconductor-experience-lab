@@ -68,6 +68,7 @@ import { mountRelationshipLegend } from './panels/relationship-legend.js';
 import { mountOperationalGrammarLegend } from './panels/operational-grammar-legend.js';
 import { mountSavedViewsManager } from './engine/saved-views.js';
 import { defaultContinuityAction } from './engine/lens-continuity.js';
+import { withHistorySuppressed } from './engine/investigation-history.js';
 
 // ---------------------------------------------------------------------------
 // DOM references (same element ids as the previous prototype iteration, so
@@ -87,6 +88,7 @@ const els = {
   zoomLabel: document.getElementById('zoomLabel'),
   timeSlider: document.getElementById('time'),
   timeLabel: document.getElementById('timeLabel'),
+  timeTicks: document.getElementById('timeTicks'),
   leftPanel: document.getElementById('leftPanel'),
   jarvisPanel: document.getElementById('jarvisPanel'),
   universeCanvas: document.getElementById('universeCanvas'),
@@ -193,6 +195,31 @@ async function main() {
   els.timeSlider.value = String(initialSliceIndex);
   store.setTimeSlice(timeSliceRecords[initialSliceIndex].id);
 
+  // --- Timeline tick marks (V1-UX-3 Timeline Polish) ------------------------
+  //
+  // Built once (the slice count/labels are static for the loaded snapshot);
+  // updateToolbarLabels() below only toggles each tick's past/current/future
+  // class and updates the current-slice's "story focus" caption on every
+  // render, rather than rebuilding this DOM on every state change.
+  const timeTickButtons = timeSliceRecords.map((slice, index) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'time-tick';
+    btn.dataset.sliceIndex = String(index);
+    btn.title = slice.label;
+    btn.setAttribute('aria-label', `Jump to ${slice.label}`);
+    const dot = document.createElement('span');
+    dot.className = 'time-tick-dot';
+    const text = document.createElement('span');
+    text.className = 'time-tick-label';
+    text.textContent = slice.depth_step || slice.label;
+    btn.appendChild(dot);
+    btn.appendChild(text);
+    btn.addEventListener('click', () => store.setTimeSlice(slice.id));
+    if (els.timeTicks) els.timeTicks.appendChild(btn);
+    return btn;
+  });
+
   // --- Selection wrapper -----------------------------------------------------
   //
   // A single choke point for "the user explicitly picked ONE concrete
@@ -296,11 +323,20 @@ async function main() {
   // state.js's Back/Forward buttons instead - see that module's header for
   // why the two coexist rather than merging).
   function jumpToTrailIndex(index) {
-    const trail = store.getState().focusTrail;
-    const popsNeeded = trail.length - index;
-    for (let i = 0; i < popsNeeded; i += 1) {
-      store.popFocus();
-    }
+    // V1-UX-3 fix: without withHistorySuppressed(), engine/investigation-
+    // history.js's generic store subscriber saw each popFocus() here as an
+    // ordinary new navigation and truncated its OWN Forward (->) stack -
+    // meaning clicking an old Navigation History dot silently wiped
+    // Forward history the newer Back/Forward mechanism had built up, even
+    // though the two are meant to coexist without interfering with each
+    // other (see engine/investigation-history.js's header comment).
+    withHistorySuppressed(() => {
+      const trail = store.getState().focusTrail;
+      const popsNeeded = trail.length - index;
+      for (let i = 0; i < popsNeeded; i += 1) {
+        store.popFocus();
+      }
+    });
   }
 
   // --- Lens mounting -------------------------------------------------------
@@ -607,6 +643,21 @@ async function main() {
 
   // --- Rendering ---------------------------------------------------------
 
+  // V1-UX-3: applyLensVisibility() runs on every renderAll() pass, i.e. on
+  // every store change (hover included, since timeline.onUpdate() below
+  // fires on every notify()). Calling a lens's resize() unconditionally
+  // whenever it happens to be the active one meant a full canvas
+  // width/height reassignment (which clears the bitmap) plus a forced
+  // computeClusterLayout() recompute (lenses/universe.js's resize() calls
+  // recomputeLayoutIfNeeded(true), bypassing its own no-op guard) on every
+  // single hover/select/time-slice/zoom change - far more often than an
+  // actual resize occurs. Tracked here so resize() only runs when the
+  // visible lens/layout region actually changed shape (a real lens switch,
+  // or Conductor Studio/Functional Radar toggling #mainLayout); the
+  // separate window 'resize' listener below still handles real viewport
+  // resizes independent of this.
+  let lastVisibilityKey = null;
+
   function applyLensVisibility(state) {
     const isUniverse = state.workspaceLens === 'universe';
     const isRiskBoard = state.workspaceLens === 'risk_board';
@@ -638,39 +689,54 @@ async function main() {
     // than one replacing the other.
     els.mainLayout.classList.toggle('hidden', isConductorStudio || functionalRadarPanel.isFullScreen());
     els.conductorStudioEl.classList.toggle('hidden', !isConductorStudio);
-    // UX hardening: when a commitment is the current Universe focus (the
-    // Passport panel is open on that same commitment), the detail panel
-    // should read as "operational network -> selected commitment ->
-    // investigation details" left to right, matching where Universe's own
-    // existing Logo Flow Focus Mode (lenses/universe.js's
-    // DIRECTIONAL_FOCUS_ANCHOR_X_FRACTION) already settles the focused node
-    // - toward the right portion of the canvas. Today the Passport/detail
-    // aside is always the FIRST grid column (to the canvas's left), which
-    // puts it on the opposite side from the node it describes. This swaps
-    // which of the SAME three existing grid regions (#leftPanel/.workspace/
-    // #jarvisPanel) sits in which grid-template-columns track via a single
-    // class - it does not add a new panel, does not touch Universe's own
-    // animation/anchor logic, and reverts the instant the commitment is no
-    // longer both selected and the visible Passport subject.
-    const isCommitmentFocus =
-      isUniverse && state.leftPanelMode === 'passport' && timeline.getDerivedBundle().passport?.overview?.objectType === 'commitment';
-    els.mainLayout.classList.toggle('commitment-focus-detail-right', isCommitmentFocus);
+    // UX hardening: whenever ANY object is the current Universe focus (the
+    // Passport panel is open on that same object), the detail panel should
+    // read as "operational network -> selected object -> investigation
+    // details" left to right, matching where Universe's own existing Logo
+    // Flow Focus Mode (lenses/universe.js's DIRECTIONAL_FOCUS_ANCHOR_X_FRACTION)
+    // already settles the focused node - toward the right portion of the
+    // canvas. Today the Passport/detail aside is always the FIRST grid
+    // column (to the canvas's left), which puts it on the opposite side
+    // from the node it describes. This swaps which of the SAME three
+    // existing grid regions (#leftPanel/.workspace/#jarvisPanel) sits in
+    // which grid-template-columns track via a single class - it does not
+    // add a new panel, does not touch Universe's own animation/anchor
+    // logic, and reverts the instant nothing is both selected and the
+    // visible Passport subject.
+    //
+    // V1-UX-3: originally gated on objectType === 'commitment' only, which
+    // meant every other selectable object type (work orders, evidence,
+    // recommendations, etc.) settled its focused node on the right per
+    // Focus Mode while the Passport describing it stayed on the left - the
+    // exact "opposite side from the node it describes" problem this class
+    // exists to fix, just left unfixed for every non-commitment object.
+    // Broadened to any single-object Universe focus (audit finding, not a
+    // new feature - the CSS/behavior already existed, only the gate widens).
+    const isSingleObjectFocus =
+      isUniverse && state.leftPanelMode === 'passport' && state.selectedObjectId !== null;
+    els.mainLayout.classList.toggle('commitment-focus-detail-right', isSingleObjectFocus);
     // Resize/re-render whichever lens just became visible - a canvas (and
     // an absolutely-positioned DOM layout) both need a fresh
     // measurement/redraw after being un-hidden, since a hidden element's
-    // getBoundingClientRect() reports zero size.
-    if (isUniverse) {
-      universeLens.resize();
-    } else if (isRiskBoard) {
-      riskBoardLens.resize();
-    } else if (isSpider) {
-      spiderLens.resize();
-    } else if (isText) {
-      textViewLens.resize();
-    } else if (isWorkbench) {
-      workbenchLens.resize();
-    } else if (isConductorStudio) {
-      conductorStudioLens.resize();
+    // getBoundingClientRect() reports zero size. Gated on the visibility
+    // key actually changing (see lastVisibilityKey's own comment above) so
+    // this doesn't re-run on every unrelated store notification.
+    const visibilityKey = `${state.workspaceLens}|${els.mainLayout.classList.contains('hidden')}`;
+    if (visibilityKey !== lastVisibilityKey) {
+      lastVisibilityKey = visibilityKey;
+      if (isUniverse) {
+        universeLens.resize();
+      } else if (isRiskBoard) {
+        riskBoardLens.resize();
+      } else if (isSpider) {
+        spiderLens.resize();
+      } else if (isText) {
+        textViewLens.resize();
+      } else if (isWorkbench) {
+        workbenchLens.resize();
+      } else if (isConductorStudio) {
+        conductorStudioLens.resize();
+      }
     }
   }
 
@@ -695,6 +761,32 @@ async function main() {
       // has no real date (formatSnapshotDate returns null).
       const snapshotDate = formatSnapshotDate(slice.date);
       els.timeLabel.textContent = snapshotDate ? `${slice.label} · Snapshot Date: ${snapshotDate}` : slice.label;
+
+      // Current/historical/future tick styling: a tick before the active
+      // index has already occurred in the investigation narrative, one
+      // after it hasn't happened yet, and the active index is "now" for
+      // this investigation's timeline - distinct from wall-clock time,
+      // which is exactly what docs/TIMELINE_ENGINE.md's "one time slider
+      // controls every surface" principle means by time here.
+      timeTickButtons.forEach((btn, i) => {
+        btn.classList.toggle('is-past', i < sliceIndex);
+        btn.classList.toggle('is-current', i === sliceIndex);
+        btn.classList.toggle('is-future', i > sliceIndex);
+        btn.setAttribute('aria-current', i === sliceIndex ? 'step' : 'false');
+      });
+
+      // Story focus caption (V1-UX-3): time-slices.json's own
+      // selected_story_object_id (surfaced via engine/timeline.js's bundle,
+      // see that file's comment) names which object THIS slice's
+      // investigation narrative is emphasizing - the honest way to show a
+      // slider move from t2 to t3 changed something, even on the slices
+      // where the same objects are already all revealed.
+      const bundle = timeline.getDerivedBundle();
+      const storyObjectId = bundle.timeline?.storyObjectId ?? null;
+      const storyNode = storyObjectId
+        ? bundle.universe.nodes.find((n) => n.id === storyObjectId)
+        : null;
+      els.timeLabel.title = storyNode ? `Current investigation focus: ${storyNode.label}` : '';
     }
   }
 

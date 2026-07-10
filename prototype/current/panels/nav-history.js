@@ -21,13 +21,17 @@
 // exactly what "dots = investigation steps, click any dot to jump to that
 // point" describes.
 //
-// Deliberately does NOT restore Operational Scope on jump - focusTrail
-// only ever stores object ids (Phase 1's shape), never a scope snapshot,
-// and this item's hard constraint is "do not build new state plumbing";
-// extending focusTrail to also snapshot scope per entry would be exactly
-// that. Logged as a known, deliberate limitation in the phase report, not
-// a bug - selectedObjectId, cameraTarget, and panel state (leftPanelMode)
-// ARE restored, since popFocus() already sets all three.
+// Deliberately does NOT restore Operational Scope OR workspaceLens on
+// jump - focusTrail only ever stores object ids (Phase 1's shape), never a
+// scope/lens snapshot, and this item's hard constraint is "do not build
+// new state plumbing"; extending focusTrail to also snapshot scope/lens
+// per entry would be exactly that. Logged as a known, deliberate
+// limitation in the phase report, not a bug - selectedObjectId,
+// cameraTarget, and panel state (leftPanelMode) ARE restored, since
+// popFocus() already sets all three. (V1-UX-3 audit note: the newer,
+// richer engine/investigation-history.js Back/Forward DOES restore
+// workspaceLens/scopeContext too, for callers that need that - see its own
+// header for why the two mechanisms coexist rather than merging.)
 
 function escapeHtml(value) {
   return String(value)

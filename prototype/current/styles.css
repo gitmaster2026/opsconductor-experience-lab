@@ -249,6 +249,82 @@ body {
   white-space: nowrap;
 }
 
+/* V1-UX-3 Timeline Polish: past/current/future tick marks under the Time
+   slider, using only existing design tokens. Past ticks read as already-
+   traversed (filled, muted), the current tick is the emphasized "now" for
+   this investigation's timeline, future ticks are outlined/dim to read as
+   not-yet-reached rather than simply identical to the past. */
+.time-ticks {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.time-tick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  padding: 2px 5px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+}
+
+.time-tick-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gray);
+  border: 1px solid var(--gray);
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.time-tick-label {
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.time-tick.is-past .time-tick-dot {
+  background: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+  opacity: 0.55;
+}
+
+.time-tick.is-past .time-tick-label {
+  color: var(--text-secondary);
+}
+
+.time-tick.is-current .time-tick-dot {
+  background: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+  box-shadow: 0 0 0 3px rgba(90, 209, 255, 0.22);
+}
+
+.time-tick.is-current .time-tick-label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.time-tick.is-future .time-tick-dot {
+  background: transparent;
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.time-tick.is-future .time-tick-label {
+  color: var(--text-secondary);
+  opacity: 0.65;
+}
+
+.time-tick:focus-visible .time-tick-dot {
+  outline: 2px solid var(--cyan-accent);
+  outline-offset: 2px;
+}
+
 /* ---------------------------------------------------------------------
    Layout
    --------------------------------------------------------------------- */
@@ -1320,7 +1396,11 @@ body {
   margin: 0;
   font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  /* V1-UX-3: standardized to 0.08em - matches .kpi-card-title and the
+     newer .functional-workspace-eyebrow/.risk-site-strip-header, which all
+     share this exact same 10.5px "section eyebrow" role but had drifted to
+     three different letter-spacing values (0.09em/0.07em/0.08em). */
+  letter-spacing: 0.08em;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -1435,7 +1515,8 @@ body {
 .kpi-card-title {
   font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  /* V1-UX-3: standardized to 0.08em - see .dash-section-title's comment. */
+  letter-spacing: 0.08em;
   color: var(--text-secondary);
 }
 
@@ -1881,6 +1962,35 @@ body {
 .passport-entry.is-dormant {
   opacity: 0.5;
   filter: saturate(0.6);
+}
+
+/* V1-UX-3: Evidence and Recommendations entries are real, selectable
+   Universe graph nodes (see engine/derive.js's node building), but were
+   previously rendered as plain, non-interactive <li> cards - a click-
+   through dead end distinct from every other Passport section (Relationships,
+   Collection members), which already use exactly this button-wrapped
+   pattern. `.passport-entry` keeps its existing card box model unchanged;
+   this only adds the interactive-element resets a <button> needs to look
+   identical to the previous <li>, plus the same hover/focus affordance
+   `.passport-relationship-item` already has. */
+.passport-entry-select {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.passport-entry-select:hover,
+.passport-entry-select:focus-visible {
+  background: var(--card-bg-hover);
+  border-color: var(--cyan-accent);
+  outline: none;
+}
+
+.passport-entry-select:disabled {
+  cursor: default;
 }
 
 .passport-entry-head {
@@ -2997,6 +3107,15 @@ body {
   background: rgba(90, 209, 255, 0.22);
 }
 
+/* V1-UX-3: every other Probe button (.passport-probe-btn and its
+   documented "benefits every existing Probe button" comment above) already
+   has a keyboard focus ring; this one - a separate, fully duplicated rule
+   block rather than sharing that class - never got one. */
+.hover-preview-probe-btn:focus-visible {
+  outline: 2px solid var(--cyan-accent);
+  outline-offset: 2px;
+}
+
 /* ---------------------------------------------------------------------
    "Manage Saved Views" modal (V5 Phase 4.6, engine/saved-views.js) -
    same visual pattern as the Scope Explorer modal above (backdrop +
@@ -4013,6 +4132,12 @@ body {
   display: none;
 }
 
+.universe-search-empty {
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
 .universe-search-result {
   appearance: none;
   width: 100%;
@@ -4174,6 +4299,12 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 10px;
+  /* V1-UX-3: this is itself a CSS Grid item of .functional-radar-groups
+     (repeat(auto-fit, minmax(280px, 1fr))) - grid items also default to
+     min-width: auto, so without this override the SAME nowrap-text sizing
+     bug described on .functional-radar-object-row could still force this
+     whole column wider than its track. See that rule's comment. */
+  min-width: 0;
 }
 
 .functional-radar-group.is-empty {
@@ -4224,11 +4355,22 @@ body {
 .functional-radar-object-row {
   display: grid;
   gap: 4px;
+  /* V1-UX-3 fix: a grid/flex item's default min-width is "auto" (its
+     content's own max-content size), not 0. .functional-radar-object-label
+     below sets white-space:nowrap so its intrinsic min-content width IS
+     its full unwrapped text width - that width was bubbling up through
+     every ancestor here (none of which overrode min-width), forcing this
+     row wider than its 280px grid column and visibly overlapping the
+     neighboring Functional Radar column. min-width: 0 on every ancestor in
+     this chain lets text-overflow: ellipsis on the label actually clip
+     instead of pushing the whole row wider than the layout. */
+  min-width: 0;
 }
 
 .functional-radar-object {
   appearance: none;
   width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -4253,6 +4395,7 @@ body {
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-width: 0;
 }
 
 .functional-radar-object-label {

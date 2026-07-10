@@ -99,7 +99,13 @@ export function mountUniverseSearchPanel(containerEl, callbacks) {
     if (activeIndex >= currentResults.length) {
       activeIndex = currentResults.length > 0 ? 0 : -1;
     }
-    const isOpen = currentResults.length > 0;
+    // V1-UX-3: a query that matches nothing used to just render an empty
+    // (hidden) dropdown with no feedback at all - the one lens/panel in
+    // the app without an honest empty state (Risk Board, Radar, Text View,
+    // and Passport all show a worded message when there's nothing to
+    // show). Keep the dropdown open to show that message whenever there's
+    // an active query, whether or not it matched.
+    const isOpen = trimmed.length > 0;
 
     containerEl.innerHTML = `
       <div class="universe-search-field">
@@ -118,9 +124,11 @@ export function mountUniverseSearchPanel(containerEl, callbacks) {
         />
       </div>
       <ul id="universeSearchResults" class="universe-search-results${isOpen ? '' : ' hidden'}" role="listbox">
-        ${currentResults
-          .map(
-            (result, index) => `
+        ${currentResults.length === 0 && trimmed.length > 0
+          ? `<li role="presentation" class="universe-search-empty">No matching operational objects.</li>`
+          : currentResults
+              .map(
+                (result, index) => `
               <li role="presentation">
                 <button
                   type="button"
@@ -135,8 +143,8 @@ export function mountUniverseSearchPanel(containerEl, callbacks) {
                 </button>
               </li>
             `
-          )
-          .join('')}
+              )
+              .join('')}
       </ul>
     `;
 

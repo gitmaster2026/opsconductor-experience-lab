@@ -2129,7 +2129,16 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
   }
 
   function onDoubleClick() {
+    // V1-UX-3: recenter() alone used to leave selectedObjectId (and thus
+    // Focus Mode's orbit/anchor state) untouched while the camera snapped
+    // back to the full overview - a confusing partial reset where the
+    // Passport still showed a "focused" object the view no longer visually
+    // focused. Double-click is a "show me everything" gesture, so it now
+    // clears selection too, matching Return to Universe's own semantics
+    // (panels/return-to-universe.js) instead of introducing a third,
+    // inconsistent partial-reset behavior.
     recenter();
+    if (typeof onSelect === 'function') onSelect(null);
   }
 
   function onPointerLeave() {
