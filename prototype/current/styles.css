@@ -3365,6 +3365,17 @@ body {
   font-size: 11px;
   text-transform: capitalize;
   letter-spacing: 0.02em;
+  /* V1-UX-3 fix: this text has no click handler (lenses/spider.js's
+     drawLabels() never wires one) but SVG text still captures pointer
+     events over its glyph area by default. When a spoke's score positions
+     its .spider-vertex circle near the outer label ring, the label's own
+     hit area sat on top of the vertex in real browser hit-testing (not a
+     test-tool artifact - confirmed via direct DOM click dispatch bypassing
+     the occluded coordinate), silently blocking a real mouse click on a
+     primary Probe affordance. pointer-events: none lets clicks pass
+     through to whatever's actually underneath - the vertex circle - with
+     zero visual or layout change. */
+  pointer-events: none;
 }
 
 .spider-empty {
