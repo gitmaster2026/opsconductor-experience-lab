@@ -276,6 +276,16 @@ export function selectObject(id) {
     throw new Error('selectObject: id must be a string or null');
   }
 
+  // Re-selecting whatever is already selected is a no-op: without this
+  // guard, clicking an already-selected node would push it onto its OWN
+  // focusTrail (a self-referencing breadcrumb) and restart cameraPhase at
+  // 'depart' even though the camera has already arrived - both visible as
+  // confusing no-op history/flight churn (found during the V1-UX-3
+  // cross-lens consistency audit).
+  if (id === store.state.selectedObjectId) {
+    return;
+  }
+
   // Remember where we were before changing selection (see pushFocus() doc;
   // same push semantics, inlined for a single atomic setState call - see
   // the design note above).

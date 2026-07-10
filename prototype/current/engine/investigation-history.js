@@ -178,6 +178,34 @@ function applyTarget(target) {
   lastSnapshot = captureSnapshot(getState());
 }
 
+/**
+ * Run `fn` (a synchronous function that mutates engine/state.js's store,
+ * e.g. via one or more popFocus() calls) WITHOUT this module recording the
+ * resulting state change(s) as ordinary navigation. Without this, a jump
+ * driven by the older focusTrail/popFocus() mechanism (panels/nav-history.js's
+ * dot rail - see app.js's jumpToTrailIndex()) is otherwise indistinguishable
+ * from a brand-new user navigation to this module's own subscriber, which
+ * (per recordNavigation()'s documented browser-history convention) silently
+ * truncates whatever Forward (->) stack this mechanism had built up - a real
+ * cross-mechanism bug found during the V1-UX-3 cross-lens consistency audit:
+ * the two coexisting history systems must not corrupt each other just
+ * because they both listen to the same underlying store.
+ * After `fn` runs, lastSnapshot is resynced to the store's new state so the
+ * NEXT genuinely-new navigation is compared against where things actually
+ * ended up, not against a now-stale snapshot.
+ * @param {() => void} fn
+ */
+export function withHistorySuppressed(fn) {
+  ensureSubscribed();
+  isRestoring = true;
+  try {
+    fn();
+  } finally {
+    isRestoring = false;
+  }
+  lastSnapshot = captureSnapshot(getState());
+}
+
 /** Step back one investigation state, if possible. No-op otherwise. */
 export function goBack() {
   ensureSubscribed();

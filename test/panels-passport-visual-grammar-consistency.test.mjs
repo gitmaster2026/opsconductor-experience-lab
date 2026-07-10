@@ -193,8 +193,17 @@ test('the supporting evidence record\'s secondary ID stays visible in both the c
   // section (its content became the conclusion sentence, not a duplicate
   // recursive list row) - documenting the intentional asymmetry, not
   // asserting a false universal-consistency requirement.
+  //
+  // V1-UX-3: the classic Evidence section's <li> is now wrapped in a
+  // <button data-select-id="EVID-LEAD-001"> (previously a non-interactive
+  // <li> - a real click-through dead end fixed this sprint, see
+  // panels/passport.js's renderEvidenceSection()), so the id now appears
+  // TWICE within the classic section alone: once in the visible
+  // .citation-chip text (unchanged) and once as that new data attribute.
+  // Still zero occurrences in the recursive card, so "classic only" still
+  // holds - only the classic section's own occurrence count changed.
   const leadOccurrences = html.split('EVID-LEAD-001').length - 1;
-  assert.equal(leadOccurrences, 1, `expected the lead entry's id in exactly 1 place (classic only), found ${leadOccurrences}`);
+  assert.equal(leadOccurrences, 2, `expected the lead entry's id in exactly 2 places (classic citation-chip text + its new data-select-id attribute, still none in the recursive card), found ${leadOccurrences}`);
 });
 
 test('the recommendation record\'s secondary ID/reference stays visible in the recursive Transactions layer, matching the classic section\'s own id-bearing category tag', () => {

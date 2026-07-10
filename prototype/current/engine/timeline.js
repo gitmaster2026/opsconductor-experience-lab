@@ -190,6 +190,22 @@ export function initTimeline({ store, getSnapshot, derive }) {
       timeline: {
         sliceIndex,
         sliceId: timeSlices[sliceIndex] ? timeSlices[sliceIndex].id : null,
+        // V1-UX-3 (Timeline Polish): time-slices.json's own
+        // selected_story_object_id field (docs/field-map.md: "Timeline
+        // fixture pointer to the object currently emphasized by a slice")
+        // was already real, governed data but had never been surfaced by
+        // any consumer - a purely additive passthrough, not a new derived
+        // concept. This is what lets the toolbar honestly distinguish t2
+        // ("Recommendation generated," story focus = the recommendation)
+        // from t3 ("Operational relationships exposed," story focus = the
+        // customer-escalation source record) even though
+        // resolveVisibilityForSlice()'s own reveal-count arrays are
+        // identical for those two slices by design (see that function's
+        // own docstring) - the depth step is real, it's WHICH object the
+        // investigation is emphasizing that changes, not how many objects
+        // are visible.
+        storyObjectId: timeSlices[sliceIndex]?.selected_story_object_id ?? null,
+        allSlices: timeSlices,
         visibility,
       },
       hierarchyPath,

@@ -441,3 +441,25 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* V1-UX-3: this file had no narrow-viewport handling at all, unlike its
+   two sibling stylesheets (operational-visual-grammar.css,
+   risk-board-recursion.css), which both have a matching breakpoint. The
+   KPI/Relationship grids already reflow on their own (repeat(auto-fill,
+   minmax(...))); the header row (title + function switch + close button
+   side by side, fixed 22px/28px padding) is what actually needs it. */
+@media (max-width: 640px) {
+  .functional-workspace-header {
+    flex-wrap: wrap;
+    padding: 16px 16px 12px;
+    gap: 12px;
+  }
+
+  .functional-workspace-title {
+    font-size: 20px;
+  }
+
+  .functional-workspace-fn-switch {
+    max-width: none;
+  }
+}

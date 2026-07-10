@@ -353,7 +353,14 @@ export function mountFilterableTable(containerEl, config = {}) {
 
   const emptyNotice = document.createElement('div');
   emptyNotice.className = 'filterable-table-empty';
-  emptyNotice.textContent = 'No rows.';
+  // V1-UX-3: matches the wording style of every other empty state in the
+  // app (e.g. Passport's "No related objects in the operational graph.",
+  // "No recommendations for this object yet.") rather than a bare,
+  // technical "No rows." Deliberately doesn't say "filters" specifically -
+  // this notice shows whenever visibleRows is empty (line ~734), which is
+  // also true with no filter active at all (e.g. a genuinely empty source),
+  // so a filter-specific message would be dishonest in that case.
+  emptyNotice.textContent = 'No rows to display for the current view.';
   containerEl.appendChild(emptyNotice);
 
   function toggleSort(columnKey) {
