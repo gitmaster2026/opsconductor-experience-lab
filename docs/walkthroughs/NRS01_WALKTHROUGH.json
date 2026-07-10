@@ -1,0 +1,142 @@
+{
+  "walkthroughId": "nrs01-supplier-shortage-manufacturing-recovery",
+  "title": "Supplier Shortage → Manufacturing Recovery",
+  "scenario": "NRS-01",
+  "status": "verified-2026-07-10",
+  "verifiedAgainst": {
+    "repo": "gitmaster2026/opsconductor-experience-lab",
+    "commit": "4f31aa2bcb04d17747116df46a5494e88194df14",
+    "snapshotContentHash": "e88a298c60b11b100ccb413e314d02c0bd3e175a44fd52bee035015386d47f41"
+  },
+  "optional": true,
+  "reusesExistingNavigation": true,
+  "steps": [
+    {
+      "id": 1,
+      "title": "The commitment at risk",
+      "explanation": "Every investigation starts from business exposure, not a technical object. Horizon LNG Partners has a $250,000 commitment showing critical risk.",
+      "highlightedUiElement": "#universeSearch input, .top-commitment-risk-row[data-customer='Horizon LNG Partners']",
+      "targetObjectId": "RB-CPP-HORIZON",
+      "targetObjectLabel": "Horizon LNG Partners ITEM-NR-CPP-1000 risk cell",
+      "targetLens": "risk_board",
+      "leftPanel": "dashboard",
+      "expectedUserAction": "Type \"Horizon\" into Universe Search, or click the 'Horizon LNG Partn...' row under Top Commitment Risks on the Dashboard.",
+      "expectedApplicationState": "selectedObjectId=RB-CPP-HORIZON; leftPanelMode can remain dashboard or switch to passport",
+      "founderNarration": "This is a live $250,000 commitment to Horizon LNG Partners. It's flagged critical. Let's find out why."
+    },
+    {
+      "id": 2,
+      "title": "The commitment's biography",
+      "explanation": "Open Passport to see the full picture: what this commitment is, why it matters, and what's connected to it.",
+      "highlightedUiElement": "#panelPassport",
+      "targetObjectId": "RB-CPP-HORIZON",
+      "targetLens": "risk_board",
+      "leftPanel": "passport",
+      "expectedUserAction": "Click the 'Passport' toggle in the left-panel control group.",
+      "expectedApplicationState": "leftPanelMode=passport; Passport renders Overview/Current Risk/Relationships/Recommendations/Evidence/Timeline/Source Records/Documents for RB-CPP-HORIZON",
+      "founderNarration": "This is the commitment's full operational passport — everything OpsConductor knows about it, in one place, not spread across five ERP screens."
+    },
+    {
+      "id": 3,
+      "title": "See it in the graph",
+      "explanation": "Switch to Universe to see the commitment's real position in the operational graph — not a mockup, the live merged graph.",
+      "highlightedUiElement": "#lensUniverse",
+      "targetObjectId": "RB-CPP-HORIZON",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Click 'Universe' in the Investigate control group.",
+      "expectedApplicationState": "workspaceLens=universe; camera focuses on RB-CPP-HORIZON with related nodes fanned left (Focus Mode)",
+      "founderNarration": "Every line here is a real relationship — supplier, lot, inspection, work order, customer commitment. This isn't a diagram we drew. It's derived from the data."
+    },
+    {
+      "id": 4,
+      "title": "Root cause: the engineering change",
+      "explanation": "The commitment's risk traces to an engineering change on the CPP-1000 impeller, triggered by a supplier casting issue.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:eco:ECO-NR-GOU-099",
+      "targetObjectLabel": "ECO-NR-GOU-099 — CPP-1000 impeller clearance tolerance update",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"ECO-NR-GOU-099\", or click the Relationships-section row for it from the commitment's Passport.",
+      "expectedApplicationState": "selectedObjectId=nr04:eco:ECO-NR-GOU-099",
+      "founderNarration": "Engineering opened a change order against Apex Foundry Group's casting. That change order is the pivot point of this whole story — it's also where our second scenario, the engineering-change investigation, begins."
+    },
+    {
+      "id": 5,
+      "title": "The affected material lot",
+      "explanation": "The ECO placed a hold on a specific incoming casting lot.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:lot:LOT-APX-C1088",
+      "targetObjectLabel": "Lot LOT-APX-C1088 (heat H-7726, Apex Foundry Group)",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"LOT-APX-C1088\" or click the ECO's 'places_hold_on' relationship row.",
+      "expectedApplicationState": "selectedObjectId=nr04:lot:LOT-APX-C1088",
+      "founderNarration": "This is the actual physical lot the hold applies to — received August 2nd, tied to a specific supplier heat number."
+    },
+    {
+      "id": 6,
+      "title": "The nonconformance",
+      "explanation": "Receiving inspection found a dimensional nonconformance and localized porosity on this lot — the quality event that forced the recovery plan.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:ncr:NCR-NR-GOU-301",
+      "targetObjectLabel": "NCR-NR-GOU-301",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"NCR-NR-GOU-301\" or click through from the lot's Relationships.",
+      "expectedApplicationState": "selectedObjectId=nr04:ncr:NCR-NR-GOU-301",
+      "founderNarration": "One nonconformance record, one meaning, used consistently everywhere it's referenced — dimensional issue plus porosity on this one lot."
+    },
+    {
+      "id": 7,
+      "title": "The disposition decision",
+      "explanation": "Material Review Board approved a controlled rework path rather than scrapping the lot.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:mrb:MRB-NR-GOU-117",
+      "targetObjectLabel": "MRB-NR-GOU-117 — Use-as-is with engineering-approved rework traveler",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"MRB-NR-GOU-117\" or click through from the NCR's Relationships.",
+      "expectedApplicationState": "selectedObjectId=nr04:mrb:MRB-NR-GOU-117",
+      "founderNarration": "Quality didn't scrap the lot — they authorized a certified repair path. That's the decision that keeps this commitment recoverable instead of lost."
+    },
+    {
+      "id": 8,
+      "title": "The recovery vendor",
+      "explanation": "A certified outside-operation purchase order sends the affected casting out for weld repair.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:osp-po:PO-OSP-24071",
+      "targetObjectLabel": "PO-OSP-24071 — Precision Alloy Repair Services",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"PO-OSP-24071\".",
+      "expectedApplicationState": "selectedObjectId=nr04:osp-po:PO-OSP-24071",
+      "founderNarration": "This is the actual outside-operation PO — the repair vendor, the cost, the schedule commitment that has to hold for Horizon's date to hold."
+    },
+    {
+      "id": 9,
+      "title": "The finish line: FAT",
+      "explanation": "Everything converges on the Factory Acceptance Test at Grand Junction — the gate that determines whether Horizon's commitment ships on time.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:fat:FAT-NR-GOU-6101",
+      "targetObjectLabel": "FAT-NR-GOU-6101 — Grand Junction FAT",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"FAT-NR-GOU-6101\".",
+      "expectedApplicationState": "selectedObjectId=nr04:fat:FAT-NR-GOU-6101",
+      "founderNarration": "This is the gate. Everything we just walked through exists to protect this test date, and through it, the Horizon commitment."
+    },
+    {
+      "id": 10,
+      "title": "Watch it unfold over time",
+      "explanation": "Scrub the Time slider to see the recovery narrative reveal in the order it actually happened.",
+      "highlightedUiElement": "#time",
+      "targetObjectId": null,
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Drag the Time slider from Baseline through t3.",
+      "expectedApplicationState": "timeSliceId advances 0→3; timeline tick row shows past/current/future; breadcrumb stepper advances Executive Signal → Shortage → Recommendation → Operational Relationships",
+      "founderNarration": "None of this was pre-scripted for today — this is the same data, replayed on its own timeline."
+    }
+  ]
+}

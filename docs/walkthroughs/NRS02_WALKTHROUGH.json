@@ -1,0 +1,123 @@
+{
+  "walkthroughId": "nrs02-engineering-change-customer-impact",
+  "title": "Engineering Change → Customer/Operational Impact",
+  "scenario": "NRS-02",
+  "status": "verified-2026-07-10",
+  "verifiedAgainst": {
+    "repo": "gitmaster2026/opsconductor-experience-lab",
+    "commit": "4f31aa2bcb04d17747116df46a5494e88194df14",
+    "snapshotContentHash": "e88a298c60b11b100ccb413e314d02c0bd3e175a44fd52bee035015386d47f41"
+  },
+  "optional": true,
+  "reusesExistingNavigation": true,
+  "convergesWith": "nrs01-supplier-shortage-manufacturing-recovery",
+  "sharedObjects": [
+    "nr04:eco:ECO-NR-GOU-099",
+    "nr04:lot:LOT-APX-C1088",
+    "nr04:ncr:NCR-NR-GOU-301",
+    "nr04:mrb:MRB-NR-GOU-117",
+    "nr04:osp-po:PO-OSP-24071",
+    "RB-CPP-HORIZON"
+  ],
+  "steps": [
+    {
+      "id": 1,
+      "title": "Same change order, engineering's view",
+      "explanation": "This walkthrough starts where NRS-01 pivoted: the same ECO, but now walking outward through engineering's authority instead of the supply-recovery path.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:eco:ECO-NR-GOU-099",
+      "targetObjectLabel": "ECO-NR-GOU-099 — CPP-1000 impeller clearance tolerance update",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"ECO-NR-GOU-099\" (or continue directly from NRS-01 step 4 without re-searching).",
+      "expectedApplicationState": "selectedObjectId=nr04:eco:ECO-NR-GOU-099",
+      "founderNarration": "What happens when engineering changes the product after production has already started? Here's the change order at the center of it."
+    },
+    {
+      "id": 2,
+      "title": "See the blast radius",
+      "explanation": "Focus on the ECO in Universe to see everything it touches, fanned out in one view — BOMs, routing, drawings, work orders.",
+      "highlightedUiElement": "#lensUniverse",
+      "targetObjectId": "nr04:eco:ECO-NR-GOU-099",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Click 'Universe'.",
+      "expectedApplicationState": "workspaceLens=universe; ECO-NR-GOU-099 focused with 15 relationships fanned left",
+      "founderNarration": "One engineering decision, fifteen downstream relationships. This is the actual blast radius, not an estimate."
+    },
+    {
+      "id": 3,
+      "title": "The engineering bill of materials",
+      "explanation": "The change flows into the impeller housing's engineering BOM.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:bom:EBOM-CPP-1000-REV-C",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"EBOM-CPP-1000-REV-C\".",
+      "expectedApplicationState": "selectedObjectId=nr04:bom:EBOM-CPP-1000-REV-C",
+      "founderNarration": "The engineering BOM under the new revision — the structural definition of what changed."
+    },
+    {
+      "id": 4,
+      "title": "The manufacturing bill of materials",
+      "explanation": "Engineering's definition flows into the manufacturing BOM the shop floor actually builds to.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:bom:MBOM-CPP-1000-REV-C",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"MBOM-CPP-1000-REV-C\".",
+      "expectedApplicationState": "selectedObjectId=nr04:bom:MBOM-CPP-1000-REV-C",
+      "founderNarration": "Same change, now in the manufacturing bill of materials — what actually gets built."
+    },
+    {
+      "id": 5,
+      "title": "The routing",
+      "explanation": "The manufacturing BOM is executed through a 10-operation routing, from receipt to shipment.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:routing:BOO-CPP-1000-REV-C",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"BOO-CPP-1000-REV-C\".",
+      "expectedApplicationState": "selectedObjectId=nr04:routing:BOO-CPP-1000-REV-C",
+      "founderNarration": "This is the routing the shop floor follows — the change has to reach every one of these operations, not just get filed in engineering."
+    },
+    {
+      "id": 6,
+      "title": "The superseded drawing",
+      "explanation": "The prior drawing revision is explicitly retained and marked superseded — the change has a documented, reversible paper trail.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:drawing:DWG-NR-CPP-1000-210-REVB",
+      "targetObjectLabel": "Drawing Revision — CPP-1000 casting Rev B (superseded)",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"DWG-NR-CPP-1000-210-REVB\".",
+      "expectedApplicationState": "selectedObjectId=nr04:drawing:DWG-NR-CPP-1000-210-REVB",
+      "founderNarration": "Nothing gets silently overwritten. Rev B is still here, marked superseded, linked to the ECO that replaced it."
+    },
+    {
+      "id": 7,
+      "title": "The shop traveler",
+      "explanation": "The physical work order traveler carries the change onto the shop floor for the affected lot.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "nr04:traveler:TRV-NR-GOU-2101",
+      "targetLens": "universe",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"TRV-NR-GOU-2101\".",
+      "expectedApplicationState": "selectedObjectId=nr04:traveler:TRV-NR-GOU-2101",
+      "founderNarration": "And here's where it lands on the floor — the traveler that documents the recovery work order, step by step."
+    },
+    {
+      "id": 8,
+      "title": "Converge: one operational company",
+      "explanation": "Return to the Horizon commitment to show that the engineering-change path and the supplier-recovery path were the same story all along.",
+      "highlightedUiElement": "#universeSearch input",
+      "targetObjectId": "RB-CPP-HORIZON",
+      "targetObjectLabel": "Horizon LNG Partners ITEM-NR-CPP-1000 risk cell",
+      "targetLens": "spider",
+      "leftPanel": "passport",
+      "expectedUserAction": "Search \"Horizon\" and select the commitment risk cell, then click 'Radar' to view it on the Commitment Health Radar.",
+      "expectedApplicationState": "selectedObjectId=RB-CPP-HORIZON; workspaceLens=spider",
+      "founderNarration": "Same commitment, same casting lot, same NCR, same MRB, same recovery work order — engineering's view and supply chain's view are two doors into the same building."
+    }
+  ]
+}
