@@ -152,6 +152,23 @@ const VIEW_MODES = Object.freeze([
  * @param {(objectId: string) => void} [callbacks.onOpenTimeline]
  * @param {(objectId: string) => void} [callbacks.onOpenEvidence]
  * @param {(objectId: string) => void} [callbacks.onOpenSource]
+ * @param {(isFullScreen: boolean) => void} [callbacks.onFullScreenChange] -
+ *   V1-UX-3 follow-up: fired synchronously, right after this module's own
+ *   local isOpen/isWorkspace state changes (open, close, or a drilldown-
+ *   triggered close), BEFORE control returns to whatever triggered the
+ *   change. This module's open/close state is deliberately local-only (see
+ *   module header - "opening/closing Functional Radar never touches
+ *   engine/state.js at all"), so app.js's own #mainLayout.hidden sync
+ *   (driven by isFullScreen(), see that field's own doc below) only used to
+ *   happen on the NEXT store-triggered render - which nothing here causes.
+ *   In real mouse-driven use this was usually masked by incidental hover
+ *   events elsewhere triggering one anyway; a click path that doesn't cross
+ *   a hoverable element could leave #mainLayout stuck hidden (or stuck
+ *   visible underneath the workspace) until an unrelated store change came
+ *   along. This callback is a direct invalidation signal - "my visibility
+ *   just changed, go re-sync whatever depends on isFullScreen() now" - not
+ *   a store mutation, so it doesn't create a new global-state dependency or
+ *   move this module's state anywhere.
  * @returns {{ render: () => void, openFunction: (functionKey: string) => void, isFullScreen: () => boolean, destroy: () => void }}
  */
 export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
@@ -170,6 +187,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     onOpenTimeline,
     onOpenEvidence,
     onOpenSource,
+    onFullScreenChange,
   } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountFunctionalRadarPanel: callbacks.getBundle is required');
@@ -210,6 +228,33 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   let listTableFilterState = {};
   let listTableSortState = null;
 
+  // Tracks the last value notifyFullScreenChange() actually reported, so
+  // the callback only fires on a genuine isFullScreen() transition - e.g.
+  // toggleOpen() (the plain "browse all functions" flyout) sets isOpen
+  // without ever setting isWorkspace, so isFullScreen() (isOpen &&
+  // isWorkspace) stays false the whole time; without this guard, opening
+  // that flyout would fire a spurious onFullScreenChange(false) that
+  // reports no real change. Starts at `false` to match isOpen/isWorkspace's
+  // own initial values (isFullScreen() is false before anything happens).
+  let lastNotifiedFullScreen = false;
+
+  /**
+   * The single place isFullScreen()'s two inputs (isOpen, isWorkspace) are
+   * read after they change - see callbacks.onFullScreenChange's own doc for
+   * why this exists. Called from every one of the 3 functions below that
+   * mutate either flag, always AFTER the mutation and AFTER render(), so a
+   * caller reading isFullScreen() from inside this callback sees the
+   * already-settled new value, not a stale one. No-ops when the computed
+   * value hasn't actually changed (see lastNotifiedFullScreen above) - this
+   * is a value-changed contract, not a fire-on-every-mutation one.
+   */
+  function notifyFullScreenChange() {
+    const next = isOpen && isWorkspace;
+    if (next === lastNotifiedFullScreen) return;
+    lastNotifiedFullScreen = next;
+    if (typeof onFullScreenChange === 'function') onFullScreenChange(next);
+  }
+
   function toggleOpen() {
     isOpen = !isOpen;
     if (!isOpen) {
@@ -224,6 +269,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       listTableSortState = null;
     }
     render();
+    notifyFullScreenChange();
   }
 
   /**
@@ -247,6 +293,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     listTableFilterState = {};
     listTableSortState = null;
     render();
+    notifyFullScreenChange();
   }
 
   /**
@@ -270,6 +317,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     listTableFilterState = {};
     listTableSortState = null;
     render();
+    notifyFullScreenChange();
   }
 
   /**

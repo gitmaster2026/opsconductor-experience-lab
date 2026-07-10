@@ -539,6 +539,18 @@ async function main() {
     onOpenEvidence: (id) => openObjectEvidence(id),
     onOpenSource: (id) => openObjectSource(id),
     onOpenDocument: (id) => openObjectDocument(id),
+    // V1-UX-3 follow-up: functional-radar.js's open/close/drilldown-close
+    // are all local-only state (by that module's own existing design - see
+    // its header). applyLensVisibility() reads functionalRadarPanel.
+    // isFullScreen() to decide #mainLayout's hidden class, but previously
+    // only ran on a store-triggered renderAll() pass - nothing in the
+    // workspace's own open/close touches the store, so #mainLayout could
+    // stay stuck hidden (or stuck visible underneath the workspace) until
+    // an unrelated store change happened to come along. This is a direct
+    // invalidation callback, not a store mutation: it just re-runs the
+    // SAME applyLensVisibility() an ordinary render already calls, at the
+    // exact moment this module's own visibility actually changed.
+    onFullScreenChange: () => applyLensVisibility(store.getState()),
   });
 
   // V5 Phase 2.6 item E: the Navigation History rail - independent of the
