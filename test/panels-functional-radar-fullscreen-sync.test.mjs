@@ -131,7 +131,19 @@ test('a drilldown from List View (onRowClick -> openMemberDetail) stays inside t
   );
 });
 
-test('the List View row\'s own explicit Probe ("Open in Universe") button still closes the workspace', () => {
+// V1-UX-4 investigation-continuity follow-up review: the List View
+// previously ALSO rendered a per-row "Probe {Type} ->" trailing button
+// (engine/filterable-table.js's generic Probe column) wired to close the
+// workspace and jump to Universe - leaving two controls on the same row
+// with contradictory behavior under the SAME "Probe" word this app's own
+// language otherwise always means "go deeper" (see engine/labels.js):
+// the unlabeled row click stayed in the workspace, while the explicitly
+// "Probe"-labeled button left it. That column is no longer wired at all -
+// a row click is the ONLY action, and it always investigates in place;
+// reaching Universe is now a deliberate second step (drill into the row's
+// member detail, then its own clearly-labeled "Open in Universe" button -
+// covered by test/panels-functional-radar-member-drilldown.test.mjs).
+test('List View renders no per-row Probe/Open-in-Universe button - a row click is the only action, and it always stays in the workspace', () => {
   const doc = installMiniDocument();
   const nodes = makeEngineeringNodes();
   const probed = [];
@@ -144,22 +156,17 @@ test('the List View row\'s own explicit Probe ("Open in Universe") button still 
     .find((el) => el.getAttribute('data-set-view-mode') === 'list');
   listTab.click();
 
-  // engine/filterable-table.js's Probe button is styled via `el.className =`
-  // (a plain string assignment mini-dom.mjs does not track into its
-  // classList - see that fixture's own header on what it does/doesn't
-  // support), so a class selector can't find it here; its rendered text
-  // ("Probe {Type} →", engine/labels.js's probeLabel()) is a stable,
-  // real-DOM-equivalent way to locate the same button.
   const probeBtn = panelEl.querySelectorAll('button').find((b) => typeof b.textContent === 'string' && b.textContent.includes('Probe'));
-  assert.ok(probeBtn, 'expected the List View row\'s own explicit Probe button to be rendered');
-  probeBtn.click();
+  assert.equal(probeBtn, undefined, 'no row-level "Probe" button should render in List View anymore');
+  assert.deepEqual(probed, [], 'nothing should have fired the Open-in-Universe callback yet');
 
-  assert.deepEqual(probed, ['nr04:eco-1'], 'the explicit Probe button must still fire the Open-in-Universe callback');
-  assert.deepEqual(
-    calls,
-    [true, false],
-    'the explicit Probe button must still close the workspace (isFullScreen -> false), unlike a plain row click'
-  );
+  const row = panelEl.querySelectorAll('[data-select-id]').find((el) => el.tagName === 'tr');
+  assert.ok(row, 'expected at least one clickable List View row');
+  row.click();
+
+  assert.deepEqual(probed, [], 'a row click must never fire the Open-in-Universe callback directly');
+  assert.deepEqual(calls, [true], 'a row click must keep the workspace open (isFullScreen unchanged)');
+  assert.ok(panelEl.querySelectorAll('[data-member-back]').length > 0, 'the row click should have opened member detail in place');
 });
 
 test('the toolbar toggle button open/close cycle fires alternating true/false, matching a real user opening then closing the flyout', () => {

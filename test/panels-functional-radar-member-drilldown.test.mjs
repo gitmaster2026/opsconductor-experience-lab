@@ -145,3 +145,66 @@ test('switching to a different function while in member detail resets the drilld
 
   assert.equal(panelEl.querySelectorAll('[data-member-back]').length, 0, 'switching function must exit any in-progress member detail');
 });
+
+// V1-UX-4 investigation-continuity follow-up review: this app's Back/
+// Forward mechanism (engine/investigation-history.js) tracks
+// selectedObjectId/workspaceLens/scopeContext/leftPanelMode only - it has
+// never tracked this module's own isOpen/isWorkspace (by design, per this
+// module's own header: "opening/closing Functional Radar never touches
+// engine/state.js at all"). The realistic path a user actually has back
+// to a function they left via "Open in Universe" is re-entering the SAME
+// function (e.g. re-clicking the same Commitment Health Radar spoke) -
+// openFunction() now resumes exactly where that investigation left off
+// instead of silently restarting at Overview, WITHOUT touching
+// engine/state.js or engine/investigation-history.js's own tracked
+// fields (see closeForHandoff()/openFunction()'s own doc comments).
+test('re-entering the SAME function after "Open in Universe" resumes the exact member-detail depth (not Overview)', () => {
+  const { panel, panelEl, probed } = mountFixturePanel();
+  panel.openFunction('engineering');
+  panelEl.querySelectorAll('[data-set-view-mode]').find((el) => el.getAttribute('data-set-view-mode') === 'relationship').click();
+  panelEl.querySelectorAll('.functional-relationship-card-header')[0].click(); // -> ECO-1 detail
+  panelEl.querySelectorAll('[data-member-drill-id]')[0].click(); // -> WO-1 detail (drilled from ECO-1)
+
+  panelEl.querySelectorAll('[data-member-action="probe"]')[0].click(); // "Open in Universe" from WO-1's detail
+  assert.deepEqual(probed, ['nr04:wo-1']);
+  assert.ok(panelEl.classList.contains('hidden'), 'the workspace overlay must hide immediately for the Universe handoff');
+
+  // The realistic "come back" gesture: re-entering the same function.
+  panel.openFunction('engineering');
+
+  assert.ok(!panelEl.classList.contains('hidden'), 'the workspace must reopen');
+  const drillLink = panelEl.querySelectorAll('[data-member-drill-id]')[0];
+  assert.ok(drillLink, 'expected to resume inside a member detail, not the Overview/List/Relationship root');
+  assert.equal(drillLink.getAttribute('data-member-drill-id'), 'nr04:supplier-1', 'resumed depth must be WO-1\'s own detail (its relationship to Supplier-1), not ECO-1\'s');
+  const depths = panelEl.querySelectorAll('[data-member-breadcrumb-depth]').map((el) => el.getAttribute('data-member-breadcrumb-depth'));
+  assert.deepEqual(depths, ['0', '1'], 'the breadcrumb (function root + ECO-1) must be restored exactly, not collapsed');
+});
+
+test('re-entering a DIFFERENT function after "Open in Universe" starts fresh at Overview (resume is scoped to the same function only)', () => {
+  const { panel, panelEl, probed } = mountFixturePanel();
+  panel.openFunction('engineering');
+  panelEl.querySelectorAll('[data-set-view-mode]').find((el) => el.getAttribute('data-set-view-mode') === 'relationship').click();
+  panelEl.querySelectorAll('.functional-relationship-card-header')[0].click();
+  panelEl.querySelectorAll('[data-member-action="probe"]')[0].click();
+  assert.deepEqual(probed, ['nr04:eco-1']);
+
+  panel.openFunction('procurement');
+
+  assert.equal(panelEl.querySelectorAll('[data-member-back]').length, 0, 'a genuinely different function must not resume the previous function\'s member detail');
+  assert.ok(panelEl.querySelectorAll('[data-set-view-mode]').length > 0, 'a different function opens fresh at Overview/List/Relationship');
+});
+
+test('an explicit close() (not a Universe handoff) still fully resets - re-entering the same function afterward starts fresh', () => {
+  const { panel, panelEl } = mountFixturePanel();
+  panel.openFunction('engineering');
+  panelEl.querySelectorAll('[data-set-view-mode]').find((el) => el.getAttribute('data-set-view-mode') === 'relationship').click();
+  panelEl.querySelectorAll('.functional-relationship-card-header')[0].click();
+  assert.ok(panelEl.querySelectorAll('[data-member-back]').length > 0);
+
+  panelEl.querySelectorAll('[data-functional-radar-close]')[0].click();
+  assert.ok(panelEl.classList.contains('hidden'));
+
+  panel.openFunction('engineering');
+
+  assert.equal(panelEl.querySelectorAll('[data-member-back]').length, 0, 'an explicit close must not be resumable - only the Open-in-Universe handoff preserves depth');
+});

@@ -345,6 +345,39 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   }
 
   /**
+   * V1-UX-4 follow-up (investigation-continuity review): a SEPARATE, softer
+   * exit than close() above, used ONLY for the "Open in Universe" handoff
+   * from inside an active investigation (the member detail view's own
+   * action, below). Hides the full-screen overlay so Universe becomes
+   * visible - but, unlike close(), deliberately does NOT reset
+   * activeFunctionKey/activeViewMode/activeObjectTypeFilter/
+   * focusedMemberId/memberTrail/listTable*State.
+   *
+   * Why this exists: engine/investigation-history.js's Back/Forward
+   * mechanism (panels/shared-investigation-state.js's <- / -> buttons)
+   * tracks selectedObjectId/workspaceLens/scopeContext/leftPanelMode only
+   * - it has never tracked this module's own isOpen/isWorkspace (by this
+   * module's own long-standing design - see the header comment: "opening/
+   * closing Functional Radar never touches engine/state.js at all"), and
+   * extending that canonical, tested contract to also carry a workspace-
+   * open flag would be exactly the "redesign canonical state" scope this
+   * fix must not attempt. What IS safely fixable, entirely within this
+   * module's own local state: a user who leaves via "Open in Universe"
+   * and then returns to the SAME function (the one realistic path back a
+   * user actually has today - re-clicking the same Commitment Health
+   * Radar spoke, since Back itself does not reopen this overlay) resumes
+   * their investigation depth instead of silently restarting at Overview.
+   * See openFunction()'s own "resume" branch below, which this pairs with.
+   */
+  function closeForHandoff() {
+    if (!isOpen) return;
+    isOpen = false;
+    isWorkspace = false;
+    render();
+    notifyFullScreenChange();
+  }
+
+  /**
    * Entry point for both the Commitment Health Radar/Spider lens's spoke
    * click AND the flyout's own "browse all functions" card clicks.
    * V1-UX-2D change: this now ALSO sets isWorkspace = true, so entering a
@@ -357,6 +390,22 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
    * @param {string} functionKey
    */
   function openFunction(functionKey) {
+    // V1-UX-4 follow-up: re-entering the SAME function that closeForHandoff()
+    // above left open-in-spirit (never reset) resumes exactly where the
+    // investigation left off, instead of restarting at Overview - see that
+    // function's own doc for why this is the smallest safe way to honor
+    // "returning should restore the correct lens-native level" without
+    // touching engine/investigation-history.js or engine/state.js. Any
+    // OTHER entry (a different function key, or after a real close()/
+    // toggleOpen() reset activeFunctionKey to null) still gets the existing
+    // fresh-Overview transition, unchanged.
+    if (activeFunctionKey === functionKey && !isOpen) {
+      isOpen = true;
+      isWorkspace = true;
+      render();
+      notifyFullScreenChange();
+      return;
+    }
     isOpen = true;
     isWorkspace = true;
     activeFunctionKey = functionKey ?? null;
@@ -776,18 +825,21 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
           listTableSortState = listTable.getSortState();
         },
         getRowSelectId: (row) => (typeof row.id === 'string' ? row.id : null),
-        getRowProbeType: (row) => (typeof row.type === 'string' ? row.type : null),
-        // V1-UX-4: a row click now opens that member's detail IN PLACE
-        // (openMemberDetail) instead of closing the workspace and jumping
-        // to Universe - "Probe should investigate inside the current
-        // functional workspace." The table's own separate, explicit
-        // "Probe {Type} →" trailing button (onProbe below) remains the
-        // deliberate "Open in Universe" action, unchanged.
+        // V1-UX-4 correction: a row click opens that member's detail IN
+        // PLACE (openMemberDetail) - "Probe should investigate inside the
+        // current functional workspace." This table's generic Probe
+        // column (getRowProbeType/onProbe, engine/labels.js's shared
+        // "Probe {Type} ->" wording) is deliberately NOT wired here
+        // anymore: that word means "go deeper" everywhere else in this
+        // app, and attaching it to the ONE control that left the
+        // workspace - while the actual "go deeper" behavior lived on the
+        // unlabeled row click - was exactly the "two controls, ambiguous/
+        // contradictory behavior" the corrected interaction model rules
+        // out. The row IS the investigate action now; reaching Universe
+        // is a second, explicit step (the member detail view's own
+        // clearly-labeled "Open in Universe" button), not a second
+        // control competing with the row for the same click.
         onRowClick: (row) => openMemberDetail(row.id),
-        onProbe: (row) => {
-          close();
-          if (typeof onProbe === 'function') onProbe(row.id);
-        },
       });
       listTableContainerEl = containerEl;
     }
@@ -1144,22 +1196,29 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       // The member detail's own continuity action row - Passport/Timeline/
       // Evidence/Source close the workspace to surface the left-panel
       // Passport (same "Exit-to-Passport on investigation" convention this
-      // module's header already documents); "Open in Universe" is the
-      // explicit secondary action the corrected interaction model requires
-      // (V1-UX-4) - it ALSO closes the workspace first, so the resulting
-      // Universe Focus Mode is immediately visible, matching every other
-      // Probe/"Open in Universe" affordance in this app.
+      // module's header already documents) via the full close() reset,
+      // since those are genuine exits with nothing left in this workspace
+      // to resume. "Open in Universe" is the explicit secondary action the
+      // corrected interaction model requires (V1-UX-4) - it uses
+      // closeForHandoff() instead (see that function's own doc): the
+      // overlay hides so Universe is immediately visible, but this
+      // investigation's depth is preserved for closeForHandoff()/
+      // openFunction()'s resume pairing above.
       panelEl.querySelectorAll('[data-member-action]').forEach((el) => {
         el.addEventListener('click', () => {
           const action = el.getAttribute('data-member-action');
           const id = focusedMemberId;
           if (!id) return;
+          if (action === 'probe') {
+            closeForHandoff();
+            if (typeof onProbe === 'function') onProbe(id);
+            return;
+          }
           close();
           if (action === 'passport' && typeof onOpenPassport === 'function') onOpenPassport(id);
           else if (action === 'timeline' && typeof onOpenTimeline === 'function') onOpenTimeline(id);
           else if (action === 'evidence' && typeof onOpenEvidence === 'function') onOpenEvidence(id);
           else if (action === 'source' && typeof onOpenSource === 'function') onOpenSource(id);
-          else if (action === 'probe' && typeof onProbe === 'function') onProbe(id);
         });
       });
     }
