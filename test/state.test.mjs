@@ -12,6 +12,7 @@ import {
   setState,
   subscribe,
   selectObject,
+  focusObject,
   setLens,
   setLeftPanel,
   setTimeSlice,
@@ -285,23 +286,78 @@ test('setLens: switching between all 6 lens values preserves selectedObjectId, f
   }
 });
 
-test('selectObject pushes the previously-selected object onto focusTrail, and sets cameraTarget/cameraPhase', () => {
+test('selectObject pushes the previously-selected object onto focusTrail', () => {
   initState();
   assert.deepEqual(getState().focusTrail, []);
 
   selectObject('A');
   assert.deepEqual(getState().focusTrail, [], 'first selection has nothing prior to push');
-  assert.equal(getState().cameraTarget, 'A');
-  assert.equal(getState().cameraPhase, 'depart');
 
   selectObject('B');
   assert.deepEqual(getState().focusTrail, ['A']);
-  assert.equal(getState().cameraTarget, 'B');
 
   selectObject(null);
   assert.deepEqual(getState().focusTrail, ['A', 'B'], 'clearing selection still pushes the object being cleared');
+});
+
+// V1-UX-4 Universe click contract: a plain selectObject() (single click /
+// lens-local select) must NEVER move the camera or enter Focus Mode - only
+// an explicit focusObject() call (double-click, Probe) does that. See
+// engine/state.js's own design note on selectObject()/focusObject().
+test('selectObject leaves cameraTarget/cameraPhase untouched on a forward selection (no implicit Focus Mode)', () => {
+  initState();
   assert.equal(getState().cameraTarget, null);
   assert.equal(getState().cameraPhase, 'idle');
+
+  selectObject('A');
+  assert.equal(getState().cameraTarget, null, 'a plain selection must not move the camera');
+  assert.equal(getState().cameraPhase, 'idle', 'a plain selection must not enter Focus Mode');
+
+  selectObject('B');
+  assert.equal(getState().cameraTarget, null, 'selecting a different object still must not move the camera');
+  assert.equal(getState().cameraPhase, 'idle');
+});
+
+test('selectObject(null) clears any active camera focus, even one set by focusObject()', () => {
+  initState();
+  selectObject('A');
+  focusObject('A');
+  assert.equal(getState().cameraTarget, 'A');
+  assert.equal(getState().cameraPhase, 'depart');
+
+  selectObject(null);
+  assert.equal(getState().cameraTarget, null, 'clearing selection must also clear focus - no dangling anchor with nothing selected');
+  assert.equal(getState().cameraPhase, 'idle');
+});
+
+test('focusObject() moves the camera without touching selectedObjectId', () => {
+  initState();
+  selectObject('A');
+
+  focusObject('A');
+  let state = getState();
+  assert.equal(state.cameraTarget, 'A');
+  assert.equal(state.cameraPhase, 'depart');
+  assert.equal(state.selectedObjectId, 'A', 'focusObject must not change selection - selectObject already set it');
+
+  // Focusing a DIFFERENT id than the current selection is allowed (the
+  // camera anchor is orthogonal state) - callers that want both call
+  // selectObject() and focusObject() together (see app.js's probeObject()).
+  focusObject('B');
+  state = getState();
+  assert.equal(state.cameraTarget, 'B');
+  assert.equal(state.selectedObjectId, 'A', 'focusObject alone must not change selectedObjectId');
+
+  focusObject(null);
+  state = getState();
+  assert.equal(state.cameraTarget, null);
+  assert.equal(state.cameraPhase, 'idle');
+  assert.equal(state.selectedObjectId, 'A', 'focusObject(null) must not clear selection');
+});
+
+test('focusObject rejects a non-string, non-null id', () => {
+  initState();
+  assert.throws(() => focusObject(42), /focusObject: id must be a string or null/);
 });
 
 test('popFocus() after 3 pushes (via 4 selections) restores exact prior selectedObjectId and cameraTarget, in LIFO order', () => {
@@ -316,7 +372,9 @@ test('popFocus() after 3 pushes (via 4 selections) restores exact prior selected
 
   assert.deepEqual(getState().focusTrail, ['A', 'B', 'C']);
   assert.equal(getState().selectedObjectId, 'D');
-  assert.equal(getState().cameraTarget, 'D');
+  // V1-UX-4: plain selectObject() calls never touch cameraTarget - only
+  // popFocus() (below) and focusObject() do.
+  assert.equal(getState().cameraTarget, null);
 
   const restored1 = popFocus();
   assert.equal(restored1, 'C');
@@ -364,7 +422,8 @@ test('pushFocus() is a no-op when there is currently no selection', () => {
 
 test('setTimeSlice never mutates cameraTarget or cameraPhase', () => {
   initState();
-  selectObject('obj-1'); // cameraTarget: 'obj-1', cameraPhase: 'depart'
+  selectObject('obj-1');
+  focusObject('obj-1'); // cameraTarget: 'obj-1', cameraPhase: 'depart'
   const before = getState();
 
   setTimeSlice('t2');

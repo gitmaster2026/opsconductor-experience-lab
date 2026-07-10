@@ -26,7 +26,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadTestSnapshot } from './fixtures/load-snapshot.mjs';
-import { buildRiskBoardViewModel } from '../prototype/current/engine/derive.js';
+import { buildRiskBoardViewModel, buildUniverseGraph } from '../prototype/current/engine/derive.js';
 import {
   SEVERITY_BANDS,
   assignSeverityBand,
@@ -36,6 +36,7 @@ import {
   filterCellsBySite,
   UNASSIGNED_SITE_KEY,
   UNASSIGNED_SITE_LABEL,
+  buildRelatedObjectPseudoCells,
 } from '../prototype/current/lenses/risk-board-layout.js';
 
 const snapshot = loadTestSnapshot();
@@ -389,4 +390,107 @@ test('filterCellsBySite: does not mutate its cells input and returns a new array
   const filtered = filterCellsBySite(cells, 'PLT-200');
   assert.deepEqual(cells, cellsCopy);
   assert.notEqual(filtered, cells);
+});
+
+// ---------------------------------------------------------------------------
+// V1-UX-4: buildRelatedObjectPseudoCells() - the pure one-hop walk behind
+// Risk Board's recursive object-level drilldown (lenses/risk-board.js).
+// ---------------------------------------------------------------------------
+
+test('buildRelatedObjectPseudoCells: returns one pseudo-cell per real one-hop edge, shaped for buildBandLayout()', () => {
+  const nodes = [
+    { id: 'obj-a', risk_state: 'critical' },
+    { id: 'obj-b', risk_state: 'watch' },
+    { id: 'obj-c', risk_state: 'normal', revenue_at_risk: 12000 },
+    { id: 'unrelated', risk_state: 'critical' },
+  ];
+  const edges = [
+    { from_id: 'obj-a', to_id: 'obj-b', relationship_type: 'requires_item' },
+    { from_id: 'obj-c', to_id: 'obj-a', relationship_type: 'affects_product' },
+  ];
+
+  const result = buildRelatedObjectPseudoCells('obj-a', nodes, edges);
+  assert.equal(result.length, 2);
+
+  const toB = result.find((c) => c.id === 'obj-b');
+  assert.ok(toB);
+  assert.equal(toB.risk_state, 'watch');
+  assert.equal(toB.visibleAtSlice, true);
+  assert.equal(toB.revenue_at_risk, null);
+  assert.equal(toB.relationshipType, 'requires_item');
+  assert.equal(toB.direction, 'outgoing');
+
+  const fromC = result.find((c) => c.id === 'obj-c');
+  assert.ok(fromC);
+  assert.equal(fromC.revenue_at_risk, 12000);
+  assert.equal(fromC.direction, 'incoming');
+
+  // Buckets correctly through the existing, unmodified band algorithm.
+  const layout = buildBandLayout(result);
+  assert.deepEqual(layout.bands.find((b) => b.band === 'watch').cellIds, ['obj-b']);
+  assert.deepEqual(layout.bands.find((b) => b.band === 'normal').cellIds, ['obj-c']);
+});
+
+test('buildRelatedObjectPseudoCells: never returns the drilled-into object itself, even on a self-referencing edge', () => {
+  const nodes = [{ id: 'obj-a', risk_state: 'critical' }];
+  const edges = [{ from_id: 'obj-a', to_id: 'obj-a', relationship_type: 'self_ref' }];
+  assert.deepEqual(buildRelatedObjectPseudoCells('obj-a', nodes, edges), []);
+});
+
+test('buildRelatedObjectPseudoCells: excludeIds omits the given ids (e.g. the immediate parent in the drill path)', () => {
+  const nodes = [
+    { id: 'obj-a', risk_state: 'critical' },
+    { id: 'obj-b', risk_state: 'watch' },
+    { id: 'obj-parent', risk_state: 'elevated' },
+  ];
+  const edges = [
+    { from_id: 'obj-a', to_id: 'obj-b', relationship_type: 'requires_item' },
+    { from_id: 'obj-parent', to_id: 'obj-a', relationship_type: 'has_recommendation' },
+  ];
+  const result = buildRelatedObjectPseudoCells('obj-a', nodes, edges, ['obj-parent']);
+  assert.deepEqual(result.map((c) => c.id), ['obj-b']);
+});
+
+test('buildRelatedObjectPseudoCells: deduplicates when two edges connect the same pair of objects', () => {
+  const nodes = [
+    { id: 'obj-a', risk_state: 'critical' },
+    { id: 'obj-b', risk_state: 'watch' },
+  ];
+  const edges = [
+    { from_id: 'obj-a', to_id: 'obj-b', relationship_type: 'requires_item' },
+    { from_id: 'obj-b', to_id: 'obj-a', relationship_type: 'supplier_quality_issue_for' },
+  ];
+  const result = buildRelatedObjectPseudoCells('obj-a', nodes, edges);
+  assert.equal(result.length, 1, 'a second edge to the same object must not produce a second pseudo-cell');
+});
+
+test('buildRelatedObjectPseudoCells: defaults a related node with no risk_state to "neutral", never fabricating a real risk state', () => {
+  const nodes = [
+    { id: 'obj-a' },
+    { id: 'obj-b' },
+  ];
+  const edges = [{ from_id: 'obj-a', to_id: 'obj-b', relationship_type: 'located_at' }];
+  const result = buildRelatedObjectPseudoCells('obj-a', nodes, edges);
+  assert.equal(result[0].risk_state, 'neutral');
+});
+
+test('buildRelatedObjectPseudoCells: total and total-safe against malformed input (never throws, always an array)', () => {
+  assert.deepEqual(buildRelatedObjectPseudoCells('', [], []), []);
+  assert.deepEqual(buildRelatedObjectPseudoCells(null, [], []), []);
+  assert.deepEqual(buildRelatedObjectPseudoCells('obj-a', null, []), []);
+  assert.deepEqual(buildRelatedObjectPseudoCells('obj-a', [], null), []);
+});
+
+test('buildRelatedObjectPseudoCells: against the real merged graph, every real Risk Board commitment has at least one real related object', () => {
+  const snapshot = loadTestSnapshot();
+  const graph = buildUniverseGraph(snapshot);
+  const bundle = buildRiskBoardViewModel(snapshot, 3, { isUnscoped: true, scopedNodeIds: [], scopedCommitmentCellIds: [] });
+  for (const cell of bundle.cells) {
+    const related = buildRelatedObjectPseudoCells(cell.id, graph.nodes, graph.edges);
+    assert.ok(related.length > 0, `risk-board cell "${cell.id}" should have at least one real one-hop relationship`);
+    // Every related pseudo-cell must trace to a real node in the graph.
+    for (const pseudo of related) {
+      assert.ok(graph.nodes.some((n) => n.id === pseudo.id), `related object "${pseudo.id}" must be a real graph node`);
+    }
+  }
 });

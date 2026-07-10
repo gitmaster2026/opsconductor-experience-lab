@@ -255,18 +255,28 @@ function notify() {
  *   immediately after, but the default and expected UX is the auto-switch.
  *
  * Camera/focus-trail note (docs/V5_DESIGN_SPEC.md §1.2, NEW this phase):
- *   selectObject() also (a) pushes the object being replaced onto
- *   focusTrail before the selection changes (the same push pushFocus()
- *   performs standalone - inlined here into the single setState call below
- *   rather than calling pushFocus() as a separate step, so selectObject()
- *   keeps notifying subscribers exactly once per call, matching its
- *   pre-existing atomic-setState contract), and (b) sets cameraTarget to
- *   the new selection and cameraPhase to 'depart' (or back to 'idle' when
- *   clearing selection), since "selecting an object may move the camera
- *   toward that object" (docs/CAMERA_MODEL.md's Focus behavior). Renderers
- *   that ignore cameraTarget/cameraPhase still get a fully correct
- *   selectedObjectId - this is progressive enhancement, not a change to
- *   selectedObjectId's own semantics.
+ *   selectObject() also pushes the object being replaced onto focusTrail
+ *   before the selection changes (the same push pushFocus() performs
+ *   standalone - inlined here into the single setState call below rather
+ *   than calling pushFocus() as a separate step, so selectObject() keeps
+ *   notifying subscribers exactly once per call, matching its pre-existing
+ *   atomic-setState contract).
+ *
+ * V1-UX-4 click-contract correction: selectObject() used to ALSO move the
+ * camera (set cameraTarget/cameraPhase) on every forward selection - the
+ * root cause of "a single click reorganizes Universe into Focus Mode."
+ * Per the corrected contract (docs/INTERACTION_MODEL_NOTES.md's Universe
+ * click contract): a plain selection ("open or update the information
+ * card") must NEVER move the camera or enter Focus Mode - only an explicit
+ * focusObject() call (double-click, Probe) does that (see below). Clearing
+ * the selection (id === null) still clears any active camera focus too -
+ * there is nothing left to be focused on once nothing is selected, and
+ * leaving a stale cameraTarget around after a deselect is exactly the
+ * "confusing partial reset" V1-UX-3 already fixed for double-click-to-
+ * recenter (see that sprint's own session log). Forward selection (id !==
+ * null) intentionally leaves cameraTarget/cameraPhase untouched, so an
+ * already-focused object stays the visual anchor across an unrelated
+ * plain-click selection elsewhere.
  *
  * @param {string|null} id - object id to select, or null to clear selection.
  */
@@ -278,10 +288,9 @@ export function selectObject(id) {
 
   // Re-selecting whatever is already selected is a no-op: without this
   // guard, clicking an already-selected node would push it onto its OWN
-  // focusTrail (a self-referencing breadcrumb) and restart cameraPhase at
-  // 'depart' even though the camera has already arrived - both visible as
-  // confusing no-op history/flight churn (found during the V1-UX-3
-  // cross-lens consistency audit).
+  // focusTrail (a self-referencing breadcrumb) - visible as confusing
+  // no-op history churn (found during the V1-UX-3 cross-lens consistency
+  // audit).
   if (id === store.state.selectedObjectId) {
     return;
   }
@@ -308,9 +317,40 @@ export function selectObject(id) {
     // the existing shipped app.js behavior and PANEL_SPECIFICATIONS.md.
     leftPanelMode: id === null ? store.state.leftPanelMode : 'passport',
     focusTrail: nextFocusTrail,
-    cameraTarget: id,
-    cameraPhase: id === null ? 'idle' : 'depart',
+    // V1-UX-4: only clearing selection touches camera state here - see the
+    // design note above. A forward selection leaves cameraTarget/
+    // cameraPhase exactly as they were; call focusObject(id) explicitly to
+    // also move the camera/enter Focus Mode.
+    ...(id === null ? { cameraTarget: null, cameraPhase: 'idle' } : {}),
   });
+}
+
+/**
+ * "Enter Focus Mode" (V1-UX-4 Universe click contract): explicitly move the
+ * camera toward `id` and (via lenses/universe.js's existing three-phase
+ * flight + orbit machinery, unchanged by this function) reorganize the
+ * Universe around it. Deliberately separate from selectObject() above -
+ * see that function's design note for why a plain selection must not do
+ * this implicitly. Callers: Universe's own double-click handler, and
+ * app.js's probeObject() (every "Probe"/"Open in Universe" affordance
+ * across Risk Board, Functional Radar, Passport, Commitment Health Radar,
+ * Search, Workbench, Conductor Studio).
+ *
+ * Does NOT change selectedObjectId - callers that want both (double-click,
+ * Probe) call selectObject(id) and focusObject(id) together; a caller that
+ * only wants to re-anchor the camera on the CURRENT selection (or clear
+ * focus without deselecting - not currently used, but kept orthogonal) can
+ * call this alone.
+ *
+ * @param {string|null} id - object id to focus, or null to exit Focus Mode
+ *   (camera returns to the full overview) without changing selection.
+ */
+export function focusObject(id) {
+  assertInitialized();
+  if (id !== null && typeof id !== 'string') {
+    throw new Error('focusObject: id must be a string or null');
+  }
+  setState({ cameraTarget: id, cameraPhase: id === null ? 'idle' : 'depart' });
 }
 
 /**

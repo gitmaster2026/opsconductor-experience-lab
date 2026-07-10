@@ -87,11 +87,18 @@ test('the close button fires onFullScreenChange(false) - the transition #mainLay
   assert.deepEqual(calls, [true, false], 'close must fire a second call with isFullScreen=false');
 });
 
-test('a drilldown from List View (onRowClick -> close() -> onSelect) fires onFullScreenChange(false) via the same close() choke point every dismissal path uses', () => {
+// V1-UX-4 correction: a List View row click no longer closes the workspace
+// and jumps to Universe - it now opens that member's detail IN PLACE (see
+// panels/functional-radar.js's openMemberDetail()), so #mainLayout must
+// stay hidden (isFullScreen() stays true) exactly like switching function/
+// view-mode already does. Only the row's own separate, explicit
+// "Probe {Type} →" button (the "Open in Universe" action) still closes the
+// workspace - see the following test.
+test('a drilldown from List View (onRowClick -> openMemberDetail) stays inside the workspace - onFullScreenChange must NOT fire again', () => {
   const doc = installMiniDocument();
   const nodes = makeEngineeringNodes();
   const selected = [];
-  const { panel, panelEl, calls } = mountWithSpy(doc, nodes, { onSelect: (id) => selected.push(id) });
+  const { panel, panelEl, calls } = mountWithSpy(doc, nodes, { onSelectInWorkspace: (id) => selected.push(id) });
 
   panel.openFunction('engineering');
   assert.deepEqual(calls, [true]);
@@ -109,13 +116,57 @@ test('a drilldown from List View (onRowClick -> close() -> onSelect) fires onFul
   assert.ok(row, 'expected at least one clickable List View row');
   row.click();
 
-  assert.deepEqual(selected, ['nr04:eco-1'], 'sanity check: the drilldown itself still selected the right object');
+  assert.deepEqual(selected, ['nr04:eco-1'], 'sanity check: the drilldown itself still updated the shared selection');
   assert.deepEqual(
     calls,
-    [true, false],
-    'drilling down from inside the workspace must ALSO fire isFullScreen=false - #mainLayout must un-hide when a ' +
-      'drilldown exits the workspace into Universe/Passport, exactly like the explicit close button does'
+    [true],
+    'a plain row click must stay inside the workspace (isFullScreen() unchanged) - only the explicit "Open in ' +
+      'Universe" Probe action, or the close button, may exit it'
   );
+  // The workspace itself should now be showing member detail for the
+  // clicked object, not the List View table anymore.
+  assert.ok(
+    panelEl.querySelectorAll('[data-member-back]').length > 0,
+    'expected the member-detail breadcrumb Back control to be rendered after drilling into a row'
+  );
+});
+
+// V1-UX-4 investigation-continuity follow-up review: the List View
+// previously ALSO rendered a per-row "Probe {Type} ->" trailing button
+// (engine/filterable-table.js's generic Probe column) wired to close the
+// workspace and jump to Universe - leaving two controls on the same row
+// with contradictory behavior under the SAME "Probe" word this app's own
+// language otherwise always means "go deeper" (see engine/labels.js):
+// the unlabeled row click stayed in the workspace, while the explicitly
+// "Probe"-labeled button left it. That column is no longer wired at all -
+// a row click is the ONLY action, and it always investigates in place;
+// reaching Universe is now a deliberate second step (drill into the row's
+// member detail, then its own clearly-labeled "Open in Universe" button -
+// covered by test/panels-functional-radar-member-drilldown.test.mjs).
+test('List View renders no per-row Probe/Open-in-Universe button - a row click is the only action, and it always stays in the workspace', () => {
+  const doc = installMiniDocument();
+  const nodes = makeEngineeringNodes();
+  const probed = [];
+  const { panel, panelEl, calls } = mountWithSpy(doc, nodes, { onProbe: (id) => probed.push(id) });
+
+  panel.openFunction('engineering');
+  assert.deepEqual(calls, [true]);
+  const listTab = panelEl
+    .querySelectorAll('[data-set-view-mode]')
+    .find((el) => el.getAttribute('data-set-view-mode') === 'list');
+  listTab.click();
+
+  const probeBtn = panelEl.querySelectorAll('button').find((b) => typeof b.textContent === 'string' && b.textContent.includes('Probe'));
+  assert.equal(probeBtn, undefined, 'no row-level "Probe" button should render in List View anymore');
+  assert.deepEqual(probed, [], 'nothing should have fired the Open-in-Universe callback yet');
+
+  const row = panelEl.querySelectorAll('[data-select-id]').find((el) => el.tagName === 'tr');
+  assert.ok(row, 'expected at least one clickable List View row');
+  row.click();
+
+  assert.deepEqual(probed, [], 'a row click must never fire the Open-in-Universe callback directly');
+  assert.deepEqual(calls, [true], 'a row click must keep the workspace open (isFullScreen unchanged)');
+  assert.ok(panelEl.querySelectorAll('[data-member-back]').length > 0, 'the row click should have opened member detail in place');
 });
 
 test('the toolbar toggle button open/close cycle fires alternating true/false, matching a real user opening then closing the flyout', () => {
