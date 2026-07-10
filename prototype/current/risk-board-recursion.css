@@ -134,12 +134,20 @@
   white-space: nowrap;
 }
 
-/* --- Scope breadcrumb (Level 1 only) -------------------------------------- */
+/* --- Scope breadcrumb (Site and V1-UX-4 Object levels) -------------------- *
+ *
+ * V1-UX-4: generalized from a single "Enterprise › <Site>" pair into a full
+ * multi-segment trail (.risk-scope-breadcrumb-trail, one
+ * .risk-scope-breadcrumb-crumb per ancestor level) plus a dedicated
+ * one-step .risk-scope-back-btn, since the Risk Board can now recurse past
+ * one level (Enterprise -> Site -> Object -> Object -> ...). Same tokens,
+ * same visual language as the original Level 1 breadcrumb this replaces.
+ */
 
 .risk-scope-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 11.5px;
   margin-bottom: 14px;
 }
@@ -148,7 +156,41 @@
   display: none;
 }
 
-.risk-scope-breadcrumb-back {
+.risk-scope-back-btn {
+  appearance: none;
+  border: 1px solid var(--panel-border, rgba(120, 160, 200, 0.16));
+  background: var(--card-bg, rgba(255, 255, 255, 0.035));
+  padding: 4px 10px;
+  color: var(--cyan-accent, #5ad1ff);
+  cursor: pointer;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.risk-scope-back-btn.hidden {
+  display: none;
+}
+
+.risk-scope-back-btn:hover,
+.risk-scope-back-btn:focus-visible {
+  background: rgba(90, 209, 255, 0.1);
+  border-color: var(--cyan-accent, #5ad1ff);
+  outline: none;
+}
+
+.risk-scope-breadcrumb-trail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.risk-scope-breadcrumb-crumb {
   appearance: none;
   border: none;
   background: transparent;
@@ -162,8 +204,8 @@
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.risk-scope-breadcrumb-back:hover,
-.risk-scope-breadcrumb-back:focus-visible {
+.risk-scope-breadcrumb-crumb:hover,
+.risk-scope-breadcrumb-crumb:focus-visible {
   background: rgba(90, 209, 255, 0.1);
   outline: none;
 }
@@ -176,11 +218,36 @@
 .risk-scope-breadcrumb-current {
   color: var(--text-primary, #e7eef6);
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+/* --- V1-UX-4: recursive drilldown card additions --------------------------- */
+
+/* The "View Contributing/Related Objects" drill action reads as a
+   distinct, deliberate investigative step (not just another Passport/
+   Timeline/Evidence/Source jump-out link), so it gets the same
+   accent-outlined treatment .risk-card-probe-btn already uses for "Probe
+   Commitment in Universe" - both are "go deeper" actions, just in
+   different directions (stay in Risk Board vs. leave for Universe). */
+.risk-card-drill-btn {
+  border-color: var(--cyan-accent, #5ad1ff);
+  color: var(--cyan-accent, #5ad1ff);
 }
 
 @media (max-width: 640px) {
   .risk-site-chip {
     min-width: 0;
     width: 100%;
+  }
+
+  .risk-scope-breadcrumb {
+    flex-wrap: wrap;
+  }
+
+  .risk-scope-breadcrumb-current {
+    max-width: 100%;
   }
 }

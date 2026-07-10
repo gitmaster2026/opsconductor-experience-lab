@@ -87,11 +87,18 @@ test('the close button fires onFullScreenChange(false) - the transition #mainLay
   assert.deepEqual(calls, [true, false], 'close must fire a second call with isFullScreen=false');
 });
 
-test('a drilldown from List View (onRowClick -> close() -> onSelect) fires onFullScreenChange(false) via the same close() choke point every dismissal path uses', () => {
+// V1-UX-4 correction: a List View row click no longer closes the workspace
+// and jumps to Universe - it now opens that member's detail IN PLACE (see
+// panels/functional-radar.js's openMemberDetail()), so #mainLayout must
+// stay hidden (isFullScreen() stays true) exactly like switching function/
+// view-mode already does. Only the row's own separate, explicit
+// "Probe {Type} →" button (the "Open in Universe" action) still closes the
+// workspace - see the following test.
+test('a drilldown from List View (onRowClick -> openMemberDetail) stays inside the workspace - onFullScreenChange must NOT fire again', () => {
   const doc = installMiniDocument();
   const nodes = makeEngineeringNodes();
   const selected = [];
-  const { panel, panelEl, calls } = mountWithSpy(doc, nodes, { onSelect: (id) => selected.push(id) });
+  const { panel, panelEl, calls } = mountWithSpy(doc, nodes, { onSelectInWorkspace: (id) => selected.push(id) });
 
   panel.openFunction('engineering');
   assert.deepEqual(calls, [true]);
@@ -109,12 +116,49 @@ test('a drilldown from List View (onRowClick -> close() -> onSelect) fires onFul
   assert.ok(row, 'expected at least one clickable List View row');
   row.click();
 
-  assert.deepEqual(selected, ['nr04:eco-1'], 'sanity check: the drilldown itself still selected the right object');
+  assert.deepEqual(selected, ['nr04:eco-1'], 'sanity check: the drilldown itself still updated the shared selection');
+  assert.deepEqual(
+    calls,
+    [true],
+    'a plain row click must stay inside the workspace (isFullScreen() unchanged) - only the explicit "Open in ' +
+      'Universe" Probe action, or the close button, may exit it'
+  );
+  // The workspace itself should now be showing member detail for the
+  // clicked object, not the List View table anymore.
+  assert.ok(
+    panelEl.querySelectorAll('[data-member-back]').length > 0,
+    'expected the member-detail breadcrumb Back control to be rendered after drilling into a row'
+  );
+});
+
+test('the List View row\'s own explicit Probe ("Open in Universe") button still closes the workspace', () => {
+  const doc = installMiniDocument();
+  const nodes = makeEngineeringNodes();
+  const probed = [];
+  const { panel, panelEl, calls } = mountWithSpy(doc, nodes, { onProbe: (id) => probed.push(id) });
+
+  panel.openFunction('engineering');
+  assert.deepEqual(calls, [true]);
+  const listTab = panelEl
+    .querySelectorAll('[data-set-view-mode]')
+    .find((el) => el.getAttribute('data-set-view-mode') === 'list');
+  listTab.click();
+
+  // engine/filterable-table.js's Probe button is styled via `el.className =`
+  // (a plain string assignment mini-dom.mjs does not track into its
+  // classList - see that fixture's own header on what it does/doesn't
+  // support), so a class selector can't find it here; its rendered text
+  // ("Probe {Type} →", engine/labels.js's probeLabel()) is a stable,
+  // real-DOM-equivalent way to locate the same button.
+  const probeBtn = panelEl.querySelectorAll('button').find((b) => typeof b.textContent === 'string' && b.textContent.includes('Probe'));
+  assert.ok(probeBtn, 'expected the List View row\'s own explicit Probe button to be rendered');
+  probeBtn.click();
+
+  assert.deepEqual(probed, ['nr04:eco-1'], 'the explicit Probe button must still fire the Open-in-Universe callback');
   assert.deepEqual(
     calls,
     [true, false],
-    'drilling down from inside the workspace must ALSO fire isFullScreen=false - #mainLayout must un-hide when a ' +
-      'drilldown exits the workspace into Universe/Passport, exactly like the explicit close button does'
+    'the explicit Probe button must still close the workspace (isFullScreen -> false), unlike a plain row click'
   );
 });
 

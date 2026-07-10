@@ -556,6 +556,20 @@ function prefersReducedMotion() {
  * @param {() => string|null} [callbacks.getSelectedId] - returns the
  *   currently selected object id (for persisting selection highlight
  *   across a lens switch, per LENS_SPECIFICATIONS.md).
+ * @param {() => string|null} [callbacks.getFocusTargetId] - V1-UX-4
+ *   Universe click contract: returns engine/state.js's cameraTarget (set by
+ *   focusObject(), NOT selectObject()) - the object the camera should be
+ *   anchored on/organized around (Focus Mode's orbit). Deliberately
+ *   separate from getSelectedId() above: a single click only selects
+ *   (opens/updates the information card) and must never move the camera;
+ *   only an explicit focus action (double-click here, or Probe/"Open in
+ *   Universe" from another lens) does that. Omitted falls back to
+ *   getSelectedId()'s value, preserving the pre-V1-UX-4 "selection drives
+ *   focus" behavior for a caller that hasn't wired this callback.
+ * @param {(nodeId: string|null) => void} [callbacks.onFocus] - V1-UX-4:
+ *   called with the node id to focus (or null to exit Focus Mode) on
+ *   double-click. The caller (app.js) is expected to route this to
+ *   engine/state.js's focusObject().
  * @param {() => string[]} [callbacks.getFocusTrail] - V5 Phase 2: returns
  *   engine/state.js's focusTrail, fed into assignStratum()/
  *   computeLabelPlan() (§2.2/§8.1's "in focus chain" terms). Omitted
@@ -633,6 +647,8 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     onHover,
     getZoomLevel,
     getSelectedId,
+    getFocusTargetId,
+    onFocus,
     getFocusTrail,
     getHoveredId,
     onWheelZoom,
@@ -1074,9 +1090,20 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
    */
   function resolveFocusPresentation(now) {
     const selectedId = typeof getSelectedId === 'function' ? getSelectedId() : null;
+    // V1-UX-4 Universe click contract: the CAMERA/orbit anchor is no longer
+    // the same thing as "which object is selected" - a plain click only
+    // selects (see selectedId above, still used for the halo/label-priority/
+    // incident-edge treatment below), while ONLY an explicit focus action
+    // (double-click, Probe) should move the camera or enter Focus Mode.
+    // getFocusTargetId() reads engine/state.js's cameraTarget (set by
+    // focusObject(), not selectObject()) - falling back to selectedId when
+    // the callback isn't wired, so a caller that hasn't adopted the new
+    // callback yet keeps the old "selection drives focus" behavior rather
+    // than silently losing Focus Mode entirely.
+    const focusRawId = typeof getFocusTargetId === 'function' ? getFocusTargetId() : selectedId;
 
     const scopeContext = typeof getScopeContext === 'function' ? getScopeContext() : null;
-    const { isCollectionScopeActive, isExpanded: isCollectionExpanded } = resolveCollectionExpansion(scopeContext, selectedId);
+    const { isCollectionScopeActive, isExpanded: isCollectionExpanded } = resolveCollectionExpansion(scopeContext, focusRawId);
     if (isCollectionScopeActive) {
       const scope = typeof getScope === 'function' ? getScope() : null;
       const resolvedIds = Array.isArray(scope?.scopedNodeIds) ? scope.scopedNodeIds : [];
@@ -1101,13 +1128,13 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // A Collection only becomes the flight/orbit target once EXPANDED
     // (item H) - a merely-active-but-collapsed Collection scope must NOT
     // trigger the camera flight, matching a real, un-selected node. An
-    // ordinary single-object selectedId only drives the flight if it is
+    // ordinary single-object focus target only drives the flight if it is
     // still a real, currently-rendered node - guards against a stale
-    // selectedObjectId left over from a Collection's own synthetic id (set
-    // by clicking its glyph) after the scope has since changed away from
-    // that Collection without going through popFocus().
-    const isSelectedIdRealNode = selectedId !== null && currentNodes.some((n) => n.id === selectedId);
-    const focusTargetId = isCollectionExpanded ? COLLECTION_FOCUS_PSEUDO_ID : isSelectedIdRealNode ? selectedId : null;
+    // cameraTarget left over from a Collection's own synthetic id (set by
+    // focusing its glyph) after the scope has since changed away from that
+    // Collection without going through popFocus().
+    const isFocusIdRealNode = focusRawId !== null && currentNodes.some((n) => n.id === focusRawId);
+    const focusTargetId = isCollectionExpanded ? COLLECTION_FOCUS_PSEUDO_ID : isFocusIdRealNode ? focusRawId : null;
     const { anchorId, progress } = updateFocusTiming(focusTargetId, now);
     const isCollectionFocus = anchorId === COLLECTION_FOCUS_PSEUDO_ID;
 
@@ -1993,6 +2020,117 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
    *
    * @param {{ node: Object, screenX: number, screenY: number, radius: number }|null} info
    */
+  // --- V1-UX-4 Part 4: draggable persistent tooltip card -----------------
+  //
+  // The tooltip is this Lab's one "persistent Universe information card"
+  // (it stays open for as long as an object is selected, independent of
+  // Focus Mode - see updateTooltip's own header doc). Per the corrected
+  // interaction contract, the user should be able to drag it away from its
+  // node to expose hidden graph underneath, with the offset staying stable
+  // for the rest of the investigation (not recomputed away on the next
+  // render/frame) until an explicit reset. `tooltipManualOffset` is a plain
+  // (dx, dy) pixel offset ADDED on top of the normal auto-anchored
+  // position every frame - dragging never disables the auto-anchor
+  // tracking (the card still follows its node through camera flight/idle
+  // drift), it only shifts where relative to that anchor the card sits.
+  /** @type {{ dx: number, dy: number }} */
+  let tooltipManualOffset = { dx: 0, dy: 0 };
+  /** Last computed auto-anchor (pre-offset) position, so a drag in progress
+   * can reposition instantly without waiting for the next draw() frame. */
+  let tooltipAutoAnchor = null;
+  /** @type {{ pointerId: number, startX: number, startY: number, startDx: number, startDy: number }|null} */
+  let tooltipDragState = null;
+
+  function clampTooltipOffset(autoAnchor, dx, dy) {
+    // "Cards must remain within practical viewport bounds" - clamp the
+    // FINAL on-screen position (auto-anchor + offset), not the offset
+    // itself, so the allowed drag range naturally shrinks/grows with how
+    // close the node's own current anchor is to an edge.
+    const cardWidth = tooltipEl.offsetWidth || 240;
+    const cardHeight = tooltipEl.offsetHeight || 120;
+    const minLeft = 8 - autoAnchor.left;
+    const maxLeft = Math.max(minLeft, layoutWidth - cardWidth - 8 - autoAnchor.left);
+    const minTop = 8 - autoAnchor.top;
+    const maxTop = Math.max(minTop, layoutHeight - cardHeight - 8 - autoAnchor.top);
+    return { dx: clamp(dx, minLeft, maxLeft), dy: clamp(dy, minTop, maxTop) };
+  }
+
+  function applyTooltipPosition() {
+    if (!tooltipEl || !tooltipAutoAnchor) return;
+    const { dx, dy } = clampTooltipOffset(tooltipAutoAnchor, tooltipManualOffset.dx, tooltipManualOffset.dy);
+    tooltipEl.style.left = `${tooltipAutoAnchor.left + dx}px`;
+    tooltipEl.style.top = `${tooltipAutoAnchor.top + dy}px`;
+  }
+
+  function resetTooltipLayout() {
+    tooltipManualOffset = { dx: 0, dy: 0 };
+    applyTooltipPosition();
+  }
+
+  function onTooltipPointerDown(ev) {
+    if (!tooltipEl || ev.target.closest('[data-tooltip-reset]')) return;
+    // Dragging the card must never pan/select on the canvas underneath it -
+    // this listener is on tooltipEl itself (a separate DOM element, not a
+    // canvas child), so canvasEl's own pointer handlers never see this
+    // event via bubbling regardless, but stopPropagation() is kept for
+    // defense-in-depth against any future shared ancestor listener.
+    ev.stopPropagation();
+    tooltipDragState = {
+      pointerId: ev.pointerId,
+      startX: ev.clientX,
+      startY: ev.clientY,
+      startDx: tooltipManualOffset.dx,
+      startDy: tooltipManualOffset.dy,
+    };
+    tooltipEl.setPointerCapture?.(ev.pointerId);
+    tooltipEl.classList.add('is-dragging');
+  }
+
+  function onTooltipPointerMove(ev) {
+    if (!tooltipDragState || ev.pointerId !== tooltipDragState.pointerId) return;
+    ev.stopPropagation();
+    tooltipManualOffset = {
+      dx: tooltipDragState.startDx + (ev.clientX - tooltipDragState.startX),
+      dy: tooltipDragState.startDy + (ev.clientY - tooltipDragState.startY),
+    };
+    applyTooltipPosition();
+  }
+
+  function endTooltipDrag(ev) {
+    if (!tooltipDragState || ev.pointerId !== tooltipDragState.pointerId) return;
+    ev.stopPropagation();
+    tooltipEl.releasePointerCapture?.(ev.pointerId);
+    tooltipDragState = null;
+    tooltipEl.classList.remove('is-dragging');
+  }
+
+  const TOOLTIP_KEYBOARD_NUDGE_PX = 12;
+  function onTooltipKeydown(ev) {
+    // Keyboard access (task requirement: "preserve accessibility and
+    // keyboard access where practical") for users who cannot drag with a
+    // pointer - arrow keys nudge the card by the same kind of offset a
+    // drag would produce; Escape/'r' resets it back to the default.
+    if (ev.key === 'ArrowLeft') tooltipManualOffset = { ...tooltipManualOffset, dx: tooltipManualOffset.dx - TOOLTIP_KEYBOARD_NUDGE_PX };
+    else if (ev.key === 'ArrowRight') tooltipManualOffset = { ...tooltipManualOffset, dx: tooltipManualOffset.dx + TOOLTIP_KEYBOARD_NUDGE_PX };
+    else if (ev.key === 'ArrowUp') tooltipManualOffset = { ...tooltipManualOffset, dy: tooltipManualOffset.dy - TOOLTIP_KEYBOARD_NUDGE_PX };
+    else if (ev.key === 'ArrowDown') tooltipManualOffset = { ...tooltipManualOffset, dy: tooltipManualOffset.dy + TOOLTIP_KEYBOARD_NUDGE_PX };
+    else if (ev.key === 'r' || ev.key === 'R') resetTooltipLayout();
+    else return;
+    ev.preventDefault();
+    applyTooltipPosition();
+  }
+
+  if (tooltipEl) {
+    tooltipEl.addEventListener('pointerdown', onTooltipPointerDown);
+    tooltipEl.addEventListener('pointermove', onTooltipPointerMove);
+    tooltipEl.addEventListener('pointerup', endTooltipDrag);
+    tooltipEl.addEventListener('pointercancel', endTooltipDrag);
+    tooltipEl.addEventListener('keydown', onTooltipKeydown);
+    tooltipEl.tabIndex = 0;
+    tooltipEl.setAttribute('role', 'group');
+    tooltipEl.setAttribute('aria-label', 'Selected object card, draggable');
+  }
+
   function updateTooltip(info) {
     if (!tooltipEl) return;
     // app.js keeps this lens mounted (and its rAF loop running) even while
@@ -2002,6 +2140,7 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // last selection and stay visible, floating on top of Risk Board.
     if (!info || canvasEl.classList.contains('hidden')) {
       tooltipEl.classList.add('hidden');
+      tooltipAutoAnchor = null;
       return;
     }
     const { node, screenX, screenY, radius } = info;
@@ -2018,23 +2157,58 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
 
     tooltipEl.classList.remove('hidden');
     // Anchor below-right of the node by default; flip above if too close to
-    // the bottom edge so the tooltip never renders off-canvas.
+    // the bottom edge so the tooltip never renders off-canvas. This is the
+    // AUTO anchor - tooltipManualOffset (V1-UX-4 drag/reset, above) is
+    // applied on top of it by applyTooltipPosition(), so the card still
+    // tracks its node through camera motion even while manually offset.
     const flipAbove = screenY > layoutHeight - 140;
     tooltipEl.classList.toggle('node-tooltip--above', flipAbove);
-    tooltipEl.style.left = `${clamp(screenX + radius + 10, 8, layoutWidth - 8)}px`;
-    tooltipEl.style.top = `${flipAbove ? screenY - radius - 10 : screenY + radius + 10}px`;
+    tooltipAutoAnchor = {
+      left: clamp(screenX + radius + 10, 8, layoutWidth - 8),
+      top: flipAbove ? screenY - radius - 10 : screenY + radius + 10,
+    };
+    applyTooltipPosition();
 
-    tooltipEl.innerHTML = `
-      <div class="node-tooltip-title">${escapeHtml(headline.primary)}</div>
-      <div class="node-tooltip-meta">
-        <span class="node-tooltip-risk node-tooltip-risk--${bucket}">${escapeHtml(bucket)}</span>
-        <span class="node-tooltip-type">${escapeHtml(objectTypeNoun(node.type))}</span>
-      </div>
-      ${headline.secondary ? `<div class="node-tooltip-line node-tooltip-line--muted">${escapeHtml(headline.secondary)}</div>` : ''}
-      ${hasRevenue && !revenueAlreadyLeading ? `<div class="node-tooltip-line">$${Math.round(node.revenue_at_risk).toLocaleString()} at risk</div>` : ''}
-      <div class="node-tooltip-line">${relationshipCount} relationship${relationshipCount === 1 ? '' : 's'}</div>
-      <div class="node-tooltip-hint">Full detail in Passport →</div>
-    `;
+    // V1-UX-4: updateTooltip() runs on every draw() frame (~60/sec) purely
+    // to keep the card's POSITION tracking its node through camera/idle-
+    // drift motion - the CONTENT below only actually changes when the
+    // selected node or its relationship count changes. Rebuilding
+    // innerHTML unconditionally every frame was destroying and recreating
+    // the reset button (and its listener) 60 times a second - harmless to
+    // a real mouse click (down+up resolve against whatever's under the
+    // cursor at each instant) but genuinely fragile: a click event whose
+    // target element is torn down between mousedown and mouseup can be
+    // dropped by the browser, and it defeats any test/automation tooling
+    // that waits for an element to be "stable" (found during this
+    // sprint's own Playwright verification - Playwright's actionability
+    // check never completed against a target being replaced every frame).
+    // Memoize on a cheap content signature so a real content change still
+    // rebuilds (and correctly re-wires the reset button), but idle
+    // position-only frames leave the existing DOM node - and its
+    // listener - alone.
+    const contentKey = `${node.id}|${bucket}|${relationshipCount}|${headline.primary}|${headline.secondary}`;
+    if (tooltipEl.dataset.contentKey !== contentKey) {
+      tooltipEl.dataset.contentKey = contentKey;
+      tooltipEl.innerHTML = `
+        <button type="button" class="node-tooltip-reset" data-tooltip-reset title="Reset card position" aria-label="Reset card position">⟲</button>
+        <div class="node-tooltip-title">${escapeHtml(headline.primary)}</div>
+        <div class="node-tooltip-meta">
+          <span class="node-tooltip-risk node-tooltip-risk--${bucket}">${escapeHtml(bucket)}</span>
+          <span class="node-tooltip-type">${escapeHtml(objectTypeNoun(node.type))}</span>
+        </div>
+        ${headline.secondary ? `<div class="node-tooltip-line node-tooltip-line--muted">${escapeHtml(headline.secondary)}</div>` : ''}
+        ${hasRevenue && !revenueAlreadyLeading ? `<div class="node-tooltip-line">$${Math.round(node.revenue_at_risk).toLocaleString()} at risk</div>` : ''}
+        <div class="node-tooltip-line">${relationshipCount} relationship${relationshipCount === 1 ? '' : 's'}</div>
+        <div class="node-tooltip-hint">Full detail in Passport →</div>
+      `;
+      // innerHTML replacement above just discarded the previous reset
+      // button node, so its listener needs rewiring whenever content
+      // actually changes (rare - once per selection, not once per frame).
+      tooltipEl.querySelector('[data-tooltip-reset]')?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        resetTooltipLayout();
+      });
+    }
   }
 
   function loop() {
@@ -2128,17 +2302,41 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     }
   }
 
-  function onDoubleClick() {
-    // V1-UX-3: recenter() alone used to leave selectedObjectId (and thus
-    // Focus Mode's orbit/anchor state) untouched while the camera snapped
-    // back to the full overview - a confusing partial reset where the
-    // Passport still showed a "focused" object the view no longer visually
-    // focused. Double-click is a "show me everything" gesture, so it now
-    // clears selection too, matching Return to Universe's own semantics
-    // (panels/return-to-universe.js) instead of introducing a third,
-    // inconsistent partial-reset behavior.
+  /**
+   * V1-UX-4 Universe click contract: "Double click: select the node, enter
+   * Focus Mode, reorient the Universe around that node, keep it as the
+   * visual anchor." Hit-tests at the double-click position - a node under
+   * the cursor is selected AND focused (the camera flies to it and the
+   * orbit/edge layout reorganizes); double-clicking empty canvas is the
+   * existing "show me everything" reset gesture (recenter + clear
+   * selection/focus), matching Return to Universe's own semantics
+   * (panels/return-to-universe.js) rather than a third, inconsistent
+   * partial-reset behavior (V1-UX-3's own fix for this exact case).
+   *
+   * Each pointerup in a double-click sequence still fires onPointerUp's
+   * plain onSelect(hitId) first (browsers dispatch pointerdown/up twice
+   * before dblclick) - but per the V1-UX-4 contract that call ONLY selects
+   * (see engine/state.js's selectObject(), which no longer moves the
+   * camera on a forward selection), so there is no "premature
+   * reorientation" for this handler to guard against: nothing reorganizes
+   * the graph or moves the camera until this handler's own onFocus() call
+   * fires, after both clicks have already registered.
+   */
+  function onDoubleClick(ev) {
+    const rect = canvasEl.getBoundingClientRect();
+    const sx = ev.clientX - rect.left;
+    const sy = ev.clientY - rect.top;
+    const hitId = hitTestAt(sx, sy);
+
+    if (hitId) {
+      if (typeof onSelect === 'function') onSelect(hitId);
+      if (typeof onFocus === 'function') onFocus(hitId);
+      return;
+    }
+
     recenter();
     if (typeof onSelect === 'function') onSelect(null);
+    if (typeof onFocus === 'function') onFocus(null);
   }
 
   function onPointerLeave() {
@@ -2184,8 +2382,15 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     canvasEl.removeEventListener('pointerleave', onPointerLeave);
     canvasEl.removeEventListener('wheel', onWheel);
     canvasEl.removeEventListener('dblclick', onDoubleClick);
-    if (tooltipEl) tooltipEl.classList.add('hidden');
+    if (tooltipEl) {
+      tooltipEl.classList.add('hidden');
+      tooltipEl.removeEventListener('pointerdown', onTooltipPointerDown);
+      tooltipEl.removeEventListener('pointermove', onTooltipPointerMove);
+      tooltipEl.removeEventListener('pointerup', endTooltipDrag);
+      tooltipEl.removeEventListener('pointercancel', endTooltipDrag);
+      tooltipEl.removeEventListener('keydown', onTooltipKeydown);
+    }
   }
 
-  return { render, resize, destroy, recenter };
+  return { render, resize, destroy, recenter, resetTooltipLayout };
 }

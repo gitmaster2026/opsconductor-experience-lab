@@ -53,10 +53,89 @@ class MiniElement {
       },
       contains: (name) => this._classList.has(name),
     };
+    // Real-DOM-equivalent inline style bag - lenses/risk-board.js's FLIP
+    // animation (transition/transform) and per-cell CSS custom properties
+    // (--risk-card-color) both write through el.style.* /
+    // el.style.setProperty(); neither is ever READ back by test code, so a
+    // plain settable object (no computed-style resolution) is enough.
+    const styleTarget = {};
+    this.style = new Proxy(styleTarget, {
+      set: (target, prop, value) => {
+        target[prop] = value;
+        return true;
+      },
+      get: (target, prop) => {
+        if (prop === 'setProperty') return (name, value) => { target[name] = value; };
+        if (prop === 'removeProperty') return (name) => { delete target[name]; };
+        return target[prop];
+      },
+    });
+  }
+
+  /**
+   * Real-DOM-equivalent `dataset` (lenses/risk-board.js's
+   * `el.dataset.cellId = cellId` pattern) - a live proxy over this
+   * element's own `data-*` attributes, converting between the DOM's
+   * camelCase dataset property names and their kebab-case attribute
+   * names (e.g. `dataset.cellId` <-> attribute `data-cell-id`).
+   */
+  get dataset() {
+    const el = this;
+    const toAttr = (prop) => `data-${String(prop).replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}`;
+    return new Proxy(
+      {},
+      {
+        get: (_target, prop) => el.attributes.get(toAttr(prop)),
+        set: (_target, prop, value) => {
+          el.attributes.set(toAttr(prop), String(value));
+          return true;
+        },
+      }
+    );
+  }
+
+  /**
+   * Real-DOM-equivalent `Element.closest()` - walks this element and its
+   * ancestors, returning the first that matches `selector` (mini-dom's own
+   * simple selector vocabulary - see matchesSimple() below), or null.
+   * Needed by any module using the "one delegated listener on a container,
+   * inspect ev.target.closest(...) to find which nested control was
+   * actually clicked" pattern (e.g. lenses/risk-board.js's card click
+   * handler) - see click() below for the matching bubbling support this
+   * pattern also requires.
+   *
+   * @param {string} selector
+   * @returns {MiniElement|null}
+   */
+  closest(selector) {
+    let node = this;
+    while (node instanceof MiniElement) {
+      if (matches(node, selector)) return node;
+      node = node.parentNode;
+    }
+    return null;
   }
 
   get id() {
     return this.attributes.get('id') ?? '';
+  }
+
+  /**
+   * Real-DOM-equivalent `className` (a plain string property in real
+   * browsers, backed by the same underlying class list `classList`
+   * reflects) - several modules (lenses/risk-board.js's card elements,
+   * engine/filterable-table.js) set classes via `el.className = '...'`
+   * rather than `classList.add()`. Mirrors into the `class` ATTRIBUTE
+   * (not `_classList`) so matchesSimple()'s class-selector matching below
+   * (which reads BOTH sources - see elementClasses()) sees it regardless
+   * of which of the two real-DOM-equivalent APIs a module used.
+   */
+  get className() {
+    return this.attributes.get('class') ?? '';
+  }
+
+  set className(value) {
+    this.attributes.set('class', String(value ?? ''));
   }
 
   setAttribute(name, value) {
@@ -75,10 +154,34 @@ class MiniElement {
     this.attributes.delete(name);
   }
 
+  /**
+   * Real-DOM-equivalent `Element.appendChild()` - crucially, MOVES an
+   * already-connected child (removes it from its current parent's children
+   * first) rather than duplicating it, exactly like a real browser.
+   * lenses/risk-board.js's own FLIP band-migration animation explicitly
+   * depends on this "appendChild on an already-connected child simply
+   * moves it" contract (see that module's own render() comment) - without
+   * this, re-appending an existing card into the (possibly same) band row
+   * on every render() call would silently accumulate duplicate child-array
+   * entries for the same element.
+   */
   appendChild(child) {
+    if (child.parentNode) {
+      const oldSiblings = child.parentNode.children;
+      const idx = oldSiblings.indexOf(child);
+      if (idx >= 0) oldSiblings.splice(idx, 1);
+    }
     child.parentNode = this;
     this.children.push(child);
     return child;
+  }
+
+  /** Real-DOM-equivalent `Element.remove()` - detaches this element from its parent, if any (lenses/risk-board.js's card/row lifecycle relies on this). */
+  remove() {
+    if (!this.parentNode) return;
+    const idx = this.parentNode.children.indexOf(this);
+    if (idx >= 0) this.parentNode.children.splice(idx, 1);
+    this.parentNode = null;
   }
 
   set innerHTML(html) {
@@ -100,9 +203,36 @@ class MiniElement {
     if (idx >= 0) list.splice(idx, 1);
   }
 
+  /**
+   * Real-DOM-equivalent bubbling click dispatch: fires 'click' listeners on
+   * this element, then (unless a handler calls stopPropagation()) walks up
+   * through parentNode firing each ancestor's own 'click' listeners in
+   * turn - the standard "event bubbles up the tree, target stays fixed"
+   * contract every real browser implements. Needed for the "one delegated
+   * listener on a container, ev.target.closest(...) to find the nested
+   * control that was actually clicked" pattern used by
+   * lenses/risk-board.js (and the stopPropagation() calls
+   * engine/filterable-table.js's own Probe button and risk-board's nested
+   * continuity-action buttons already rely on to prevent their container's
+   * row/card click from ALSO firing - both were previously silent no-ops
+   * under the old non-bubbling click(), since there was nothing to stop).
+   */
   click() {
-    const fakeEvent = { target: this, stopPropagation() {} };
-    for (const handler of this.listeners.get('click') ?? []) handler(fakeEvent);
+    let stopped = false;
+    const fakeEvent = {
+      target: this,
+      stopPropagation() {
+        stopped = true;
+      },
+    };
+    let node = this;
+    while (node instanceof MiniElement) {
+      for (const handler of [...(node.listeners.get('click') ?? [])]) {
+        handler(fakeEvent);
+        if (stopped) return;
+      }
+      node = node.parentNode;
+    }
   }
 
   getBoundingClientRect() {
@@ -120,10 +250,27 @@ class MiniElement {
   }
 }
 
+/**
+ * The union of every class name an element carries, regardless of which
+ * real-DOM-equivalent API put it there: `classList.add/toggle` (tracked in
+ * `_classList`), `el.className = '...'` (mirrored into the `class`
+ * attribute - see the className getter/setter above), or inline
+ * `class="..."` markup parsed by parseHTML() below (also lands in the
+ * `class` attribute, via the same generic setAttribute() every parsed
+ * attribute goes through).
+ *
+ * @param {MiniElement} el
+ * @returns {Set<string>}
+ */
+function elementClasses(el) {
+  const fromAttribute = (el.attributes.get('class') ?? '').split(/\s+/).filter(Boolean);
+  return new Set([...fromAttribute, ...el._classList]);
+}
+
 function matchesSimple(el, sel) {
   sel = sel.trim();
   if (sel.startsWith('#')) return el.id === sel.slice(1);
-  if (sel.startsWith('.')) return el.classList.contains(sel.slice(1));
+  if (sel.startsWith('.')) return elementClasses(el).has(sel.slice(1));
   if (sel.startsWith('[') && sel.endsWith(']')) {
     const inner = sel.slice(1, -1);
     const eqIdx = inner.indexOf('=');

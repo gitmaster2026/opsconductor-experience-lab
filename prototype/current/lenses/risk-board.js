@@ -77,8 +77,10 @@ import {
   FLIP_EASING,
   groupCellsBySite,
   filterCellsBySite,
+  buildRelatedObjectPseudoCells,
 } from './risk-board-layout.js';
-import { riskImpactTags } from '../engine/business-language.js';
+import { riskImpactTags, universeNodeHeadline } from '../engine/business-language.js';
+import { objectNoun, relationshipLabel } from '../engine/operational-language.js';
 import { grammarMarkerHtml } from '../engine/visual-grammar.js';
 
 const BAND_LABEL = Object.freeze({
@@ -238,39 +240,94 @@ export function mountRiskBoardLens(containerEl, callbacks) {
   // incorrectly re-scope the whole app to one site whenever a user drills
   // into the Risk Board, rather than narrowing only this lens's own view
   // as the brief requires ("The Risk Board should recursively narrow
-  // while remaining inside the Risk workspace"). currentScope is read and
+  // while remaining inside the Risk workspace"). scopePath is read and
   // written ONLY inside this closure.
   //
-  // null            -> Level 0, "Enterprise" (today's unscoped 5-band view).
-  // { type: 'site', key, label } -> Level 1, narrowed to one real site.
+  // scopePath is a STACK, oldest-first, so the Risk Board can recurse past
+  // one level (V1-UX-4: "At-Risk Revenue -> Commitment -> ECO -> Related
+  // Work Orders -> Related NCR/MRB/Reinspection..."), not just the
+  // original Enterprise/Site pair:
+  //   []                                        -> Level 0 "Enterprise"
+  //     (the existing unscoped 5-band view, unchanged).
+  //   [{ type: 'site', key, label }]             -> Level 1 "Site"
+  //     (existing behavior, unchanged - the SAME 5-band layout narrowed to
+  //     one real site's cells).
+  //   [...,{ type: 'object', objectId, label }]  -> "Related objects of
+  //     <objectId>" - a NEW recursive level. Each entry's objectId is
+  //     whichever card's expanded "View Contributing/Related Objects"
+  //     button was clicked; the cards shown at this level are that
+  //     object's own real one-hop graph relationships
+  //     (buildRelatedObjectPseudoCells(), risk-board-layout.js), reshaped
+  //     into pseudo-cells and banded by the SAME buildBandLayout() every
+  //     other level already uses - "objects are placed into the
+  //     appropriate risk bucket" using their own real risk_state, never a
+  //     new classification. An 'object' entry can follow either a 'site'
+  //     entry or another 'object' entry (drilling deeper than one hop),
+  //     and always stays 100% local to this lens's own closure state -
+  //     never reads/writes engine/state.js's shared scopeContext, so
+  //     narrowing/drilling the Risk Board never re-scopes Universe/
+  //     Dashboard/Jarvis (same invariant the Site level already documents).
   // -------------------------------------------------------------------
-  /** @type {{ type: 'site', key: string, label: string }|null} */
-  let currentScope = null;
+  /** @type {Array<{ type: 'site', key: string, label: string }|{ type: 'object', objectId: string, label: string }>} */
+  let scopePath = [];
 
-  // Breadcrumb (Level 1 only) - "Enterprise > <Site business name>", with
-  // the "Enterprise" segment a real, focusable, keyboard-usable <button>
-  // that resets currentScope to null and re-renders.
+  // Breadcrumb - "Enterprise › <Site> › <Object> › <Object> › ...", every
+  // segment except the last a real, focusable, keyboard-usable <button>
+  // that truncates scopePath back to that segment's depth and re-renders
+  // (V1-UX-4: "Breadcrumbs show the current Risk Board path... clicking an
+  // ancestor segment returns to that level"). A dedicated "‹ Back" button
+  // (V1-UX-4: "Back returns to the previous Risk Board level") pops
+  // exactly one level, alongside the breadcrumb's own jump-to-any-ancestor
+  // affordance.
   const breadcrumbEl = document.createElement('nav');
   breadcrumbEl.className = 'risk-scope-breadcrumb hidden';
-  breadcrumbEl.setAttribute('aria-label', 'Risk Board scope');
+  breadcrumbEl.setAttribute('aria-label', 'Risk Board investigation path');
   const breadcrumbBackBtn = document.createElement('button');
   breadcrumbBackBtn.type = 'button';
-  breadcrumbBackBtn.className = 'risk-scope-breadcrumb-back';
-  breadcrumbBackBtn.textContent = 'Enterprise';
+  breadcrumbBackBtn.className = 'risk-scope-back-btn';
+  breadcrumbBackBtn.textContent = '‹ Back';
   breadcrumbBackBtn.addEventListener('click', () => {
-    currentScope = null;
+    scopePath = scopePath.slice(0, -1);
     render();
   });
-  const breadcrumbSep = document.createElement('span');
-  breadcrumbSep.className = 'risk-scope-breadcrumb-sep';
-  breadcrumbSep.setAttribute('aria-hidden', 'true');
-  breadcrumbSep.textContent = '›';
-  const breadcrumbCurrentEl = document.createElement('span');
-  breadcrumbCurrentEl.className = 'risk-scope-breadcrumb-current';
+  const breadcrumbTrailEl = document.createElement('div');
+  breadcrumbTrailEl.className = 'risk-scope-breadcrumb-trail';
   breadcrumbEl.appendChild(breadcrumbBackBtn);
-  breadcrumbEl.appendChild(breadcrumbSep);
-  breadcrumbEl.appendChild(breadcrumbCurrentEl);
+  breadcrumbEl.appendChild(breadcrumbTrailEl);
   surface.appendChild(breadcrumbEl);
+
+  /**
+   * Render the full "Enterprise › ... › current" breadcrumb trail for the
+   * active scopePath. Every segment but the last is a clickable button that
+   * truncates scopePath to that depth (0 = Enterprise root).
+   */
+  function renderBreadcrumbTrail() {
+    const isScoped = scopePath.length > 0;
+    breadcrumbEl.classList.toggle('hidden', !isScoped);
+    breadcrumbBackBtn.classList.toggle('hidden', !isScoped);
+    if (!isScoped) {
+      breadcrumbTrailEl.innerHTML = '';
+      return;
+    }
+    const segments = [{ label: 'Enterprise', depth: 0 }, ...scopePath.map((entry, i) => ({ label: entry.label, depth: i + 1 }))];
+    breadcrumbTrailEl.innerHTML = segments
+      .map((seg, i) => {
+        const isLast = i === segments.length - 1;
+        const sep = i > 0 ? '<span class="risk-scope-breadcrumb-sep" aria-hidden="true">›</span>' : '';
+        if (isLast) {
+          return `${sep}<span class="risk-scope-breadcrumb-current" aria-current="step">${escapeHtml(seg.label)}</span>`;
+        }
+        return `${sep}<button type="button" class="risk-scope-breadcrumb-crumb" data-breadcrumb-depth="${seg.depth}">${escapeHtml(seg.label)}</button>`;
+      })
+      .join('');
+    breadcrumbTrailEl.querySelectorAll('[data-breadcrumb-depth]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const depth = Number(el.getAttribute('data-breadcrumb-depth'));
+        scopePath = scopePath.slice(0, depth);
+        render();
+      });
+    });
+  }
 
   // Site-entry strip (Level 0 only) - one small card per real site,
   // business-first (site business name leads; the PLT-200/PLT-300 code is
@@ -302,7 +359,7 @@ export function mountRiskBoardLens(containerEl, callbacks) {
     el.addEventListener('click', () => {
       const group = el.__siteGroup;
       if (!group) return;
-      currentScope = { type: 'site', key: group.site, label: group.siteLabel };
+      scopePath = [{ type: 'site', key: group.site, label: group.siteLabel }];
       render();
     });
     siteChipElements.set(siteKey, el);
@@ -318,7 +375,7 @@ export function mountRiskBoardLens(containerEl, callbacks) {
    * @param {Array<Object>} allCells
    */
   function renderSiteStrip(allCells) {
-    const isEnterpriseLevel = currentScope === null;
+    const isEnterpriseLevel = scopePath.length === 0;
     siteStripEl.classList.toggle('hidden', !isEnterpriseLevel);
     if (!isEnterpriseLevel) return;
 
@@ -364,14 +421,6 @@ export function mountRiskBoardLens(containerEl, callbacks) {
       `;
       siteStripListEl.appendChild(el);
     }
-  }
-
-  /** Show/hide + populate the Level 1 breadcrumb for the active scope. */
-  function renderBreadcrumb() {
-    const isScoped = currentScope !== null;
-    breadcrumbEl.classList.toggle('hidden', !isScoped);
-    if (!isScoped) return;
-    breadcrumbCurrentEl.textContent = currentScope.label;
   }
 
   const emptyNotice = document.createElement('div');
@@ -435,6 +484,14 @@ export function mountRiskBoardLens(containerEl, callbacks) {
         else if (action === 'evidence' && typeof onOpenEvidence === 'function') onOpenEvidence(cellId);
         else if (action === 'source' && typeof onOpenSource === 'function') onOpenSource(cellId);
         else if (action === 'probe' && typeof onProbe === 'function') onProbe(cellId);
+        // V1-UX-4: "View Contributing/Related Objects" - recursive
+        // drilldown that stays entirely inside the Risk Board (pushes a
+        // new 'object' scopePath level instead of navigating anywhere).
+        else if (action === 'drill') {
+          const label = continuityAction.getAttribute('data-drill-label') || cellId;
+          scopePath = [...scopePath, { type: 'object', objectId: cellId, label }];
+          render();
+        }
         return;
       }
       if (typeof onSelect === 'function') onSelect(cellId);
@@ -528,6 +585,49 @@ export function mountRiskBoardLens(containerEl, callbacks) {
    * DOM position) changed since the last render; a card that stayed in
    * the same band gets a zero delta and is left alone.
    */
+  /**
+   * Resolve which cells (real risk-board commitments, or - for an
+   * 'object' scope level - pseudo-cells shaped from one hop of real graph
+   * relationships) buildBandLayout() should band for the CURRENT scopePath
+   * depth. Returns both the cells array and whether this level is an
+   * object-relationship level (renderCardContent()/buildExpandedDetail()
+   * below need to know, since a pseudo-cell has none of a real
+   * risk-board commitment's fields).
+   *
+   * @param {Array<Object>} allCells
+   * @param {Object} bundle
+   * @returns {{ cells: Array<Object>, isObjectLevel: boolean, levelLabel: string }}
+   */
+  function resolveCellsForScope(allCells, bundle) {
+    if (scopePath.length === 0) {
+      return { cells: allCells, isObjectLevel: false, levelLabel: 'Enterprise' };
+    }
+    const last = scopePath[scopePath.length - 1];
+    if (last.type === 'site') {
+      return { cells: filterCellsBySite(allCells, last.key), isObjectLevel: false, levelLabel: last.label };
+    }
+    // last.type === 'object': one hop of REAL graph relationships from the
+    // object being drilled into, reshaped into pseudo-cells and banded by
+    // their own real risk_state - see buildRelatedObjectPseudoCells()'s
+    // own header doc (risk-board-layout.js) for why excluding the
+    // immediate ancestor prevents the very next bucket from just showing
+    // "the object you came from."
+    const nodes = bundle?.universe?.nodes ?? [];
+    const edges = bundle?.universe?.edges ?? [];
+    const nodesById = new Map(nodes.map((n) => [n.id, n]));
+    const priorObjectEntry = scopePath.length >= 2 && scopePath[scopePath.length - 2].type === 'object'
+      ? scopePath[scopePath.length - 2]
+      : null;
+    const excludeIds = priorObjectEntry ? [priorObjectEntry.objectId] : [];
+    const pseudo = buildRelatedObjectPseudoCells(last.objectId, nodes, edges, excludeIds);
+    const cells = pseudo.map((pc) => ({
+      ...pc,
+      isRelatedObject: true,
+      node: nodesById.get(pc.id) ?? { id: pc.id, label: pc.id, type: null },
+    }));
+    return { cells, isObjectLevel: true, levelLabel: last.label };
+  }
+
   function render() {
     const bundle = getBundle();
     const riskBoard = bundle?.riskBoard ?? { cells: [] };
@@ -538,18 +638,21 @@ export function mountRiskBoardLens(containerEl, callbacks) {
     const isHighlightActive = highlightIds.size > 0;
 
     renderSiteStrip(allCells);
-    renderBreadcrumb();
+    renderBreadcrumbTrail();
 
-    // Recursive Risk Board: when a Site scope is active, narrow the cell
-    // set BEFORE it ever reaches buildBandLayout() - the band-assignment/
-    // sort algorithm below runs identically whether it was handed all 5
-    // cells or a site's subset; it has no awareness a scope even exists.
-    const cells = currentScope ? filterCellsBySite(allCells, currentScope.key) : allCells;
+    // Recursive Risk Board: narrow (Site) or reshape-into-related-objects
+    // (Object level) the cell set BEFORE it ever reaches buildBandLayout() -
+    // the band-assignment/sort algorithm below runs identically regardless
+    // of which level produced its input; it has no awareness a scope even
+    // exists.
+    const { cells, isObjectLevel, levelLabel } = resolveCellsForScope(allCells, bundle);
 
     emptyNotice.classList.toggle('hidden', cells.length > 0);
-    emptyNotice.textContent = currentScope
-      ? `No risk-board cells for ${currentScope.label} at this time slice.`
-      : 'No risk-board cells at this time slice.';
+    emptyNotice.textContent = scopePath.length === 0
+      ? 'No risk-board cells at this time slice.'
+      : isObjectLevel
+        ? `No further governed relationships found for ${levelLabel}.`
+        : `No risk-board cells for ${levelLabel} at this time slice.`;
 
     const currentIds = new Set(cells.map((c) => c.id));
     // FLIP "First": measure every card still at its PRE-update position
@@ -578,7 +681,7 @@ export function mountRiskBoardLens(containerEl, callbacks) {
           isSelected: cellId === selectedId,
           isHighlighted: isHighlightActive && highlightIds.has(cellId),
           isDimmedByHighlight: isHighlightActive && !highlightIds.has(cellId),
-        });
+        }, bundle);
         row.cardListEl.appendChild(el);
       }
     }
@@ -599,16 +702,31 @@ export function mountRiskBoardLens(containerEl, callbacks) {
 
   /**
    * Populate one card element's content/classes for the given cell + band.
+   * `cell.isRelatedObject` (set by resolveCellsForScope() for an 'object'
+   * scope level) branches into a generic related-object rendering - a
+   * pseudo-cell built from a real graph relationship has none of a real
+   * risk-board commitment's fields (item_number/customer/coverage_pct/...).
    *
    * @param {HTMLElement} el
-   * @param {Object} cell - a buildRiskBoardViewModel(...).cells entry.
+   * @param {Object} cell - a buildRiskBoardViewModel(...).cells entry, OR
+   *   (V1-UX-4) a buildRelatedObjectPseudoCells() pseudo-cell.
    * @param {string} band - the severity band this card is currently in.
    * @param {{ isSelected: boolean, isHighlighted: boolean, isDimmedByHighlight: boolean }} flags
+   * @param {Object} [bundle] - the current DerivedBundle (V1-UX-4: needed
+   *   so a related-object card's own expanded detail can compute ITS OWN
+   *   one-hop relationships, to know whether the "View Related Objects"
+   *   drill button has anywhere to go).
    */
-  function renderCardContent(el, cell, band, flags) {
+  function renderCardContent(el, cell, band, flags, bundle) {
+    if (cell.isRelatedObject) {
+      renderRelatedObjectCardContent(el, cell, band, flags, bundle);
+      return;
+    }
+
     el.style.setProperty('--risk-card-color', `var(${colorVarForBand(band)})`);
     el.classList.toggle('is-critical', band === 'critical');
     el.classList.toggle('is-dormant', band === 'dormant');
+    el.classList.toggle('is-related-object', false);
     el.classList.toggle('is-selected', flags.isSelected);
     el.setAttribute('aria-pressed', flags.isSelected ? 'true' : 'false');
     el.classList.toggle('is-highlighted', flags.isHighlighted);
@@ -658,7 +776,63 @@ export function mountRiskBoardLens(containerEl, callbacks) {
         ${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'}
       </div>
       <div class="risk-card-rootcause">${escapeHtml(rootCause)}</div>
-      ${flags.isSelected ? buildExpandedDetail(cell) : ''}
+      ${flags.isSelected ? buildExpandedDetail(cell, bundle) : ''}
+    `;
+  }
+
+  /**
+   * V1-UX-4: card content for an 'object' scope level's related-object
+   * pseudo-cells. Deliberately a SEPARATE renderer from the commitment
+   * card above rather than a shared template with a lot of `?? '—'`
+   * fallbacks - a related object has a genuinely different, smaller field
+   * set (no item_number/customer/coverage_pct/etc.), so a shared template
+   * would mostly show placeholder dashes instead of an honest, purpose-
+   * built card. Reuses the SAME Operational Visual Grammar (grammarMarkerHtml)
+   * and business-first headline (universeNodeHeadline) every other surface
+   * in this app already uses for a real graph node, so the same object
+   * looks identical here and in Universe/Functional Radar/Passport.
+   *
+   * @param {HTMLElement} el
+   * @param {Object} cell - a buildRelatedObjectPseudoCells() pseudo-cell,
+   *   decorated with `.node` (the real graph node) by resolveCellsForScope().
+   * @param {string} band
+   * @param {{ isSelected: boolean, isHighlighted: boolean, isDimmedByHighlight: boolean }} flags
+   * @param {Object} [bundle]
+   */
+  function renderRelatedObjectCardContent(el, cell, band, flags, bundle) {
+    const node = cell.node ?? { id: cell.id, label: cell.id, type: null };
+    el.style.setProperty('--risk-card-color', `var(${colorVarForBand(band)})`);
+    el.classList.toggle('is-critical', band === 'critical');
+    el.classList.toggle('is-dormant', band === 'dormant');
+    el.classList.add('is-related-object');
+    el.classList.toggle('is-selected', flags.isSelected);
+    el.setAttribute('aria-pressed', flags.isSelected ? 'true' : 'false');
+    el.classList.toggle('is-highlighted', flags.isHighlighted);
+    el.classList.toggle('is-dimmed-by-highlight', flags.isDimmedByHighlight);
+
+    const noun = objectNoun(node.type, node);
+    const headline = universeNodeHeadline(node, (t) => objectNoun(t, node));
+    const relContext = relationshipLabel(cell.relationshipType, cell.direction);
+    const bandLabel = band === 'dormant' ? 'dormant (not yet revealed)' : cell.risk_state;
+    const impactLine = node.business_impact_summary ?? node.next_action_summary ?? null;
+
+    el.setAttribute('aria-label', `${headline.primary}, ${noun}, risk state ${bandLabel}, ${relContext}`);
+
+    el.innerHTML = `
+      <div class="risk-card-impact-tags">
+        <span class="risk-impact-tag risk-impact-tag--primary">${escapeHtml(relContext)}</span>
+      </div>
+      <div class="risk-card-top">
+        ${grammarMarkerHtml(node, { size: 14, title: noun })}
+        <span class="risk-card-customer">${escapeHtml(headline.primary)}</span>
+        <span class="risk-card-item">${escapeHtml(noun)}</span>
+      </div>
+      <div class="risk-card-meta">
+        <span class="risk-card-ref">Reference ${escapeHtml(node.id ?? '—')}</span>
+        ${headline.secondary ? `<span class="risk-card-meta-sep">·</span><span class="risk-card-required">${escapeHtml(headline.secondary)}</span>` : ''}
+      </div>
+      ${impactLine ? `<div class="risk-card-rootcause">${escapeHtml(impactLine)}</div>` : ''}
+      ${flags.isSelected ? buildExpandedDetail(cell, bundle) : ''}
     `;
   }
 
@@ -678,10 +852,67 @@ export function mountRiskBoardLens(containerEl, callbacks) {
    * button's onProbe callback) - the site-scoping recursion added
    * elsewhere in this file never bypasses it.
    *
-   * @param {Object} cell
+   * V1-UX-4 addition: also carries the "View Contributing/Related Objects"
+   * drill button (data-risk-continuity-action="drill") - the explicit
+   * action that pushes a new 'object' scopePath level (see the click
+   * handler above), recursively narrowing the board to this object's own
+   * one-hop relationships WITHOUT ever leaving the Risk Board. Hidden when
+   * this object genuinely has no further real relationships to drill into
+   * (per "no dead ends where relationships exist" - this button simply
+   * does not render one where they don't).
+   *
+   * @param {Object} cell - a real risk-board cell OR (V1-UX-4) a related-
+   *   object pseudo-cell (cell.isRelatedObject).
+   * @param {Object} [bundle] - current DerivedBundle, for computing this
+   *   object's own one-hop relationship count (drill-button visibility).
    * @returns {string}
    */
-  function buildExpandedDetail(cell) {
+  function buildExpandedDetail(cell, bundle) {
+    const nodes = bundle?.universe?.nodes ?? [];
+    const edges = bundle?.universe?.edges ?? [];
+    const relatedCount = buildRelatedObjectPseudoCells(cell.id, nodes, edges).length;
+    const drillLabel = cell.isRelatedObject ? 'View Related Objects' : 'View Contributing Objects';
+    const drillButtonHtml = relatedCount > 0
+      ? `<button type="button" class="risk-card-continuity-btn risk-card-drill-btn" data-risk-continuity-action="drill" data-drill-label="${escapeHtml(cardDrillLabel(cell))}">${escapeHtml(drillLabel)} (${relatedCount}) →</button>`
+      : '';
+
+    if (cell.isRelatedObject) {
+      const node = cell.node ?? { id: cell.id, label: cell.id };
+      const noun = objectNoun(node.type, node);
+      return `
+        <div class="risk-card-expanded">
+          ${
+            node.next_action_summary
+              ? `<div class="risk-card-expanded-row">
+                  <span class="risk-card-expanded-label">Next action</span>
+                  <span>${escapeHtml(node.next_action_summary)}</span>
+                </div>`
+              : ''
+          }
+          <div class="risk-card-expanded-row">
+            <span class="risk-card-expanded-label">Type</span>
+            <span>${escapeHtml(noun)}</span>
+          </div>
+          ${
+            node.status
+              ? `<div class="risk-card-expanded-row">
+                  <span class="risk-card-expanded-label">Status</span>
+                  <span>${escapeHtml(node.status)}</span>
+                </div>`
+              : ''
+          }
+          <div class="risk-card-continuity-actions" aria-label="Continue this risk investigation">
+            <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="passport">Passport</button>
+            <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="timeline">Timeline</button>
+            <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="evidence">Evidence</button>
+            <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="source">Source</button>
+            ${drillButtonHtml}
+            <button type="button" class="risk-card-probe-btn passport-probe-btn" data-risk-continuity-action="probe">Open in Universe →</button>
+          </div>
+        </div>
+      `;
+    }
+
     // risk-board.json's coverage_pct is already a whole-number percentage
     // (e.g. 66.67, not 0.6667) - see field-map.md/derive.js, which passes
     // it through unchanged.
@@ -710,10 +941,29 @@ export function mountRiskBoardLens(containerEl, callbacks) {
           <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="timeline">Timeline</button>
           <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="evidence">Evidence</button>
           <button type="button" class="risk-card-continuity-btn" data-risk-continuity-action="source">Source</button>
+          ${drillButtonHtml}
           <button type="button" class="risk-card-probe-btn passport-probe-btn" data-risk-continuity-action="probe">Probe Commitment in Universe →</button>
         </div>
       </div>
     `;
+  }
+
+  /**
+   * The label shown in the breadcrumb for a drilled-into object - the
+   * real business headline when this is a related-object pseudo-cell
+   * (its .node is already resolved), or the cell's own customer/id for a
+   * real risk-board commitment (which has no .node - it IS the top-level
+   * risk-board record).
+   *
+   * @param {Object} cell
+   * @returns {string}
+   */
+  function cardDrillLabel(cell) {
+    if (cell.isRelatedObject && cell.node) {
+      const headline = universeNodeHeadline(cell.node, (t) => objectNoun(t, cell.node));
+      return headline.primary;
+    }
+    return cell.customer ? `${cell.customer} · ${cell.item_number ?? cell.id}` : cell.id;
   }
 
   function resize() {

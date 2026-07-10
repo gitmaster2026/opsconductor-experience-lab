@@ -233,21 +233,31 @@ async function main() {
     store.selectObject(id);
   }
 
-  // --- Probe (V1-UX-1b Task 3) ------------------------------------------------
+  // --- Probe / "Open in Universe" (V1-UX-1b Task 3, corrected by V1-UX-4) --
   //
   // "Probe takes the user into the Depth Lens / deeper investigation
   // context" (docs/UX_ARCHITECTURE.md). Concretely: selecting alone already
   // opens the Passport (engine/state.js's selectObject()); Probe goes one
-  // step further and ensures the user lands in Universe, where selection
-  // drives the relationship focus mode / orbit reorganization (Tasks 4/8) -
-  // the actual "deeper investigation context" this sprint builds. A Probe
-  // action never fires from within Universe's own canvas (there, clicking a
-  // node IS the selection - see mountUniverseLens's onSelect below), only
-  // from surfaces that show objects WITHOUT switching the workspace lens
-  // (Hover Passport Preview, Passport relationship/recommendation rows,
-  // Risk Board cells, the Commitment Health Radar).
+  // step further and ensures the user lands in Universe AND explicitly
+  // enters Focus Mode there (engine/state.js's focusObject()) - the actual
+  // "deeper investigation context" this action exists for. A Probe action
+  // never fires from within Universe's own canvas (there, a single click IS
+  // the selection and a double-click is the explicit focus action - see
+  // mountUniverseLens's onSelect/onFocus below), only from surfaces that
+  // show objects WITHOUT switching the workspace lens (Hover Passport
+  // Preview, Passport relationship/recommendation rows, Risk Board cells,
+  // the Commitment Health Radar, Functional Radar's explicit "Open in
+  // Universe" action).
+  //
+  // V1-UX-4 correction: Risk Board and Functional Radar no longer route a
+  // plain object SELECTION through this function (see
+  // continueObjectInCurrentLens/functional-radar.js's onSelectInWorkspace
+  // below) - selecting an object now always stays inside the lens the user
+  // is already investigating in. probeObject() remains wired ONLY to each
+  // surface's explicit "Probe"/"Open in Universe" affordance.
   function probeObject(id) {
     selectAndClearHighlight(id);
+    store.focusObject(id);
     store.setLens('universe');
   }
 
@@ -362,6 +372,13 @@ async function main() {
     // from an ordinary single-value scope narrowing, which should NOT
     // trigger Focus Mode (docs/V5_HANDOVER.md §15.1).
     getScopeContext: () => store.getState().scopeContext,
+    // V1-UX-4 Universe click contract: getFocusTargetId/onFocus are the new
+    // pair, deliberately separate from getSelectedId/onSelect above -
+    // selection (single click) and camera focus (double-click) are no
+    // longer the same thing. See engine/state.js's focusObject() and
+    // lenses/universe.js's own onDoubleClick() for the full contract.
+    getFocusTargetId: () => store.getState().cameraTarget,
+    onFocus: (nodeId) => store.focusObject(nodeId),
     onSelect: (nodeId) => selectAndClearHighlight(nodeId),
     onHover: (nodeId) => store.setHovered(nodeId),
     onWheelZoom: (delta) => {
@@ -533,6 +550,15 @@ async function main() {
     getBundle: () => timeline.getDerivedBundle(),
     getCurrentLens: () => store.getState().workspaceLens,
     onSelect: (id) => continueObjectInCurrentLens(id),
+    // V1-UX-4: the full-screen workspace's own List/Relationship View
+    // investigation (Probe) now stays entirely local to the workspace -
+    // this callback ONLY updates the shared selection (so Passport/Jarvis/
+    // bundle.passport stay in sync for whatever's being inspected) without
+    // switching the workspace lens or closing the workspace, unlike
+    // onSelect above (still used by the smaller legacy "browse all
+    // functions" flyout dialog, which keeps its own pre-existing
+    // select-in-place-or-Probe-Universe continuity behavior unchanged).
+    onSelectInWorkspace: (id) => selectAndClearHighlight(id),
     onProbe: (id) => probeObject(id),
     onOpenPassport: (id) => openObjectPassport(id),
     onOpenTimeline: (id) => openObjectTimeline(id),

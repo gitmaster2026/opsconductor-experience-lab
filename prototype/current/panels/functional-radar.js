@@ -145,9 +145,27 @@ const VIEW_MODES = Object.freeze([
  * @param {() => string} [callbacks.getCurrentLens] - current workspace lens,
  *   used to keep Risk Board selections inside Risk Board when possible.
  * @param {(objectId: string) => void} callbacks.onSelect - default continuity
- *   action for the chosen object. app.js keeps risk-board objects in-lens and
+ *   action for the chosen object, used ONLY by the smaller legacy "browse
+ *   all functions" flyout dialog (not the full-screen workspace - see
+ *   onSelectInWorkspace below). app.js keeps risk-board objects in-lens and
  *   degrades other objects to Probe Universe.
- * @param {(objectId: string) => void} [callbacks.onProbe]
+ * @param {(objectId: string) => void} [callbacks.onSelectInWorkspace] -
+ *   V1-UX-4: fired when the user investigates an object from INSIDE the
+ *   full-screen workspace (a List View row, a Relationship View edge/
+ *   header). Updates the shared selection (so Passport/Jarvis/
+ *   bundle.passport stay in sync) WITHOUT switching the workspace lens or
+ *   closing the workspace - the corrected contract's central point:
+ *   "selection updates the investigation; the active lens decides how to
+ *   present the next state," not "selection means navigate to Universe."
+ *   The workspace's own openMemberDetail() (below) renders the resulting
+ *   member detail in place. Falls back to onSelect (closing the workspace,
+ *   the pre-V1-UX-4 behavior) when omitted, so a caller that hasn't wired
+ *   this yet keeps working.
+ * @param {(objectId: string) => void} [callbacks.onProbe] - the explicit
+ *   "Open in Universe" action (List View's per-row Probe button, the
+ *   member detail view's own "Open in Universe" button). Always closes the
+ *   workspace first (via close()) so the resulting Universe Focus Mode is
+ *   immediately visible.
  * @param {(objectId: string) => void} [callbacks.onOpenPassport]
  * @param {(objectId: string) => void} [callbacks.onOpenTimeline]
  * @param {(objectId: string) => void} [callbacks.onOpenEvidence]
@@ -182,6 +200,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     getBundle,
     getCurrentLens,
     onSelect,
+    onSelectInWorkspace,
     onProbe,
     onOpenPassport,
     onOpenTimeline,
@@ -203,6 +222,33 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   let activeViewMode = 'overview';
   /** @type {string|null} a resolved grammar type key from a clicked KPI card, or null (no filter) */
   let activeObjectTypeFilter = null;
+
+  // --- V1-UX-4 new state: in-workspace member detail drilldown -----------
+  //
+  // "Selecting Probe should not automatically switch to Universe" - a List
+  // View row / Relationship View edge click now opens a member detail
+  // view IN PLACE (same full-screen workspace, same function), instead of
+  // closing the workspace and jumping to Universe. focusedMemberId is the
+  // object currently shown in detail (null = showing Overview/List/
+  // Relationship, not a member detail). memberTrail is the stack of PRIOR
+  // focusedMemberId values (oldest first; an entry may itself be null,
+  // representing "the function's own Overview/List/Relationship root") -
+  // exactly the same "local breadcrumb stack" pattern
+  // lenses/risk-board.js's scopePath uses for its own recursive drilldown,
+  // kept independent of engine/state.js per this module's own established
+  // "opening/closing Functional Radar never touches engine/state.js"
+  // design (module header) - only the underlying SELECTION
+  // (onSelectInWorkspace) is shared state; which member detail is showing
+  // is not.
+  /** @type {string|null} */
+  let focusedMemberId = null;
+  /** @type {Array<string|null>} */
+  let memberTrail = [];
+
+  function resetMemberDrilldown() {
+    focusedMemberId = null;
+    memberTrail = [];
+  }
 
   // The List View's mounted filterable table instance (workspace-only;
   // created/destroyed alongside the workspace markup itself, since the
@@ -267,6 +313,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       activeObjectTypeFilter = null;
       listTableFilterState = {};
       listTableSortState = null;
+      resetMemberDrilldown();
     }
     render();
     notifyFullScreenChange();
@@ -292,6 +339,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     activeObjectTypeFilter = null;
     listTableFilterState = {};
     listTableSortState = null;
+    resetMemberDrilldown();
     render();
     notifyFullScreenChange();
   }
@@ -316,6 +364,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     activeObjectTypeFilter = null;
     listTableFilterState = {};
     listTableSortState = null;
+    resetMemberDrilldown();
     render();
     notifyFullScreenChange();
   }
@@ -338,6 +387,10 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     activeObjectTypeFilter = null;
     listTableFilterState = {};
     listTableSortState = null;
+    // A member-detail drilldown is scoped to the PREVIOUS function's own
+    // member objects (same reasoning as activeObjectTypeFilter above) -
+    // has no meaning once the function itself changes.
+    resetMemberDrilldown();
     render();
   }
 
@@ -353,6 +406,70 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   function setViewMode(viewMode) {
     if (!VIEW_MODES.some((v) => v.key === viewMode)) return;
     activeViewMode = viewMode;
+    // Choosing a view mode is choosing to look at the function's root
+    // Overview/List/Relationship again, not at whatever member detail was
+    // open - resetMemberDrilldown() below is what the member detail's own
+    // breadcrumb root segment does too (see jumpToMemberDepth(0)).
+    resetMemberDrilldown();
+    render();
+  }
+
+  /**
+   * V1-UX-4: open (or navigate to) a member's detail view IN PLACE inside
+   * the current full-screen workspace - the corrected behavior for a List
+   * View row click / Relationship View edge click ("Probe" in the brief's
+   * language), replacing the old close()+onSelect() pair that used to jump
+   * straight to Universe. Pushes the CURRENT focusedMemberId (which may
+   * itself be null, meaning "the function's own root view") onto
+   * memberTrail before navigating, so backOneMemberLevel()/
+   * jumpToMemberDepth() below can restore it exactly - the same
+   * stack-based pattern lenses/risk-board.js's scopePath uses for its own
+   * recursive drilldown.
+   *
+   * Also updates the shared selection (onSelectInWorkspace) so
+   * bundle.passport/Jarvis/etc. stay in sync with whatever the workspace
+   * is currently showing in detail - selection updates the investigation;
+   * this lens decides how to present it (a member-detail panel, not a
+   * jump to Universe).
+   *
+   * @param {string} id
+   */
+  function openMemberDetail(id) {
+    if (typeof id !== 'string' || id.length === 0 || id === focusedMemberId) return;
+    memberTrail = [...memberTrail, focusedMemberId];
+    focusedMemberId = id;
+    if (typeof onSelectInWorkspace === 'function') onSelectInWorkspace(id);
+    else if (typeof onSelect === 'function') onSelect(id); // backward-compat fallback (closes workspace) - see onSelectInWorkspace's own doc
+    render();
+  }
+
+  /** Pop exactly one member-detail level (V1-UX-4: "Back restores the prior functional level"). */
+  function backOneMemberLevel() {
+    if (memberTrail.length === 0) {
+      focusedMemberId = null;
+      render();
+      return;
+    }
+    const prior = memberTrail[memberTrail.length - 1];
+    memberTrail = memberTrail.slice(0, -1);
+    focusedMemberId = prior;
+    if (prior !== null && typeof onSelectInWorkspace === 'function') onSelectInWorkspace(prior);
+    render();
+  }
+
+  /**
+   * Jump directly to a breadcrumb depth (0 = the function's own root
+   * view). Depth is an index into [...memberTrail, focusedMemberId].
+   *
+   * @param {number} depth
+   */
+  function jumpToMemberDepth(depth) {
+    const path = [...memberTrail, focusedMemberId];
+    if (depth < 0 || depth >= path.length - 1) return; // depth === path.length-1 is already "current" - nothing to do
+    const targetId = path[depth];
+    memberTrail = path.slice(0, depth);
+    focusedMemberId = targetId;
+    if (targetId !== null && typeof onSelectInWorkspace === 'function') onSelectInWorkspace(targetId);
     render();
   }
 
@@ -496,8 +613,9 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     return FUNCTIONAL_VIEW_GROUPS.find((g) => g.key === functionKey)?.label ?? domainLabel(functionKey);
   }
 
-  function renderWorkspaceHeader(functionKey, allMembers) {
+  function renderWorkspaceHeader(functionKey, allMembers, allNodes) {
     const riskCritical = allMembers.filter((n) => String(n.risk_state ?? '').toLowerCase() === 'critical').length;
+    const isMemberDetail = focusedMemberId !== null;
     return `
       <header class="functional-workspace-header">
         <div class="functional-workspace-title-block">
@@ -519,25 +637,29 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
         </nav>
         <button type="button" class="functional-workspace-close" data-functional-radar-close aria-label="Close Functional Radar">✕</button>
       </header>
-      <nav class="functional-workspace-view-tabs" role="tablist" aria-label="Functional Radar view">
-        ${VIEW_MODES.map(
-          (v) => `<button
-            type="button"
-            role="tab"
-            aria-selected="${v.key === activeViewMode ? 'true' : 'false'}"
-            class="functional-workspace-view-tab${v.key === activeViewMode ? ' is-active' : ''}"
-            data-set-view-mode="${escapeHtml(v.key)}"
-          >${escapeHtml(v.label)}</button>`
-        ).join('')}
-        ${
-          activeObjectTypeFilter
-            ? `<span class="functional-workspace-active-filter">
-                Filtered: ${escapeHtml(resolveCardNounForDisplay(activeObjectTypeFilter, allMembers))}
-                <button type="button" class="functional-workspace-clear-filter" data-clear-object-filter aria-label="Clear filter">✕</button>
-              </span>`
-            : ''
-        }
-      </nav>
+      ${
+        isMemberDetail
+          ? renderMemberBreadcrumb(functionKey, allNodes)
+          : `<nav class="functional-workspace-view-tabs" role="tablist" aria-label="Functional Radar view">
+              ${VIEW_MODES.map(
+                (v) => `<button
+                  type="button"
+                  role="tab"
+                  aria-selected="${v.key === activeViewMode ? 'true' : 'false'}"
+                  class="functional-workspace-view-tab${v.key === activeViewMode ? ' is-active' : ''}"
+                  data-set-view-mode="${escapeHtml(v.key)}"
+                >${escapeHtml(v.label)}</button>`
+              ).join('')}
+              ${
+                activeObjectTypeFilter
+                  ? `<span class="functional-workspace-active-filter">
+                      Filtered: ${escapeHtml(resolveCardNounForDisplay(activeObjectTypeFilter, allMembers))}
+                      <button type="button" class="functional-workspace-clear-filter" data-clear-object-filter aria-label="Clear filter">✕</button>
+                    </span>`
+                  : ''
+              }
+            </nav>`
+      }
     `;
   }
 
@@ -655,10 +777,13 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
         },
         getRowSelectId: (row) => (typeof row.id === 'string' ? row.id : null),
         getRowProbeType: (row) => (typeof row.type === 'string' ? row.type : null),
-        onRowClick: (row) => {
-          close();
-          if (typeof onSelect === 'function') onSelect(row.id);
-        },
+        // V1-UX-4: a row click now opens that member's detail IN PLACE
+        // (openMemberDetail) instead of closing the workspace and jumping
+        // to Universe - "Probe should investigate inside the current
+        // functional workspace." The table's own separate, explicit
+        // "Probe {Type} →" trailing button (onProbe below) remains the
+        // deliberate "Open in Universe" action, unchanged.
+        onRowClick: (row) => openMemberDetail(row.id),
         onProbe: (row) => {
           close();
           if (typeof onProbe === 'function') onProbe(row.id);
@@ -786,6 +911,185 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     `;
   }
 
+  // -------------------------------------------------------------------
+  // V1-UX-4: in-workspace member detail (Part 2)
+  // -------------------------------------------------------------------
+
+  /** Resolve a real node's business headline for breadcrumb/detail display, or the raw id if the node can no longer be found. */
+  function memberHeadline(id, allNodes) {
+    const node = allNodes.find((n) => n.id === id);
+    if (!node) return { primary: id, secondary: null, node: null };
+    return { ...universeNodeHeadline(node, (t) => objectNoun(t, node)), node };
+  }
+
+  /**
+   * "Add breadcrumbs showing the current [Functional Radar] investigation
+   * path... Back returns to the previous functional level." Mirrors
+   * lenses/risk-board.js's own renderBreadcrumbTrail() structure (a
+   * dedicated one-step Back button plus a full clickable trail) for the
+   * identical reason - both are local per-lens breadcrumb stacks over the
+   * same underlying recursive-investigation pattern.
+   *
+   * @param {string} functionKey
+   * @param {Array<Object>} allNodes
+   * @returns {string}
+   */
+  function renderMemberBreadcrumb(functionKey, allNodes) {
+    const path = [...memberTrail, focusedMemberId];
+    const labelFor = (id) => (id === null ? functionLabel(functionKey) : memberHeadline(id, allNodes).primary);
+    const segments = path.map((id, i) => {
+      const isLast = i === path.length - 1;
+      const sep = i > 0 ? '<span class="functional-member-breadcrumb-sep" aria-hidden="true">›</span>' : '';
+      if (isLast) {
+        return `${sep}<span class="functional-member-breadcrumb-current" aria-current="step">${escapeHtml(labelFor(id))}</span>`;
+      }
+      return `${sep}<button type="button" class="functional-member-breadcrumb-crumb" data-member-breadcrumb-depth="${i}">${escapeHtml(labelFor(id))}</button>`;
+    });
+    return `
+      <nav class="functional-member-breadcrumb" aria-label="Functional Radar investigation path">
+        <button type="button" class="functional-member-back-btn" data-member-back>‹ Back</button>
+        <div class="functional-member-breadcrumb-trail">${segments.join('')}</div>
+      </nav>
+    `;
+  }
+
+  /**
+   * The member detail body itself - "the next view should show relevant
+   * information such as: change authority, changed by, reason for change,
+   * revision history, old and new revision, effectivity, affected BOMs,
+   * affected BOOs, inventory impact, WIP impact, related work orders,
+   * rework, inspection or disposition, supplier and customer impact." This
+   * Lab's real governed data for a member does not carry those as
+   * separately-named fields (verified against src/data/nr04-canonical-
+   * universe.json's real object shape) - what it DOES carry, and what this
+   * renders, is: the object's own real overview fields (status/domain/
+   * customer/supplier/program/owner/dates/business impact/next action),
+   * its Representative Drilldown detail when this object is one of the
+   * documented anchor records (bundle.representativeDrilldown - already
+   * real per-object-type structured fields like an ECO's current_revision/
+   * new_revision, see docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md), and its
+   * real one-hop graph relationships - which is exactly how this dataset
+   * models "affected BOMs," "related work orders," "supplier impact," etc.
+   * (each a real relationship_type edge, not a separate field). Never
+   * fabricates a field the data doesn't have.
+   *
+   * @param {string} memberId
+   * @param {Array<Object>} allNodes
+   * @param {Array<Object>} edges
+   * @param {Object} bundle - current DerivedBundle (for
+   *   representativeDrilldown/passport, both keyed to state.selectedObjectId,
+   *   which openMemberDetail()'s onSelectInWorkspace call keeps in sync
+   *   with memberId).
+   * @returns {string}
+   */
+  function renderMemberDetail(memberId, allNodes, edges, bundle) {
+    const node = allNodes.find((n) => n.id === memberId);
+    if (!node) {
+      return `<p class="functional-workspace-empty-note">This object is no longer available in the current operational graph.</p>`;
+    }
+    const noun = objectNoun(node.type, node);
+    const headline = universeNodeHeadline(node, (t) => objectNoun(t, node));
+
+    const overviewFields = [
+      ['Status', node.status],
+      ['Domain', node.domain ? domainLabel(node.domain) : null],
+      ['Customer', node.customer],
+      ['Supplier', node.supplier],
+      ['Program', node.program],
+      ['Owner', node.owner_name ? (node.owner_role ? `${node.owner_name} (${node.owner_role})` : node.owner_name) : null],
+      ['Occurred', node.occurred_at],
+      ['Due', node.due_at],
+    ].filter(([, value]) => value !== null && value !== undefined && String(value).trim().length > 0);
+
+    // Representative Drilldown (docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md):
+    // real, governed per-object-type detail fields (e.g. an ECO's
+    // current_revision/new_revision/effective_date) for the small,
+    // explicit allowlist of anchor objects this Lab has that depth for -
+    // only rendered when the bundle actually resolved it for THIS member
+    // (bundle.representativeDrilldown tracks state.selectedObjectId, which
+    // may momentarily lag one render behind memberId during the
+    // transition - guarded here rather than assumed in sync).
+    const drilldown = bundle?.representativeDrilldown;
+    const drilldownFields = drilldown && drilldown.objectId === memberId && Array.isArray(drilldown.drilldownFields) ? drilldown.drilldownFields : [];
+
+    const relRows = buildFunctionRelationshipRows([node], edges, allNodes)[0]?.relationships ?? [];
+
+    const passport = bundle?.passport;
+    const evidenceEntries = passport && passport.overview?.objectId === memberId ? (passport.evidence ?? []) : [];
+    const sourceRecordEntries = passport && passport.overview?.objectId === memberId ? (passport.sourceRecords ?? []) : [];
+
+    return `
+      <div class="functional-member-detail">
+        <header class="functional-member-detail-header">
+          ${grammarMarkerHtml(node, { size: 18, lead: true, title: noun })}
+          <div class="functional-member-detail-title-block">
+            <h2 class="functional-member-detail-title">${escapeHtml(headline.primary)}</h2>
+            <p class="functional-member-detail-subtitle">${escapeHtml(noun)}${headline.secondary ? ` · ${escapeHtml(headline.secondary)}` : ''}</p>
+          </div>
+          ${riskBadgeHtml(node.risk_state)}
+        </header>
+
+        ${node.business_impact_summary ? `<p class="functional-member-detail-impact">${escapeHtml(node.business_impact_summary)}</p>` : ''}
+        ${node.next_action_summary ? `<p class="functional-member-detail-next-action"><strong>Next action:</strong> ${escapeHtml(node.next_action_summary)}</p>` : ''}
+
+        ${overviewFields.length > 0 ? `
+          <dl class="functional-member-detail-fields">
+            ${overviewFields.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(String(value))}</dd></div>`).join('')}
+          </dl>` : ''}
+
+        ${drilldownFields.length > 0 ? `
+          <section class="functional-member-detail-drilldown">
+            <h3 class="functional-member-detail-section-title">Demo-derived Detail</h3>
+            <dl class="functional-member-detail-fields">
+              ${drilldownFields.map((f) => `<div><dt>${escapeHtml(f.label)}</dt><dd>${escapeHtml(String(f.value ?? '—'))}</dd></div>`).join('')}
+            </dl>
+          </section>` : ''}
+
+        <section class="functional-member-detail-relationships">
+          <h3 class="functional-member-detail-section-title">Related operational objects (${relRows.length})</h3>
+          ${
+            relRows.length === 0
+              ? '<p class="functional-workspace-empty-note">No further governed relationships are recorded for this object - the investigation terminates here.</p>'
+              : `<ul class="functional-relationship-edge-list">
+                  ${relRows
+                    .map((rel) => {
+                      const otherNoun = objectNoun(rel.other.type, rel.other);
+                      const otherHeadline = universeNodeHeadline(rel.other, (t) => objectNoun(t, rel.other));
+                      const label = relationshipLabel(rel.relationshipType, rel.direction);
+                      return `
+                      <li class="functional-relationship-edge">
+                        <button type="button" class="functional-relationship-edge-btn" data-member-drill-id="${escapeHtml(rel.other.id)}">
+                          ${grammarMarkerHtml(rel.other, { size: 12, lead: true, title: otherNoun })}
+                          <span class="functional-relationship-edge-label">${escapeHtml(label)}</span>
+                          <span class="functional-relationship-edge-target">${escapeHtml(otherHeadline.primary)}</span>
+                        </button>
+                      </li>`;
+                    })
+                    .join('')}
+                </ul>`
+          }
+        </section>
+
+        ${evidenceEntries.length > 0 || sourceRecordEntries.length > 0 ? `
+          <section class="functional-member-detail-evidence">
+            <h3 class="functional-member-detail-section-title">Evidence &amp; source records</h3>
+            <ul class="recursive-investigation-list">
+              ${evidenceEntries.slice(0, 4).map((ev) => `<li>${escapeHtml(ev.evidence_summary ?? ev.id)}</li>`).join('')}
+              ${sourceRecordEntries.slice(0, 4).map((rec) => `<li>${escapeHtml(rec.sourceTable ?? 'source')} / ${escapeHtml(rec.sourceRecordId ?? 'record')}</li>`).join('')}
+            </ul>
+          </section>` : ''}
+
+        <div class="functional-member-detail-actions" aria-label="Continue investigating this object">
+          <button type="button" class="functional-radar-continuity-btn" data-member-action="passport">Passport</button>
+          <button type="button" class="functional-radar-continuity-btn" data-member-action="timeline">Timeline</button>
+          <button type="button" class="functional-radar-continuity-btn" data-member-action="evidence">Evidence</button>
+          <button type="button" class="functional-radar-continuity-btn" data-member-action="source">Source</button>
+          <button type="button" class="functional-radar-continuity-btn functional-radar-continuity-btn--probe" data-member-action="probe">Open in Universe →</button>
+        </div>
+      </div>
+    `;
+  }
+
   function renderWorkspace(functionKey) {
     const bundle = getBundle();
     const allNodes = bundle?.universe?.nodes ?? [];
@@ -796,13 +1100,16 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       ? allMembers.filter((m) => resolveGrammarType(m) === activeObjectTypeFilter)
       : allMembers;
 
+    const isMemberDetail = focusedMemberId !== null;
+
     panelEl.innerHTML = `
       <div class="functional-workspace-shell">
-        ${renderWorkspaceHeader(functionKey, allMembers)}
+        ${renderWorkspaceHeader(functionKey, allMembers, allNodes)}
         <div class="functional-workspace-body">
-          ${activeViewMode === 'overview' ? renderOverview(functionKey, allMembers) : ''}
-          ${activeViewMode === 'list' ? renderListContainer() : ''}
-          ${activeViewMode === 'relationship' ? renderRelationshipList(functionKey, allMembers, edges, allNodes) : ''}
+          ${isMemberDetail ? renderMemberDetail(focusedMemberId, allNodes, edges, bundle) : ''}
+          ${!isMemberDetail && activeViewMode === 'overview' ? renderOverview(functionKey, allMembers) : ''}
+          ${!isMemberDetail && activeViewMode === 'list' ? renderListContainer() : ''}
+          ${!isMemberDetail && activeViewMode === 'relationship' ? renderRelationshipList(functionKey, allMembers, edges, allNodes) : ''}
         </div>
       </div>
     `;
@@ -822,15 +1129,45 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       });
     });
 
-    // Overview: KPI card clicks
-    panelEl.querySelectorAll('[data-kpi-card]').forEach((el) => {
-      el.addEventListener('click', () => selectKpiCard(el.getAttribute('data-kpi-card')));
+    // V1-UX-4: member-detail breadcrumb/back wiring.
+    panelEl.querySelectorAll('[data-member-back]').forEach((el) => el.addEventListener('click', backOneMemberLevel));
+    panelEl.querySelectorAll('[data-member-breadcrumb-depth]').forEach((el) => {
+      el.addEventListener('click', () => jumpToMemberDepth(Number(el.getAttribute('data-member-breadcrumb-depth'))));
     });
+
+    if (isMemberDetail) {
+      // Member detail: relationship rows drill further IN PLACE (never
+      // close()/leave the workspace - see openMemberDetail()'s own doc).
+      panelEl.querySelectorAll('[data-member-drill-id]').forEach((el) => {
+        el.addEventListener('click', () => openMemberDetail(el.getAttribute('data-member-drill-id')));
+      });
+      // The member detail's own continuity action row - Passport/Timeline/
+      // Evidence/Source close the workspace to surface the left-panel
+      // Passport (same "Exit-to-Passport on investigation" convention this
+      // module's header already documents); "Open in Universe" is the
+      // explicit secondary action the corrected interaction model requires
+      // (V1-UX-4) - it ALSO closes the workspace first, so the resulting
+      // Universe Focus Mode is immediately visible, matching every other
+      // Probe/"Open in Universe" affordance in this app.
+      panelEl.querySelectorAll('[data-member-action]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const action = el.getAttribute('data-member-action');
+          const id = focusedMemberId;
+          if (!id) return;
+          close();
+          if (action === 'passport' && typeof onOpenPassport === 'function') onOpenPassport(id);
+          else if (action === 'timeline' && typeof onOpenTimeline === 'function') onOpenTimeline(id);
+          else if (action === 'evidence' && typeof onOpenEvidence === 'function') onOpenEvidence(id);
+          else if (action === 'source' && typeof onOpenSource === 'function') onOpenSource(id);
+          else if (action === 'probe' && typeof onProbe === 'function') onProbe(id);
+        });
+      });
+    }
 
     // List View: mount/refresh the shared filterable table component with
     // this function's (possibly KPI-filtered) member rows, each decorated
     // with business-first display fields.
-    if (activeViewMode === 'list') {
+    if (!isMemberDetail && activeViewMode === 'list') {
       const containerEl = panelEl.querySelector('#functionalListTableContainer');
       if (containerEl) {
         mountOrUpdateListTable(containerEl, listMembers.map(decorateMemberForList));
@@ -848,14 +1185,17 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     // Relationship View: every related-object row and every member header
     // already carries data-select-id (free Hover Preview via app.js's
     // existing delegated listener) - wire the click-to-investigate action
-    // on top of that same attribute.
-    if (activeViewMode === 'relationship') {
+    // on top of that same attribute. V1-UX-4: this now opens the member
+    // detail IN PLACE (openMemberDetail) instead of closing the workspace
+    // and jumping to Universe - "Probe should investigate inside the
+    // current functional workspace rather than automatically switching to
+    // Universe."
+    if (!isMemberDetail && activeViewMode === 'relationship') {
       panelEl.querySelectorAll('.functional-relationship-edge-btn, .functional-relationship-card-header').forEach((el) => {
         el.addEventListener('click', () => {
           const objectId = el.getAttribute('data-select-id');
           if (!objectId) return;
-          close();
-          if (typeof onSelect === 'function') onSelect(objectId);
+          openMemberDetail(objectId);
         });
       });
     }

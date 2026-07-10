@@ -344,3 +344,92 @@ export function filterCellsBySite(cells, siteKey) {
     return resolvedKey === siteKey;
   });
 }
+
+// ---------------------------------------------------------------------------
+// V1-UX-4: recursive object-level drilldown (pure, DOM-free)
+// ---------------------------------------------------------------------------
+//
+// "The Risk Board should recursively answer: what contributes to this
+// risk?" - Enterprise and Site level (above) narrow WHICH of the 5 real
+// commitment cells are shown; this drills the OTHER direction, one hop at
+// a time, into a single object's own real graph relationships (the
+// contributing POs/ECOs/WOs/NCRs, then THEIR own contributing/downstream
+// objects, and so on), while staying inside the Risk Board's own band
+// visual language - every related object is shaped into a "pseudo-cell"
+// buildBandLayout() can bucket exactly like a real risk-board cell, using
+// nothing but that object's own already-derived risk_state (never a new
+// risk classification - the risk-board severity vocabulary already covers
+// every real node's risk_state per lenses/universe.js's own riskBucket()
+// mapping).
+//
+// This function is a small, self-contained ONE-HOP walk over the SAME
+// already-derived Universe graph (bundle.universe.nodes/edges) that
+// panels/functional-radar.js's buildFunctionRelationshipRows() already
+// walks for the identical reason (buildRelationshipDataset()'s narrative-
+// object visibility gate would otherwise falsely empty out every real NR04
+// object - see that module's own header comment for the full, verified
+// finding this reuses rather than re-derives).
+
+/**
+ * @typedef {Object} RelatedObjectPseudoCell
+ * @property {string} id - the related object's own node id.
+ * @property {string} risk_state - the related node's own risk_state
+ *   (falls back to 'neutral' when absent, matching lenses/universe.js's
+ *   own riskBucket() default - never a fabricated classification).
+ * @property {boolean} visibleAtSlice - always true (a related object
+ *   reached by a real, currently-rendered edge is by definition part of
+ *   the currently visible graph).
+ * @property {number|null} revenue_at_risk - passthrough of the related
+ *   node's own revenue_at_risk when present (commitments only), else null
+ *   (sorts as 0 in buildBandLayout(), same as every other non-revenue
+ *   object type already does there).
+ * @property {string} relationshipType - the real relationship_type of the
+ *   edge connecting this object to the object being drilled into.
+ * @property {'outgoing'|'incoming'} direction
+ */
+
+/**
+ * One-hop related objects of `objectId`, shaped as pseudo-cells
+ * buildBandLayout() can bucket by severity. Total and deterministic
+ * (stable input order -> stable output order); never invents a
+ * relationship or a risk classification - every returned entry traces to a
+ * real edge in `edges` and a real node in `nodes`.
+ *
+ * @param {string} objectId - the object being drilled into.
+ * @param {Array<Object>} nodes - bundle.universe.nodes.
+ * @param {Array<Object>} edges - bundle.universe.edges.
+ * @param {Iterable<string>} [excludeIds] - object ids to omit from the
+ *   result (typically the immediate parent in the drill path, so the very
+ *   next bucket doesn't just show "the commitment you came from").
+ * @returns {RelatedObjectPseudoCell[]}
+ */
+export function buildRelatedObjectPseudoCells(objectId, nodes, edges, excludeIds = []) {
+  if (typeof objectId !== 'string' || objectId.length === 0) return [];
+  if (!Array.isArray(nodes) || !Array.isArray(edges)) return [];
+
+  const nodesById = new Map(nodes.map((n) => [n.id, n]));
+  const exclude = new Set(excludeIds);
+  const seen = new Set();
+  /** @type {RelatedObjectPseudoCell[]} */
+  const cells = [];
+
+  for (const edge of edges) {
+    if (edge.from_id !== objectId && edge.to_id !== objectId) continue;
+    const isOutgoing = edge.from_id === objectId;
+    const otherId = isOutgoing ? edge.to_id : edge.from_id;
+    if (otherId === objectId || exclude.has(otherId) || seen.has(otherId)) continue;
+    const otherNode = nodesById.get(otherId);
+    if (!otherNode) continue;
+    seen.add(otherId);
+    cells.push({
+      id: otherNode.id,
+      risk_state: otherNode.risk_state ?? 'neutral',
+      visibleAtSlice: true,
+      revenue_at_risk: Number.isFinite(otherNode.revenue_at_risk) ? otherNode.revenue_at_risk : null,
+      relationshipType: edge.relationship_type,
+      direction: isOutgoing ? 'outgoing' : 'incoming',
+    });
+  }
+
+  return cells;
+}
