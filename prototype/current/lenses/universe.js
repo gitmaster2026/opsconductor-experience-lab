@@ -1134,7 +1134,28 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     if (isCollectionScopeActive) {
       const scope = typeof getScope === 'function' ? getScope() : null;
       const resolvedIds = Array.isArray(scope?.scopedNodeIds) ? scope.scopedNodeIds : [];
-      lastCollectionMemberIds = resolvedIds.filter((id) => layoutById.has(id));
+      // V1-UX-5 follow-up (real-browser-review finding): a Hidden-layer
+      // member must not leak into the Collection glyph (radius/worst-risk
+      // color/hit target - all computed from lastCollectionMemberIds below,
+      // in BOTH the collapsed-glyph and expanded-orbit paths) or the
+      // per-node collection rendering itself once expanded. Filtering once
+      // here, at the single point this shared variable is populated,
+      // covers every downstream consumer by construction - the same
+      // "filter once near the source" approach the idle-camera-framing fix
+      // above uses for positionsForCamera, rather than re-filtering at each
+      // separate call site. Unlike a plain selection/focus target, a
+      // Collection's individual members are NOT forced 'visible' by Phase
+      // 6 continuity (engine/timeline.js's continuityIdsForState() only
+      // covers selectedObjectId/cameraTarget/focusTrail) - a Collection
+      // member whose category is hidden is genuinely hidden, exactly like
+      // any other node, so excluding it here keeps the aggregate glyph
+      // consistent with what the individual per-node draw loop already
+      // does for that same object.
+      lastCollectionMemberIds = resolvedIds.filter((id) => {
+        if (!layoutById.has(id)) return false;
+        const node = currentNodes.find((candidate) => candidate.id === id);
+        return node ? node.visualLayer !== 'hidden' : true;
+      });
     }
 
     // V5 Phase 2.7.1 (item H): the collapsed glyph's own position/size -
