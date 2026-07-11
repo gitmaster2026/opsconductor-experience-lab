@@ -642,6 +642,17 @@ export function setLayerState(categoryStates, presetId = null) {
  * selectObject()/setScope() each own a clear, documented side-effect on a
  * sibling field rather than leaving it silently stale.
  *
+ * Re-applying the CURRENT state (clicking a category toggle button that is
+ * already active) is a no-op - it neither changes layerState nor clears
+ * activePresetId, nor notifies subscribers. Without this guard, clicking
+ * an already-active toggle (e.g. the "Visible" button for a category a
+ * preset already set to Visible) would still relabel the active preset as
+ * "Custom" even though nothing about the resolved visibility actually
+ * changed - the same "no real change, no side effect" contract
+ * selectObject() already enforces for re-selecting the current selection.
+ * Missing keys default to 'visible' (see this file's own header comment
+ * on layerState), so the comparison below mirrors that same default.
+ *
  * @param {string} categoryKey
  * @param {'visible'|'context'|'hidden'} layerStateValue
  */
@@ -654,6 +665,10 @@ export function setCategoryLayerState(categoryKey, layerStateValue) {
     throw new Error(
       `setCategoryLayerState: invalid layerStateValue "${layerStateValue}" (expected one of ${LAYER_STATE_VALUES.join(', ')})`
     );
+  }
+  const currentValue = store.state.layerState[categoryKey] ?? 'visible';
+  if (currentValue === layerStateValue) {
+    return;
   }
   setState({
     layerState: { ...store.state.layerState, [categoryKey]: layerStateValue },

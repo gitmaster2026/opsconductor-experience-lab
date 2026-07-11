@@ -1307,14 +1307,30 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // ancestor at-or-above the current depth.
     const collapsedInto = new Map();
     const collapseCounts = new Map();
+    // V1-UX-5 follow-up (real-browser-review finding): a Hidden-layer node
+    // must never contribute to a collapse badge - "Removed completely...
+    // no rendering, no labels" (Phase 1) means it should produce ZERO
+    // visible artifact anywhere, including an inflated "+N more" count on
+    // an otherwise-Visible/Context ancestor. Excluded from BOTH ends of
+    // this collapse relationship: never a collapse CHILD (so it can't
+    // inflate a real ancestor's count) and never an eligible collapse
+    // PARENT (so a genuinely visible descendant can't be silently
+    // swallowed into an invisible ancestor with no badge/representation
+    // anywhere on screen).
     const collapseCandidateIds = currentNodes
-      .filter((n) => stratumById.get(n.id) === 'background' && naturalZoomIndexForNode(n) > currentZoomIndex && !orbitMemberById.has(n.id))
+      .filter(
+        (n) =>
+          stratumById.get(n.id) === 'background' &&
+          naturalZoomIndexForNode(n) > currentZoomIndex &&
+          !orbitMemberById.has(n.id) &&
+          n.visualLayer !== 'hidden'
+      )
       .map((n) => n.id);
     if (collapseCandidateIds.length > 0) {
       const adjacency = buildAdjacency(currentEdges);
       const isEligibleParent = (id) => {
         const n = currentNodes.find((candidate) => candidate.id === id);
-        return n ? naturalZoomIndexForNode(n) <= currentZoomIndex : false;
+        return n ? naturalZoomIndexForNode(n) <= currentZoomIndex && n.visualLayer !== 'hidden' : false;
       };
       for (const id of collapseCandidateIds) {
         const parentId = findCollapseParent(id, adjacency, isEligibleParent);

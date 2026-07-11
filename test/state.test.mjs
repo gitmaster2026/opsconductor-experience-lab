@@ -587,6 +587,31 @@ test('setCategoryLayerState patches exactly one category and clears activePreset
   assert.equal(state.activePresetId, null, 'a manual category change clears activePresetId');
 });
 
+test("setCategoryLayerState is a no-op when re-applying the category's CURRENT value - activePresetId must survive re-clicking an already-active toggle", () => {
+  initState();
+  setLayerState({ ncrs: 'hidden', quality: 'context' }, 'engineering');
+
+  setCategoryLayerState('ncrs', 'hidden'); // already 'hidden' - a true no-op
+  let state = getState();
+  assert.equal(state.activePresetId, 'engineering', 'activePresetId must NOT be cleared by a no-op category click');
+  assert.deepEqual(state.layerState, { ncrs: 'hidden', quality: 'context' });
+
+  setCategoryLayerState('customers', 'visible'); // 'customers' is absent from the map, defaults to 'visible' - also a no-op
+  state = getState();
+  assert.equal(state.activePresetId, 'engineering', 'clicking the default-visible state for an omitted category must also stay a no-op');
+});
+
+test('setCategoryLayerState no-op does not notify subscribers', () => {
+  initState();
+  setLayerState({ ncrs: 'hidden' }, 'engineering');
+  let callCount = 0;
+  subscribe(() => {
+    callCount += 1;
+  });
+  setCategoryLayerState('ncrs', 'hidden');
+  assert.equal(callCount, 0, "a true no-op must not notify subscribers, consistent with setState's own change-detection contract");
+});
+
 test('setCategoryLayerState rejects an invalid category key or state value', () => {
   initState();
   assert.throws(() => setCategoryLayerState('', 'visible'));
