@@ -60,6 +60,9 @@ import { mountPassportPanel } from './panels/passport.js';
 import { mountHoverPreview } from './panels/hover-preview.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
 import { mountScopePanel } from './panels/scope.js';
+import { mountVisualLayersPanel } from './panels/visual-layers.js';
+import { presetForFunctionalRadarKey } from './engine/visual-layers.js';
+import { initPresetStore, resolveDefaultPreset, getSyncFunctionalRadarWithVisualLayers } from './engine/investigation-presets.js';
 import { mountUniverseSearchPanel } from './panels/universe-search.js';
 import { mountFunctionalRadarPanel } from './panels/functional-radar.js';
 import { mountNavHistoryRail } from './panels/nav-history.js';
@@ -100,6 +103,8 @@ const els = {
   mainLayout: document.getElementById('mainLayout'),
   scopeBar: document.getElementById('scopeBar'),
   scopeExplorer: document.getElementById('scopeExplorer'),
+  visualLayersBar: document.getElementById('visualLayersBar'),
+  visualLayersPanel: document.getElementById('visualLayersPanel'),
   universeSearch: document.getElementById('universeSearch'),
   functionalRadarToggle: document.getElementById('functionalRadarToggle'),
   functionalRadarPanel: document.getElementById('functionalRadarPanel'),
@@ -171,6 +176,21 @@ async function main() {
     initialLens: 'universe',
     initialLeftPanel: 'dashboard',
   });
+
+  // V1-UX-5 follow-up (localStorage persistence): hydrate the user preset
+  // catalog/default/sync-preference from real browser storage, then apply
+  // whichever preset resolveDefaultPreset() names (or Full Enterprise if
+  // none is set) as the STARTING Visual Layers state - before the first
+  // timeline recompute below, so the very first render already reflects
+  // it rather than flashing Full Enterprise and then jumping. This app has
+  // no other persisted state across a reload (store.initState() above
+  // always starts every OTHER field - selectedObjectId, scopeContext,
+  // timeSliceId - fresh), so every app boot is unambiguously a "clean
+  // application start": there is no pre-existing investigation state this
+  // restoration could ever unexpectedly clobber.
+  initPresetStore();
+  const restoredDefault = resolveDefaultPreset();
+  store.setLayerState(restoredDefault.categoryStates, restoredDefault.presetId);
 
   const timeline = initTimeline({
     store: { getState: store.getState, subscribe: store.subscribe },
@@ -526,6 +546,19 @@ async function main() {
     onSetScope: (scope) => store.setScope(scope),
   });
 
+  // V1-UX-5 (Visual Layers): the three-state visibility model + built-in/
+  // user presets, one-state-many-renderers same as Scope above -
+  // store.setLayerState()/setCategoryLayerState() are the only mutators
+  // this panel calls, and every subscribed surface (today: Universe -
+  // Phase 1's own framing scopes Visual Layers to decluttering the
+  // Universe graph) picks up the change on the next timeline recompute.
+  const visualLayersPanel = mountVisualLayersPanel(els.visualLayersBar, els.visualLayersPanel, {
+    getLayerState: () => store.getState().layerState,
+    getActivePresetId: () => store.getState().activePresetId,
+    onSetLayerState: (categoryStates, presetId) => store.setLayerState(categoryStates, presetId),
+    onSetCategoryLayerState: (categoryKey, layerStateValue) => store.setCategoryLayerState(categoryKey, layerStateValue),
+  });
+
   // V1-UX-2A (Universe Focus + Investigation Flow): "search-to-focus" -
   // find any operational object by name/id/type/customer/program/domain
   // and jump straight to it. Routes through the same probeObject() choke
@@ -577,6 +610,27 @@ async function main() {
     // SAME applyLensVisibility() an ordinary render already calls, at the
     // exact moment this module's own visibility actually changed.
     onFullScreenChange: () => applyLensVisibility(store.getState()),
+    // V1-UX-5 Phase 4 (Functional Radar Synchronization): "Selecting a
+    // Functional Radar area automatically activates its matching Visual
+    // Layer preset... User can still modify visibility manually" - the
+    // manual-override half of that contract is already true for free here,
+    // since setLayerState() below is just an ordinary preset activation
+    // (setCategoryLayerState() afterward behaves exactly as it would for
+    // any other preset - see engine/state.js's own doc on why a manual
+    // category change clears activePresetId rather than fighting it).
+    //
+    // Follow-up (founder review): this sync is now an explicit, persisted
+    // user preference ("Synchronize Visual Layers with Functional Radar,"
+    // panels/visual-layers.js), default on - unchanged behavior unless a
+    // user deliberately opts out. When off, opening a function leaves the
+    // current Visual Layers configuration untouched; the user can still
+    // reach that function's preset manually via the Visual Layers modal's
+    // own preset cards (unchanged either way).
+    onFunctionActivated: (functionKey) => {
+      if (!getSyncFunctionalRadarWithVisualLayers()) return;
+      const preset = presetForFunctionalRadarKey(functionKey);
+      if (preset) store.setLayerState({ ...preset.categoryStates }, preset.id);
+    },
   });
 
   // V5 Phase 2.6 item E: the Navigation History rail - independent of the
@@ -857,6 +911,7 @@ async function main() {
     }
     jarvisPanel.render();
     scopePanel.render();
+    visualLayersPanel.render();
     universeSearchPanel.render();
     functionalRadarPanel.render();
     navHistoryPanel.render();

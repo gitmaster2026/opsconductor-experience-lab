@@ -22,8 +22,11 @@ import {
   popFocus,
   setCameraPhase,
   setScope,
+  setLayerState,
+  setCategoryLayerState,
   WORKSPACE_LENS_VALUES,
   CAMERA_PHASE_VALUES,
+  LAYER_STATE_VALUES,
 } from '../prototype/current/engine/state.js';
 
 test('initState returns the documented canonical AppState shape with defaults', () => {
@@ -40,6 +43,8 @@ test('initState returns the documented canonical AppState shape with defaults', 
     cameraTarget: null,
     cameraPhase: 'idle',
     scopeContext: null,
+    layerState: {},
+    activePresetId: null,
   });
 });
 
@@ -535,6 +540,103 @@ test('setScope notifies subscribers exactly once per call, same as other transit
 
   setScope(null);
   assert.equal(callCount, 2);
+});
+
+// ---------------------------------------------------------------------------
+// V1-UX-5: setLayerState / setCategoryLayerState (Visual Layers)
+// ---------------------------------------------------------------------------
+
+test('layerState/activePresetId default to {} / null (the Full Enterprise baseline)', () => {
+  const state = initState();
+  assert.deepEqual(state.layerState, {});
+  assert.equal(state.activePresetId, null);
+});
+
+test('setLayerState replaces the whole category map and records the preset id', () => {
+  initState();
+  setLayerState({ ncrs: 'hidden', quality: 'context' }, 'engineering');
+  const state = getState();
+  assert.deepEqual(state.layerState, { ncrs: 'hidden', quality: 'context' });
+  assert.equal(state.activePresetId, 'engineering');
+});
+
+test('setLayerState defaults presetId to null when omitted', () => {
+  initState();
+  setLayerState({ ncrs: 'hidden' });
+  assert.equal(getState().activePresetId, null);
+});
+
+test('setLayerState rejects a non-object categoryStates', () => {
+  initState();
+  assert.throws(() => setLayerState(null));
+  assert.throws(() => setLayerState('x'));
+  assert.throws(() => setLayerState(['a']));
+});
+
+test('setLayerState rejects a non-string, non-null presetId', () => {
+  initState();
+  assert.throws(() => setLayerState({}, 42));
+});
+
+test('setCategoryLayerState patches exactly one category and clears activePresetId', () => {
+  initState();
+  setLayerState({ ncrs: 'hidden', quality: 'context' }, 'engineering');
+  setCategoryLayerState('quality', 'hidden');
+  const state = getState();
+  assert.deepEqual(state.layerState, { ncrs: 'hidden', quality: 'hidden' });
+  assert.equal(state.activePresetId, null, 'a manual category change clears activePresetId');
+});
+
+test("setCategoryLayerState is a no-op when re-applying the category's CURRENT value - activePresetId must survive re-clicking an already-active toggle", () => {
+  initState();
+  setLayerState({ ncrs: 'hidden', quality: 'context' }, 'engineering');
+
+  setCategoryLayerState('ncrs', 'hidden'); // already 'hidden' - a true no-op
+  let state = getState();
+  assert.equal(state.activePresetId, 'engineering', 'activePresetId must NOT be cleared by a no-op category click');
+  assert.deepEqual(state.layerState, { ncrs: 'hidden', quality: 'context' });
+
+  setCategoryLayerState('customers', 'visible'); // 'customers' is absent from the map, defaults to 'visible' - also a no-op
+  state = getState();
+  assert.equal(state.activePresetId, 'engineering', 'clicking the default-visible state for an omitted category must also stay a no-op');
+});
+
+test('setCategoryLayerState no-op does not notify subscribers', () => {
+  initState();
+  setLayerState({ ncrs: 'hidden' }, 'engineering');
+  let callCount = 0;
+  subscribe(() => {
+    callCount += 1;
+  });
+  setCategoryLayerState('ncrs', 'hidden');
+  assert.equal(callCount, 0, "a true no-op must not notify subscribers, consistent with setState's own change-detection contract");
+});
+
+test('setCategoryLayerState rejects an invalid category key or state value', () => {
+  initState();
+  assert.throws(() => setCategoryLayerState('', 'visible'));
+  assert.throws(() => setCategoryLayerState('ncrs', 'not_a_state'));
+  for (const value of LAYER_STATE_VALUES) {
+    assert.doesNotThrow(() => setCategoryLayerState('ncrs', value));
+  }
+});
+
+test('setLayerState/setCategoryLayerState touch layerState + activePresetId ONLY', () => {
+  initState({
+    resolveCommitmentForObject: (id) => (id === 'obj-1' ? 'commitment-1' : null),
+    initialTimeSliceId: 't1',
+    initialZoomLevel: 4,
+  });
+  selectObject('obj-1');
+  const before = getState();
+
+  setLayerState({ ncrs: 'hidden' }, 'engineering');
+  const after = getState();
+  assert.equal(after.selectedObjectId, before.selectedObjectId);
+  assert.equal(after.focusedCommitmentId, before.focusedCommitmentId);
+  assert.equal(after.timeSliceId, before.timeSliceId);
+  assert.equal(after.zoomLevel, before.zoomLevel);
+  assert.equal(after.scopeContext, before.scopeContext);
 });
 
 // ---------------------------------------------------------------------------

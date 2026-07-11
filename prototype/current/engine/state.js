@@ -28,6 +28,19 @@
 //   cameraTarget: string | null  NEW - object id the camera is flying toward
 //   cameraPhase: 'idle'|'depart'|'travel'|'arrive'  NEW - motion choreography state
 //   scopeContext: Object|null    NEW (V5 Phase 3.5) - current Operational Scope
+//   layerState: Record<string,'visible'|'context'|'hidden'>  NEW (V1-UX-5) - per-
+//     category Visual Layer state (engine/visual-layers.js's category
+//     keys). Missing keys mean 'visible' (see visual-layers.js's
+//     resolveLayerStateForNode()), so {} is exactly the Full Enterprise
+//     baseline - this module deliberately stores whatever plain map the
+//     caller passes with zero opinion on category keys, the same
+//     "caller-owns-the-vocabulary" pattern scopeContext already uses, so
+//     this file never needs to import engine/visual-layers.js.
+//   activePresetId: string|null NEW (V1-UX-5) - which built-in or user
+//     preset (if any) produced the current layerState; null means "no
+//     preset is currently active" (either the Full Enterprise default, or
+//     the user has manually adjusted a category since a preset was last
+//     applied - see setCategoryLayerState() below).
 //
 // Per V5_DESIGN_SPEC.md §1.2: focusTrail/cameraTarget/cameraPhase are all
 // derived/transient UI state, never persisted, never source data (docs/
@@ -67,6 +80,8 @@ const CAMERA_PHASES = Object.freeze(['idle', 'depart', 'travel', 'arrive']);
  * @property {string|null} cameraTarget
  * @property {'idle'|'depart'|'travel'|'arrive'} cameraPhase
  * @property {{ type: string, id: string|null, label?: string }|null} scopeContext
+ * @property {Record<string, 'visible'|'context'|'hidden'>} layerState
+ * @property {string|null} activePresetId
  */
 
 /**
@@ -134,6 +149,8 @@ export function initState(options = {}) {
     cameraTarget: null,
     cameraPhase: 'idle',
     scopeContext: null,
+    layerState: {},
+    activePresetId: null,
   };
 
   const listeners = new Set();
@@ -591,6 +608,72 @@ export function setScope(scope) {
     throw new Error('setScope: scope must be null or an object with a string "type" field');
   }
   setState({ scopeContext: scope });
+}
+
+export const LAYER_STATE_VALUES = Object.freeze(['visible', 'context', 'hidden']);
+
+/**
+ * V1-UX-5 Phase 3/4/5: replace the WHOLE layerState map at once - the
+ * transition a built-in or user preset activation performs (engine/
+ * visual-layers.js's BUILT_IN_PRESETS / engine/investigation-presets.js's
+ * user presets both hand this function a complete category-state map).
+ *
+ * @param {Record<string, 'visible'|'context'|'hidden'>} categoryStates
+ * @param {string|null} [presetId] - the preset id that produced this map,
+ *   or null for a manual/custom map with no associated preset.
+ */
+export function setLayerState(categoryStates, presetId = null) {
+  assertInitialized();
+  if (categoryStates === null || typeof categoryStates !== 'object' || Array.isArray(categoryStates)) {
+    throw new Error('setLayerState: categoryStates must be a plain object');
+  }
+  if (presetId !== null && typeof presetId !== 'string') {
+    throw new Error('setLayerState: presetId must be a string or null');
+  }
+  setState({ layerState: { ...categoryStates }, activePresetId: presetId });
+}
+
+/**
+ * V1-UX-5 Phase 2/6: patch ONE category's layer state, leaving every other
+ * category untouched. Per the brief's "user can still modify visibility
+ * manually" after a preset activates, a manual category change clears
+ * activePresetId (the resulting map is no longer exactly any named preset,
+ * even though it may have started from one) - this mirrors how
+ * selectObject()/setScope() each own a clear, documented side-effect on a
+ * sibling field rather than leaving it silently stale.
+ *
+ * Re-applying the CURRENT state (clicking a category toggle button that is
+ * already active) is a no-op - it neither changes layerState nor clears
+ * activePresetId, nor notifies subscribers. Without this guard, clicking
+ * an already-active toggle (e.g. the "Visible" button for a category a
+ * preset already set to Visible) would still relabel the active preset as
+ * "Custom" even though nothing about the resolved visibility actually
+ * changed - the same "no real change, no side effect" contract
+ * selectObject() already enforces for re-selecting the current selection.
+ * Missing keys default to 'visible' (see this file's own header comment
+ * on layerState), so the comparison below mirrors that same default.
+ *
+ * @param {string} categoryKey
+ * @param {'visible'|'context'|'hidden'} layerStateValue
+ */
+export function setCategoryLayerState(categoryKey, layerStateValue) {
+  assertInitialized();
+  if (typeof categoryKey !== 'string' || categoryKey.length === 0) {
+    throw new Error('setCategoryLayerState: categoryKey must be a non-empty string');
+  }
+  if (!LAYER_STATE_VALUES.includes(layerStateValue)) {
+    throw new Error(
+      `setCategoryLayerState: invalid layerStateValue "${layerStateValue}" (expected one of ${LAYER_STATE_VALUES.join(', ')})`
+    );
+  }
+  const currentValue = store.state.layerState[categoryKey] ?? 'visible';
+  if (currentValue === layerStateValue) {
+    return;
+  }
+  setState({
+    layerState: { ...store.state.layerState, [categoryKey]: layerStateValue },
+    activePresetId: null,
+  });
 }
 
 // Exported for tests / advanced callers that want to inspect the allowed

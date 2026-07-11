@@ -203,22 +203,36 @@ plan and status.
 
 ## Next implementation target
 
-**Current: V1-UX-2 Pre-Launch Interaction Completion** (see
-`docs/V1_UX_2_PRELAUNCH_PLAN.md`). V1-UX-2A through V1-UX-2H are
+**Current: V1-UX-5 (Visual Layers, Investigation Presets & Documentation
+Cleanup) is implemented and tested** (see
+`docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own "Sprint V1-UX-5" section for full
+detail). V1-UX-2A through V1-UX-2H, V1-UX-3, V1-UX-4, and V1-UX-5 are all
 implemented and tested (see that document's per-sprint sections and the
-session logs below); the two items each sprint has explicitly carried
-forward as still-open (Progressive Risk Board owner/next-action
-enrichment; the `resolveVisibilityForSlice()` t2/t3 gating gap) remain
-open, by deliberate scope decision each time, not by oversight.
+session logs below); the items each sprint has explicitly carried forward
+as still-open (Progressive Risk Board owner/next-action enrichment; the
+`resolveVisibilityForSlice()` t2/t3 gating gap) remain open, by deliberate
+scope decision each time, not by oversight.
 
-With V4's architecture and interaction model built, natural next steps
-beyond V1-UX-2 are a real founder/browser pass across all of V1-UX-2A-2H
-(none of this work has been visually confirmed in a browser - see each
-sprint's own "Known limitations"), the two carried-forward follow-ups
-above, and whichever of the "Future lenses" `docs/LENS_SPECIFICATIONS.md`
-names (supplier network, inventory flow, program map, evidence chain,
-timeline replay) prove most valuable once the current surfaces have been
-used directly.
+Per the founder's own post-V1-UX-5 assessment, the remaining work toward a
+V1.0 launch is:
+
+- **V1.0 launch blockers**: Passport enrichment (populate Recommendations/
+  Evidence/Timeline/business-impact summaries for the NR04 canonical
+  objects instead of showing empty sections where governed data doesn't
+  yet reach them); a Universe Search hover-card z-index issue (hover cards
+  should never block Universe Search interaction); business-copy polish
+  ("what happened"/"why it matters"/"next step" explanatory text).
+- **V1.0 polish (strongly recommended)**: the guided NRS-01 and NRS-02
+  walkthroughs, authored against the framework `engine/guided-investigation.js`/
+  `panels/guided-investigation.js` now provide (V1-UX-5 Phase 8) but do not
+  yet contain any real script content; transition/animation polish;
+  loading/empty-state messaging; a spacing/typography/icon consistency
+  pass.
+- **Post-launch (V1.1)**: additional investigative lenses, Timeline
+  replay, a supplier network view, inventory flow, program map,
+  multi-user collaboration, richer saved workspaces - see whichever of the
+  "Future lenses" `docs/LENS_SPECIFICATIONS.md` names prove most valuable
+  once the current surfaces have been used directly.
 
 ## Non-goals
 
@@ -445,6 +459,36 @@ Three review findings on PR #30, addressed:
 
 3. **Persistent-card scope, clarified.** V1 intentionally supports exactly one movable persistent selected-object card (`#nodeTooltip`) - this matches the existing single-selection architecture (`selectedObjectId` is one field, not a list); this was never a multi-card/pinning system and the PR description has been corrected to say so explicitly rather than leave it ambiguous.
 
-New tests: `test/panels-functional-radar-fullscreen-sync.test.mjs` (the pinned "row's own Probe button" test replaced with one asserting NO such button exists and a row click never fires the Open-in-Universe callback), `test/panels-functional-radar-member-drilldown.test.mjs` (+3: same-function resume, different-function no-resume, explicit-close no-resume). 716 tests total, all passing (`npm run build`: check-syntax 49/49, verify-field-map PASSED). `npm run lint`: same 2 pre-existing warnings, zero new.
+New tests: `test/panels-functional-radar-fullscreen-sync.test.mjs` (the pinned "row's own Probe button" test replaced with one asserting NO such button exists and a row click never fires the Open-in-Universe callback), `test/panels-functional-radar-member-drilldown.test.mjs` (+3: same-function resume, different-function no-resume, explicit-close no-resume). 713 tests total, all passing (`npm run build`: check-syntax 49/49, verify-field-map PASSED). `npm run lint`: same 2 pre-existing warnings, zero new.
 
 Real browser verification (Playwright/Chromium): Risk Board 2-level drill → Open in Universe → Back → exact same cards/breadcrumb depth restored (confirmed, not assumed). Functional Radar List View confirmed to render zero "Probe"-labeled controls; row click confirmed to stay in the workspace; member detail confirmed to expose exactly one "Open in Universe" action; re-entering the same function after a handoff confirmed to restore the exact prior depth. Zero console errors throughout.
+
+## Session log — 2026-07-11 V1-UX-5 Visual Layers, Investigation Presets & Documentation Cleanup
+
+Full detail (per-shipped-item breakdown, verification method, Definition-of-Done mapping, known limitations) is in `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own new "Sprint V1-UX-5" section - this entry is a summary pointer, per this file's own established convention of deferring detailed per-sprint narrative to that document.
+
+Scope: implementation-layer only. No architecture, ontology, schema, operational data, Supabase, Passport model, or Timeline engine change.
+
+**What shipped:** the three-state Visual Layers model (Visible/Context/Hidden) over 16 real Operational Categories (`engine/visual-layers.js`, new); 13 built-in Functional Presets plus a Full Enterprise baseline; Functional Radar → Visual Layers preset synchronization (a new `onFunctionActivated` callback on `panels/functional-radar.js`, fired from both its real function-activation entry points); Phase 6 investigation continuity (selected/focused/investigation-path objects always render Visible regardless of the active preset - implemented once, inside `engine/timeline.js`'s single recompute, not duplicated per-lens); user Investigation Presets with real (session-scoped) create/rename/duplicate/delete/set-default plus real export/import (`engine/investigation-presets.js`, new); the Visual Layers Bar + modal UI (`panels/visual-layers.js`/`.css`, new, mounted next to the existing Scope Bar); and the Guided Investigation Framework's pure state machine + thin DOM controller (`engine/guided-investigation.js`/`panels/guided-investigation.js`, new) - framework only, no walkthrough content, not mounted in `app.js` this sprint per the brief's explicit instruction.
+
+**Verification:** `npm run build` PASSED - 804/804 tests (713 baseline + 91 new: `engine-visual-layers.test.mjs` 20, `engine-investigation-presets.test.mjs` 23, `engine-guided-investigation.test.mjs` 21, `panels-guided-investigation.test.mjs` 11, `panels-functional-radar-visual-layers-sync.test.mjs` 4, plus new/extended cases in `state.test.mjs` and `timeline.test.mjs`), check-syntax 54/54, verify-field-map PASSED (both new engine modules stay outside `derive.js`'s scan scope). `npm run lint`: the same 2 pre-existing errors, zero new.
+
+**Real browser verification (Playwright/Chromium)**, exercising the full golden path from this sprint's Definition of Done end-to-end: Visual Layers bar/modal open and close; a manual category toggle (NCRs → Hidden) applies and shows its active state; the Engineering built-in preset activates and updates the bar label; Universe re-renders correctly under the active preset; Universe Search finds and selects a real object with the persistent card/Passport/Jarvis populated, confirming continuity keeps the searched-and-selected object Visible; clicking empty Universe space clears the selection; double-click does not error; "Reset to Full Enterprise" restores the baseline; saving the current view as a user preset, exporting it to a real downloadable JSON file, and marking it Default all work; clicking a real Commitment Health Radar spoke opens the Functional Radar workspace AND auto-activates the matching Visual Layers preset with the modal closed the entire time (proving the sync is a real store effect, not a rendering coincidence); Dashboard/Risk Board/Text View/Universe lens switching all continue to work. Zero unexpected console errors or HTTP 4xx/5xx responses - the one console message observed (a `/favicon.ico` 404) is confirmed pre-existing and unrelated to this sprint.
+
+## Session log — 2026-07-11 V1-UX-5 follow-up: localStorage persistence + optional Functional Radar sync
+
+Founder review of the V1-UX-5 PR flagged two product-contract gaps before merge: "Set Default" was misleading (the catalog was session-scoped, so a chosen default silently vanished on reload), and Functional Radar → Visual Layers sync had no opt-out. Both addressed in this follow-up, still within `engine/investigation-presets.js`/`panels/visual-layers.js`/`app.js` - no architecture, schema, or canonical `engine/state.js` change (persistence is entirely internal to `investigation-presets.js`; `state.js`'s `layerState`/`activePresetId` remain exactly as in-memory/transient as before).
+
+**Persistence contract:** `engine/investigation-presets.js` now injects a storage backend (defaults to the real browser `localStorage`, guarded by try/catch for unavailable/blocked storage; tests inject a small in-memory fake). A single versioned envelope under key `opsconductor-experience-lab.visual-layers-presets`:
+```
+{ version: 1, presets: [...], defaultPresetId: string|null, syncFunctionalRadarWithVisualLayers: boolean }
+```
+persists ONLY the user preset catalog, the chosen default, and the sync preference - never operational data, never `selectedObjectId`/Passport content/graph/source records, and never the canonical `layerState`/`activePresetId` themselves (those stay session-only exactly as before; only the DEFAULT preset id that can regenerate a `layerState` at boot is persisted). Loaded/imported preset data is sanitized through the same lenient path (`sanitizePresetFields`/`sanitizeCategoryStates`) uploaded-JSON Import already used - unknown categories and invalid visibility states are silently dropped, not rejected wholesale; a version mismatch, corrupted JSON, or missing storage all fall back safely to an empty catalog / the Full Enterprise preset, never throwing. Built-in presets remain structurally immutable (they are never members of the mutable `presets` array `createPreset`/`renamePreset`/`duplicatePreset`/`deletePreset` operate on). Deleting the current default falls back `defaultPresetId` to `FULL_ENTERPRISE_PRESET_ID` (not `null`) - Full Enterprise can never itself be deleted, so this is always resolvable. A new "Clear Local Presets & Preferences" action (`clearPersistedPresetData()`) wipes the catalog/default/sync-preference and removes the storage key entirely, without touching whatever is currently on screen.
+
+**Active-preset restoration on refresh, clarified:** yes - `app.js`'s boot sequence now calls `resolveDefaultPreset()` right after `store.initState()` and applies it via `store.setLayerState()` before the first render. This is safe specifically because this app has no OTHER state that survives a reload (`selectedObjectId`/`scopeContext`/`timeSliceId` all always start fresh) - every boot is unambiguously a "clean application start," so there is no pre-existing investigation state this restoration could ever unexpectedly replace.
+
+**Functional Radar sync contract:** a new, persisted preference, "Synchronize Visual Layers with Functional Radar" (a labeled checkbox in the Visual Layers modal), default **On** (unchanged pre-existing behavior). On: opening a Functional Radar area applies its matching built-in preset, exactly as V1-UX-5 originally shipped. Off: opening the workspace leaves the current Visual Layers configuration untouched; the function's preset remains reachable manually via the modal's own preset cards. Toggling the preference itself never touches the active `layerState` - it is a pure preference write, verified live (Playwright) in both states: Sync On (Full Enterprise → real Radar spoke → matching preset activates) and Sync Off (a custom preset → real Radar spoke → preset unchanged, workspace still opens normally).
+
+**Verification:** `npm run build` PASSED - **824/824 tests** (804 prior + 20 new, all in `test/engine-investigation-presets.test.mjs`: save/reload, default restoration, corrupted-storage fallback, version mismatch, deleted-default fallback, built-in immutability, sync-preference persistence, `clearPersistedPresetData`), check-syntax 54/54, verify-field-map PASSED. `npm run lint`: same 2 pre-existing errors, zero new. Real browser (Playwright/Chromium): a full save → set-default → toggle-sync-off → **real page reload** round trip confirmed the default preset auto-applies at boot, the user preset and its Default badge survive, and the sync preference survives; Sync On/Off both verified against a real Commitment Health Radar spoke click into the Functional Radar workspace; a corrupted `localStorage` value was confirmed to fall back to Full Enterprise with zero console errors and without breaking boot; a golden-path smoke test (Universe Search → select → Passport/Evidence) confirmed the existing investigation flow is unaffected. **Note on "NRS-01/NRS-02 smoke paths":** no such content exists anywhere in this repository - those names are this sprint's own forward-looking placeholders for future Guided Investigation Framework scripts (Phase 8's own explicit scope: framework only, no content), not an existing artifact to smoke-test. The golden-path smoke test above (the same canonical Universe → Search → Passport → Evidence/Timeline investigation this repo's other sprints already use for regression checks) is what was actually run and is the closest honest equivalent available today.
+
+Remaining open items, unchanged from the prior session log: Passport enrichment, the Universe Search hover-card z-index issue, business-copy polish (all founder-flagged, pre-existing, out of this follow-up's scope), and the still-unauthored NRS-01/NRS-02 walkthrough content itself.

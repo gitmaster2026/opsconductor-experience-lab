@@ -145,3 +145,27 @@ already-shipped work) was found and fixed during V1-UX-2's research pass.
    built** (Documents Passport section, Passport-first exploration,
    Golden Story timeline ordering) - see `docs/V1_UX_2_PRELAUNCH_PLAN.md`
    for the current read and what's left.
+10. **No Visual Layers / declutter mechanism existed for a large, dense
+    Universe graph** (the only prior scoping tools were Operational Scope
+    narrowing and Focus Mode's own zero-background rendering, neither of
+    which lets a user independently narrow to an operational CATEGORY
+    while keeping the current investigation visible) - **RESOLVED
+    (V1-UX-5)**, see `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s "Sprint V1-UX-5"
+    section. Three items surfaced by the founder's own post-V1-UX-5
+    review remain open, carried forward here rather than silently
+    dropped:
+    - **Passport enrichment**: several NR04 canonical objects show empty
+      Recommendations/Evidence/Timeline/business-impact sections because
+      the governed source data doesn't yet reach them, not because the
+      Passport renderer has a gap - still open.
+    - **Universe Search hover-card z-index**: the Hover Passport Preview
+      can visually sit over the Universe Search dropdown, blocking a
+      search interaction underneath it - still open.
+    - **Business-copy polish**: the "what happened"/"why it matters"/
+      "next step" explanatory text across surfaces could read more
+      plainly for a first-time non-technical viewer - still open.
+11. **The Guided Investigation Framework has no real walkthrough content
+    yet** (V1-UX-5 Phase 8 built only the reusable state machine +
+    DOM controller, by explicit brief instruction) - NRS-01 and NRS-02
+    walkthroughs, to be authored against `engine/guided-investigation.js`/
+    `panels/guided-investigation.js`, remain open.
