@@ -397,3 +397,39 @@
   font-size: 12px;
   font-family: inherit;
 }
+
+/* --- Functional Radar sync preference + destructive "Clear Local" action
+   (V1-UX-5 follow-up: localStorage persistence + the optional sync toggle) */
+
+.visual-layers-sync-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-top: 12px;
+  cursor: pointer;
+}
+
+.visual-layers-sync-toggle input[type='checkbox'] {
+  accent-color: var(--cyan-accent);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.visual-layers-sync-hint {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 4px 0 0;
+}
+
+.view-action-btn--danger {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.view-action-btn--danger:hover:not(:disabled) {
+  background: rgba(255, 90, 90, 0.12);
+}

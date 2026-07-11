@@ -138,6 +138,15 @@ export function fullVisibilityMap() {
 }
 
 /**
+ * The Full Enterprise preset's id, exported as a named constant so callers
+ * that need to reference "the always-available, undeletable fallback
+ * preset" by id (engine/investigation-presets.js's deleted-default
+ * fallback; app.js's boot-time default resolution) never hardcode the
+ * literal string `'full_enterprise'` a second time.
+ */
+export const FULL_ENTERPRISE_PRESET_ID = 'full_enterprise';
+
+/**
  * V1-UX-5 Phase 3: built-in Functional Presets. Each preset assigns a
  * layer state to every category (any category it omits defaults to
  * 'visible' via resolveLayerStateForNode()'s own fallback, but every

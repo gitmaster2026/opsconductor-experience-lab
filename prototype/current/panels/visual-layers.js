@@ -34,6 +34,9 @@ import {
   getDefaultPresetId,
   exportPresetToJson,
   importPresetFromJson,
+  clearPersistedPresetData,
+  getSyncFunctionalRadarWithVisualLayers,
+  setSyncFunctionalRadarWithVisualLayers,
 } from '../engine/investigation-presets.js';
 import { mountSaveNamePrompt } from '../engine/saved-views.js';
 
@@ -337,6 +340,17 @@ export function mountVisualLayersPanel(barEl, modalEl, callbacks) {
           <div class="visual-layers-preset-grid">
             ${BUILT_IN_PRESETS.map(renderBuiltInPresetCard).join('')}
           </div>
+          <label class="visual-layers-sync-toggle">
+            <input type="checkbox" data-sync-radar-toggle ${getSyncFunctionalRadarWithVisualLayers() ? 'checked' : ''} />
+            Synchronize Visual Layers with Functional Radar
+          </label>
+          <p class="visual-layers-sync-hint">
+            ${
+              getSyncFunctionalRadarWithVisualLayers()
+                ? 'On: opening a Functional Radar area automatically applies its matching preset above.'
+                : 'Off: opening a Functional Radar area leaves your current Visual Layers configuration unchanged - apply a preset above manually if you want it.'
+            }
+          </p>
         </section>
 
         <section class="visual-layers-section">
@@ -361,6 +375,8 @@ export function mountVisualLayersPanel(barEl, modalEl, callbacks) {
               ? `<ul class="visual-layers-user-preset-list">${userPresets.map(renderUserPresetRow).join('')}</ul>`
               : '<p class="visual-layers-empty-note">No saved presets yet - build a view below and click "Save Current as Preset."</p>'
           }
+          <button type="button" class="view-action-btn view-action-btn--danger" data-clear-local-presets>Clear Local Presets &amp; Preferences</button>
+          <p class="visual-layers-sync-hint">Saved presets, your default, and the Functional Radar sync setting are stored only in this browser's local storage - nothing is sent anywhere. This clears that local data; it does not change what's on screen right now.</p>
         </section>
       </div>
     `;
@@ -381,6 +397,17 @@ export function mountVisualLayersPanel(barEl, modalEl, callbacks) {
     });
 
     modalEl.querySelector('[data-reset-full-enterprise]')?.addEventListener('click', resetToFullEnterprise);
+
+    modalEl.querySelector('[data-sync-radar-toggle]')?.addEventListener('change', (ev) => {
+      setSyncFunctionalRadarWithVisualLayers(ev.target.checked);
+      render();
+    });
+
+    modalEl.querySelector('[data-clear-local-presets]')?.addEventListener('click', () => {
+      clearPersistedPresetData();
+      statusNote = 'Cleared locally saved presets and preferences.';
+      render();
+    });
 
     savePromptContainer = modalEl.querySelector('[data-save-current-container]');
     if (savePromptContainer) {

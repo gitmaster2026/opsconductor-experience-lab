@@ -62,6 +62,7 @@ import { mountJarvisPanel } from './panels/jarvis.js';
 import { mountScopePanel } from './panels/scope.js';
 import { mountVisualLayersPanel } from './panels/visual-layers.js';
 import { presetForFunctionalRadarKey } from './engine/visual-layers.js';
+import { initPresetStore, resolveDefaultPreset, getSyncFunctionalRadarWithVisualLayers } from './engine/investigation-presets.js';
 import { mountUniverseSearchPanel } from './panels/universe-search.js';
 import { mountFunctionalRadarPanel } from './panels/functional-radar.js';
 import { mountNavHistoryRail } from './panels/nav-history.js';
@@ -175,6 +176,21 @@ async function main() {
     initialLens: 'universe',
     initialLeftPanel: 'dashboard',
   });
+
+  // V1-UX-5 follow-up (localStorage persistence): hydrate the user preset
+  // catalog/default/sync-preference from real browser storage, then apply
+  // whichever preset resolveDefaultPreset() names (or Full Enterprise if
+  // none is set) as the STARTING Visual Layers state - before the first
+  // timeline recompute below, so the very first render already reflects
+  // it rather than flashing Full Enterprise and then jumping. This app has
+  // no other persisted state across a reload (store.initState() above
+  // always starts every OTHER field - selectedObjectId, scopeContext,
+  // timeSliceId - fresh), so every app boot is unambiguously a "clean
+  // application start": there is no pre-existing investigation state this
+  // restoration could ever unexpectedly clobber.
+  initPresetStore();
+  const restoredDefault = resolveDefaultPreset();
+  store.setLayerState(restoredDefault.categoryStates, restoredDefault.presetId);
 
   const timeline = initTimeline({
     store: { getState: store.getState, subscribe: store.subscribe },
@@ -602,7 +618,16 @@ async function main() {
     // (setCategoryLayerState() afterward behaves exactly as it would for
     // any other preset - see engine/state.js's own doc on why a manual
     // category change clears activePresetId rather than fighting it).
+    //
+    // Follow-up (founder review): this sync is now an explicit, persisted
+    // user preference ("Synchronize Visual Layers with Functional Radar,"
+    // panels/visual-layers.js), default on - unchanged behavior unless a
+    // user deliberately opts out. When off, opening a function leaves the
+    // current Visual Layers configuration untouched; the user can still
+    // reach that function's preset manually via the Visual Layers modal's
+    // own preset cards (unchanged either way).
     onFunctionActivated: (functionKey) => {
+      if (!getSyncFunctionalRadarWithVisualLayers()) return;
       const preset = presetForFunctionalRadarKey(functionKey);
       if (preset) store.setLayerState({ ...preset.categoryStates }, preset.id);
     },
