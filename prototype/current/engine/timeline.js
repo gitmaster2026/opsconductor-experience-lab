@@ -19,6 +19,36 @@
 // one onUpdate() notification, matching the "deterministic and idempotent"
 // requirement: calling getDerivedBundle() twice in a row without an
 // intervening state change returns equal (by value) results both times.
+//
+// V1-UX-5 (Visual Layers): this is also the single place bundle.universe's
+// nodes get their per-node `visualLayer` field resolved (engine/
+// visual-layers.js's applyVisualLayers()), from state.layerState plus the
+// Phase 6 "investigation continuity" id set (selectedObjectId, cameraTarget,
+// focusTrail - see continuityIdsForState() below). A static import of
+// engine/visual-layers.js is safe here (unlike derive.js, which is
+// injected to avoid a cycle) since visual-layers.js is a pure leaf module
+// with no import of state.js/derive.js/timeline.js itself - same
+// "pure primitives" contract engine/camera.js already has.
+
+import { applyVisualLayers } from './visual-layers.js';
+
+/**
+ * V1-UX-5 Phase 6: the set of object ids that must always render as
+ * 'visible' regardless of the active Visual Layers preset - "Selected
+ * object always remains Visible. Focused object always remains Visible.
+ * Active investigation path remains Visible." focusTrail IS the
+ * investigation path (the breadcrumb stack selectObject()/popFocus()
+ * maintain - see engine/state.js), so all three collapse to one id set.
+ *
+ * @param {{ selectedObjectId: string|null, cameraTarget: string|null, focusTrail: string[] }} state
+ * @returns {Set<string>}
+ */
+function continuityIdsForState(state) {
+  const ids = new Set(state.focusTrail ?? []);
+  if (state.selectedObjectId) ids.add(state.selectedObjectId);
+  if (state.cameraTarget) ids.add(state.cameraTarget);
+  return ids;
+}
 
 /**
  * @typedef {Object} DerivedBundle
@@ -152,7 +182,14 @@ export function initTimeline({ store, getSnapshot, derive }) {
     }
 
     const visibility = derive.resolveVisibilityForSlice(snapshot, sliceIndex);
-    const universe = derive.buildUniverseGraph(snapshot);
+    const rawUniverse = derive.buildUniverseGraph(snapshot);
+    // V1-UX-5: attach visualLayer to every node, honoring continuity
+    // (Phase 6) over the raw category-state map (Phases 1-3) - see this
+    // module's own header/continuityIdsForState() doc above.
+    const universe = {
+      ...rawUniverse,
+      nodes: applyVisualLayers(rawUniverse.nodes, state.layerState ?? {}, continuityIdsForState(state)),
+    };
     const scope = derive.buildScopeFilter(snapshot, state.scopeContext ?? null);
     const scopeHierarchy = derive.buildScopeHierarchy(snapshot);
     const riskBoard = derive.buildRiskBoardViewModel(snapshot, sliceIndex, scope);

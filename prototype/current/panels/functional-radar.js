@@ -187,6 +187,19 @@ const VIEW_MODES = Object.freeze([
  *   just changed, go re-sync whatever depends on isFullScreen() now" - not
  *   a store mutation, so it doesn't create a new global-state dependency or
  *   move this module's state anywhere.
+ * @param {(functionKey: string) => void} [callbacks.onFunctionActivated] -
+ *   V1-UX-5 Phase 4 (Functional Radar Synchronization): fired with the real
+ *   functionKey whenever a specific function becomes the active one - both
+ *   from a fresh openFunction() entry AND from switchToFunction() (staying
+ *   inside the workspace, jumping to a different function) - so app.js can
+ *   activate that function's matching Visual Layer preset (engine/
+ *   visual-layers.js's presetForFunctionalRadarKey()). Deliberately a
+ *   callback, not a store mutation this module performs itself - this
+ *   module's own long-standing design principle is that opening/closing/
+ *   navigating Functional Radar never touches engine/state.js directly
+ *   (see module header); the caller decides what "activating a function"
+ *   means for Visual Layers, same as every other onOpen.../onSelect
+ *   callback above.
  * @returns {{ render: () => void, openFunction: (functionKey: string) => void, isFullScreen: () => boolean, destroy: () => void }}
  */
 export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
@@ -207,6 +220,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     onOpenEvidence,
     onOpenSource,
     onFullScreenChange,
+    onFunctionActivated,
   } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountFunctionalRadarPanel: callbacks.getBundle is required');
@@ -404,6 +418,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
       isWorkspace = true;
       render();
       notifyFullScreenChange();
+      if (typeof onFunctionActivated === 'function') onFunctionActivated(functionKey);
       return;
     }
     isOpen = true;
@@ -416,6 +431,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     resetMemberDrilldown();
     render();
     notifyFullScreenChange();
+    if (typeof onFunctionActivated === 'function') onFunctionActivated(functionKey);
   }
 
   /**
@@ -441,6 +457,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     // has no meaning once the function itself changes.
     resetMemberDrilldown();
     render();
+    if (typeof onFunctionActivated === 'function') onFunctionActivated(functionKey);
   }
 
   /**

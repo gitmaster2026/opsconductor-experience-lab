@@ -161,6 +161,33 @@ const SCOPE_RECEDE_ALPHA_FACTOR = 0.22;
 const SCOPE_RECEDE_SCALE = 0.82;
 
 /**
+ * V1-UX-5 (Visual Layers): a node's `visualLayer` field (engine/
+ * visual-layers.js's applyVisualLayers(), resolved once per bundle by
+ * engine/timeline.js) drives three render treatments here:
+ *   - 'hidden': the node (and every edge touching it) is skipped entirely -
+ *     "Removed completely. No rendering. No labels. No relationship
+ *     lines." (brief, Phase 1) - see the `hiddenLayerIds` guards below,
+ *     the same "skip in the edge loop AND the node loop AND hitTestAt()"
+ *     pattern this file already uses for `collapsedInto`/
+ *     `hiddenByCollectionGlyph`.
+ *   - 'context': "Reduced opacity... still selectable... still
+ *     searchable" - CONTEXT_ALPHA_FACTOR dims the node (composes with
+ *     scope-recede/highlight-dim/Focus-Mode-background exactly like
+ *     SCOPE_RECEDE_ALPHA_FACTOR already does), CONTEXT_LABEL_SCALE shrinks
+ *     its label if one is ever drawn for it. Hit-testing/searchability are
+ *     untouched (this file's hitTestAt() only excludes 'hidden' nodes).
+ *   - 'visible': no change from pre-V1-UX-5 rendering.
+ * A node forced 'visible' by Phase 6 investigation continuity (the current
+ * selection/focus/investigation path) already carries that resolved value
+ * on `node.visualLayer` itself - engine/timeline.js applies the continuity
+ * override before this module ever sees the node, so this file has no
+ * separate continuity logic of its own to get wrong.
+ */
+const CONTEXT_ALPHA_FACTOR = 0.45;
+/** Multiplies a Context-layer node's label font size (headline + secondary), alongside CONTEXT_ALPHA_FACTOR's opacity reduction. Only observable today for a node that is BOTH the current selection AND still resolves 'context' - which cannot happen, since continuity forces a selected node to 'visible' (see this block's own header doc) - kept for correctness/forward-compatibility with any future non-selection-gated label tier, rather than silently doing nothing for a real spec requirement. */
+const CONTEXT_LABEL_SCALE = 0.82;
+
+/**
  * V1-UX-2G: when Operational Scope narrows to a new value, the recede
  * treatment above eases in over this many ms (from "not receded yet" to
  * "fully receded") rather than snapping instantly - so narrowing scope
@@ -1444,6 +1471,9 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       const node = currentNodes[i];
       if (collapsedInto.has(node.id)) continue;
       if (hiddenByCollectionGlyph && hiddenByCollectionGlyph.has(node.id)) continue;
+      // V1-UX-5: a Hidden-layer node is "removed completely" - not
+      // clickable, same as a collapsed/glyph-subsumed node above.
+      if (node.visualLayer === 'hidden') continue;
       const pos = positions.get(node.id);
       if (!pos) continue;
       const stratum = stratumById.get(node.id) ?? 'midground';
@@ -1647,6 +1677,11 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
 
     const depthById = new Map(currentNodes.map((n) => [n.id, depthFilter(zoomLevel, n)]));
     const opacityById = new Map(currentNodes.map((n) => [n.id, currentOpacityFor(n.id, now)]));
+    // V1-UX-5: per-node resolved Visual Layer (see CONTEXT_ALPHA_FACTOR's
+    // header doc above) - a plain id lookup since the edge loop below only
+    // has from_id/to_id, not the node objects themselves.
+    const visualLayerById = new Map(currentNodes.map((n) => [n.id, n.visualLayer ?? 'visible']));
+    const hiddenLayerIds = new Set([...visualLayerById.entries()].filter(([, layer]) => layer === 'hidden').map(([id]) => id));
 
     /** World -> this-node's-stratum-relative local draw coordinate. */
     function localFor(nodeId) {
@@ -1691,6 +1726,8 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       // subsumed into its aggregate glyph, same reasoning as the
       // depth-collapse skip just above.
       if (hiddenByCollectionGlyph && (hiddenByCollectionGlyph.has(edge.from_id) || hiddenByCollectionGlyph.has(edge.to_id))) continue;
+      // V1-UX-5: "No relationship lines" for a Hidden-layer endpoint.
+      if (hiddenLayerIds.has(edge.from_id) || hiddenLayerIds.has(edge.to_id)) continue;
       // V5 Phase 2.7 (§15): once Focus Mode is fully settled, an edge with
       // either endpoint outside the resolved focus set is not drawn at
       // all - "zero background rendering," not an opacity extreme.
@@ -1772,6 +1809,13 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       // its aggregate glyph instead (drawn separately below), not
       // individually.
       if (hiddenByCollectionGlyph && hiddenByCollectionGlyph.has(node.id)) continue;
+      // V1-UX-5: "Removed completely. No rendering. No labels." A
+      // continuity override (current selection/focus/investigation path)
+      // already resolved to 'visible' on this node before this module ever
+      // saw it (engine/timeline.js) - so a node reaching this branch as
+      // 'hidden' is genuinely not part of the active investigation.
+      if (node.visualLayer === 'hidden') continue;
+      const isContextLayer = node.visualLayer === 'context';
       // V5 Phase 2.7 (§15): once Focus Mode is fully settled, no object
       // outside the resolved focus set renders at all.
       const isNodeInFocusSet = focusModeVisibleIds.has(node.id);
@@ -1820,6 +1864,16 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
       // above.
       if (isOutOfScope) {
         finalAlpha *= lerp(1, SCOPE_RECEDE_ALPHA_FACTOR, scopeSettleT);
+      }
+      // V1-UX-5: a Context-layer node dims (composes with the dimming
+      // above the same way scope-recede/highlight-dim already compose) -
+      // "Reduced opacity... provides context without clutter." No easing
+      // timer of its own (unlike scope-recede's scopeSettleT) - a Visual
+      // Layer preset change is a deliberate, infrequent user action (via
+      // panels/visual-layers.js), not a per-frame animated quantity worth
+      // its own transition state.
+      if (isContextLayer) {
+        finalAlpha *= CONTEXT_ALPHA_FACTOR;
       }
       // V5 Phase 2.7 (§15): while entering/exiting Focus Mode, everything
       // outside the resolved focus set cross-fades rather than cutting
@@ -1885,16 +1939,23 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
         // node shape carries every field, and how it degrades gracefully
         // to the plain label/noun when the richer fields aren't present).
         const headline = universeNodeHeadline(node, objectTypeNoun);
-        ctx.globalAlpha = clamp(opacity, 0.15, 1) * labelScopeFactor;
+        // V1-UX-5: "Smaller labels" for a Context-layer node - see
+        // CONTEXT_LABEL_SCALE's own header doc for why this is a no-op
+        // under today's "text only on the selected node" tier system (a
+        // selected node is always continuity-forced to 'visible'), kept
+        // correct for when that changes rather than silently dropped.
+        const labelFontScale = isContextLayer ? CONTEXT_LABEL_SCALE : 1;
+        const labelLayerFactor = isContextLayer ? CONTEXT_ALPHA_FACTOR : 1;
+        ctx.globalAlpha = clamp(opacity, 0.15, 1) * labelScopeFactor * labelLayerFactor;
         ctx.fillStyle = resolveCssVar(canvasEl, '--label-color', 'rgba(230,240,250,0.92)');
-        ctx.font = '600 12px system-ui, sans-serif';
+        ctx.font = `600 ${Math.round(12 * labelFontScale)}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillText(truncateLabel(headline.primary), local.x, local.y + radius + 4);
         if (headline.secondary) {
-          ctx.globalAlpha = clamp(opacity, 0.15, 1) * labelScopeFactor * 0.72;
+          ctx.globalAlpha = clamp(opacity, 0.15, 1) * labelScopeFactor * 0.72 * labelLayerFactor;
           ctx.fillStyle = resolveCssVar(canvasEl, '--text-secondary', 'rgba(230,240,250,0.6)');
-          ctx.font = '500 10px system-ui, sans-serif';
+          ctx.font = `500 ${Math.round(10 * labelFontScale)}px system-ui, sans-serif`;
           ctx.fillText(truncateLabel(headline.secondary), local.x, local.y + radius + 19);
         }
       }

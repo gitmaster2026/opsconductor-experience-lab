@@ -345,3 +345,68 @@ test('initTimeline: switching every workspace lens preserves hierarchyPath, spid
 
   timeline.dispose();
 });
+
+// ---------------------------------------------------------------------------
+// V1-UX-5: Visual Layers integration (visualLayer resolved per node)
+// ---------------------------------------------------------------------------
+
+test('initTimeline: every universe node has a valid visualLayer, defaulting to visible with no layerState set', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+  const bundle = timeline.getDerivedBundle();
+
+  assert.ok(bundle.universe.nodes.length > 5);
+  for (const node of bundle.universe.nodes) {
+    assert.ok(['visible', 'context', 'hidden'].includes(node.visualLayer), `node ${node.id} missing a valid visualLayer`);
+    assert.equal(node.visualLayer, 'visible');
+  }
+
+  timeline.dispose();
+});
+
+test('initTimeline: setLayerState re-resolves visualLayer for every node on the next bundle', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+
+  const ncrNode = timeline.getDerivedBundle().universe.nodes.find((n) => n.type === 'ncr');
+  assert.ok(ncrNode, 'sanity: dataset must contain at least one NCR node');
+  assert.equal(ncrNode.visualLayer, 'visible');
+
+  stateModule.setLayerState({ ncrs: 'hidden' }, 'quality');
+  const afterNode = timeline.getDerivedBundle().universe.nodes.find((n) => n.id === ncrNode.id);
+  assert.equal(afterNode.visualLayer, 'hidden');
+
+  timeline.dispose();
+});
+
+test('initTimeline: Phase 6 continuity - selecting a node hidden by the active preset forces it back to visible', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+
+  const ncrNode = timeline.getDerivedBundle().universe.nodes.find((n) => n.type === 'ncr');
+  stateModule.setLayerState({ ncrs: 'hidden' }, 'quality');
+  assert.equal(timeline.getDerivedBundle().universe.nodes.find((n) => n.id === ncrNode.id).visualLayer, 'hidden');
+
+  stateModule.selectObject(ncrNode.id);
+  const selectedResolved = timeline.getDerivedBundle().universe.nodes.find((n) => n.id === ncrNode.id);
+  assert.equal(selectedResolved.visualLayer, 'visible', 'a selected node must always resolve to visible, even under a hiding preset');
+
+  timeline.dispose();
+});
+
+test('initTimeline: Phase 6 continuity - focusTrail entries also stay visible', () => {
+  const store = freshStore();
+  const timeline = initTimeline({ store, getSnapshot: () => snapshot, derive });
+
+  const customerNode = timeline.getDerivedBundle().universe.nodes.find((n) => n.type === 'customer');
+  const ncrNode = timeline.getDerivedBundle().universe.nodes.find((n) => n.type === 'ncr');
+  stateModule.selectObject(customerNode.id);
+  stateModule.selectObject(ncrNode.id); // pushes customerNode.id onto focusTrail
+
+  stateModule.setLayerState({ customers: 'hidden', ncrs: 'hidden' }, null);
+  const bundle = timeline.getDerivedBundle();
+  assert.equal(bundle.universe.nodes.find((n) => n.id === customerNode.id).visualLayer, 'visible', 'focusTrail entry must stay visible');
+  assert.equal(bundle.universe.nodes.find((n) => n.id === ncrNode.id).visualLayer, 'visible', 'current selection must stay visible');
+
+  timeline.dispose();
+});

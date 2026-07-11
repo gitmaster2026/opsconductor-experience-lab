@@ -203,22 +203,36 @@ plan and status.
 
 ## Next implementation target
 
-**Current: V1-UX-2 Pre-Launch Interaction Completion** (see
-`docs/V1_UX_2_PRELAUNCH_PLAN.md`). V1-UX-2A through V1-UX-2H are
+**Current: V1-UX-5 (Visual Layers, Investigation Presets & Documentation
+Cleanup) is implemented and tested** (see
+`docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own "Sprint V1-UX-5" section for full
+detail). V1-UX-2A through V1-UX-2H, V1-UX-3, V1-UX-4, and V1-UX-5 are all
 implemented and tested (see that document's per-sprint sections and the
-session logs below); the two items each sprint has explicitly carried
-forward as still-open (Progressive Risk Board owner/next-action
-enrichment; the `resolveVisibilityForSlice()` t2/t3 gating gap) remain
-open, by deliberate scope decision each time, not by oversight.
+session logs below); the items each sprint has explicitly carried forward
+as still-open (Progressive Risk Board owner/next-action enrichment; the
+`resolveVisibilityForSlice()` t2/t3 gating gap) remain open, by deliberate
+scope decision each time, not by oversight.
 
-With V4's architecture and interaction model built, natural next steps
-beyond V1-UX-2 are a real founder/browser pass across all of V1-UX-2A-2H
-(none of this work has been visually confirmed in a browser - see each
-sprint's own "Known limitations"), the two carried-forward follow-ups
-above, and whichever of the "Future lenses" `docs/LENS_SPECIFICATIONS.md`
-names (supplier network, inventory flow, program map, evidence chain,
-timeline replay) prove most valuable once the current surfaces have been
-used directly.
+Per the founder's own post-V1-UX-5 assessment, the remaining work toward a
+V1.0 launch is:
+
+- **V1.0 launch blockers**: Passport enrichment (populate Recommendations/
+  Evidence/Timeline/business-impact summaries for the NR04 canonical
+  objects instead of showing empty sections where governed data doesn't
+  yet reach them); a Universe Search hover-card z-index issue (hover cards
+  should never block Universe Search interaction); business-copy polish
+  ("what happened"/"why it matters"/"next step" explanatory text).
+- **V1.0 polish (strongly recommended)**: the guided NRS-01 and NRS-02
+  walkthroughs, authored against the framework `engine/guided-investigation.js`/
+  `panels/guided-investigation.js` now provide (V1-UX-5 Phase 8) but do not
+  yet contain any real script content; transition/animation polish;
+  loading/empty-state messaging; a spacing/typography/icon consistency
+  pass.
+- **Post-launch (V1.1)**: additional investigative lenses, Timeline
+  replay, a supplier network view, inventory flow, program map,
+  multi-user collaboration, richer saved workspaces - see whichever of the
+  "Future lenses" `docs/LENS_SPECIFICATIONS.md` names prove most valuable
+  once the current surfaces have been used directly.
 
 ## Non-goals
 
@@ -445,6 +459,18 @@ Three review findings on PR #30, addressed:
 
 3. **Persistent-card scope, clarified.** V1 intentionally supports exactly one movable persistent selected-object card (`#nodeTooltip`) - this matches the existing single-selection architecture (`selectedObjectId` is one field, not a list); this was never a multi-card/pinning system and the PR description has been corrected to say so explicitly rather than leave it ambiguous.
 
-New tests: `test/panels-functional-radar-fullscreen-sync.test.mjs` (the pinned "row's own Probe button" test replaced with one asserting NO such button exists and a row click never fires the Open-in-Universe callback), `test/panels-functional-radar-member-drilldown.test.mjs` (+3: same-function resume, different-function no-resume, explicit-close no-resume). 716 tests total, all passing (`npm run build`: check-syntax 49/49, verify-field-map PASSED). `npm run lint`: same 2 pre-existing warnings, zero new.
+New tests: `test/panels-functional-radar-fullscreen-sync.test.mjs` (the pinned "row's own Probe button" test replaced with one asserting NO such button exists and a row click never fires the Open-in-Universe callback), `test/panels-functional-radar-member-drilldown.test.mjs` (+3: same-function resume, different-function no-resume, explicit-close no-resume). 713 tests total, all passing (`npm run build`: check-syntax 49/49, verify-field-map PASSED). `npm run lint`: same 2 pre-existing warnings, zero new.
 
 Real browser verification (Playwright/Chromium): Risk Board 2-level drill → Open in Universe → Back → exact same cards/breadcrumb depth restored (confirmed, not assumed). Functional Radar List View confirmed to render zero "Probe"-labeled controls; row click confirmed to stay in the workspace; member detail confirmed to expose exactly one "Open in Universe" action; re-entering the same function after a handoff confirmed to restore the exact prior depth. Zero console errors throughout.
+
+## Session log — 2026-07-11 V1-UX-5 Visual Layers, Investigation Presets & Documentation Cleanup
+
+Full detail (per-shipped-item breakdown, verification method, Definition-of-Done mapping, known limitations) is in `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own new "Sprint V1-UX-5" section - this entry is a summary pointer, per this file's own established convention of deferring detailed per-sprint narrative to that document.
+
+Scope: implementation-layer only. No architecture, ontology, schema, operational data, Supabase, Passport model, or Timeline engine change.
+
+**What shipped:** the three-state Visual Layers model (Visible/Context/Hidden) over 16 real Operational Categories (`engine/visual-layers.js`, new); 13 built-in Functional Presets plus a Full Enterprise baseline; Functional Radar → Visual Layers preset synchronization (a new `onFunctionActivated` callback on `panels/functional-radar.js`, fired from both its real function-activation entry points); Phase 6 investigation continuity (selected/focused/investigation-path objects always render Visible regardless of the active preset - implemented once, inside `engine/timeline.js`'s single recompute, not duplicated per-lens); user Investigation Presets with real (session-scoped) create/rename/duplicate/delete/set-default plus real export/import (`engine/investigation-presets.js`, new); the Visual Layers Bar + modal UI (`panels/visual-layers.js`/`.css`, new, mounted next to the existing Scope Bar); and the Guided Investigation Framework's pure state machine + thin DOM controller (`engine/guided-investigation.js`/`panels/guided-investigation.js`, new) - framework only, no walkthrough content, not mounted in `app.js` this sprint per the brief's explicit instruction.
+
+**Verification:** `npm run build` PASSED - 804/804 tests (713 baseline + 91 new: `engine-visual-layers.test.mjs` 20, `engine-investigation-presets.test.mjs` 23, `engine-guided-investigation.test.mjs` 21, `panels-guided-investigation.test.mjs` 11, `panels-functional-radar-visual-layers-sync.test.mjs` 4, plus new/extended cases in `state.test.mjs` and `timeline.test.mjs`), check-syntax 54/54, verify-field-map PASSED (both new engine modules stay outside `derive.js`'s scan scope). `npm run lint`: the same 2 pre-existing errors, zero new.
+
+**Real browser verification (Playwright/Chromium)**, exercising the full golden path from this sprint's Definition of Done end-to-end: Visual Layers bar/modal open and close; a manual category toggle (NCRs → Hidden) applies and shows its active state; the Engineering built-in preset activates and updates the bar label; Universe re-renders correctly under the active preset; Universe Search finds and selects a real object with the persistent card/Passport/Jarvis populated, confirming continuity keeps the searched-and-selected object Visible; clicking empty Universe space clears the selection; double-click does not error; "Reset to Full Enterprise" restores the baseline; saving the current view as a user preset, exporting it to a real downloadable JSON file, and marking it Default all work; clicking a real Commitment Health Radar spoke opens the Functional Radar workspace AND auto-activates the matching Visual Layers preset with the modal closed the entire time (proving the sync is a real store effect, not a rendering coincidence); Dashboard/Risk Board/Text View/Universe lens switching all continue to work. Zero unexpected console errors or HTTP 4xx/5xx responses - the one console message observed (a `/favicon.ico` 404) is confirmed pre-existing and unrelated to this sprint.
