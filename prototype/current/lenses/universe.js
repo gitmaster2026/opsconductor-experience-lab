@@ -1387,7 +1387,28 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
    * @returns {Record<string, {x:number,y:number}>}
    */
   function computeEffectiveCentersByStratum(now, focusTargetId, orbitCenter) {
+    // V1-UX-5 follow-up (real-browser-review finding): a Hidden-layer node
+    // must not pull the idle/no-selection camera centroid ("home") toward
+    // itself - computeCameraFrame()'s `home` is the plain average of every
+    // entry in `nodes` (engine/camera.js), so a preset that hides a large
+    // cluster would otherwise leave the remaining VISIBLE/Context nodes
+    // off-center in the viewport even though nothing about scale is
+    // affected (computeCameraFrame()'s scale is driven purely by the Depth
+    // slider's zoomLevel, never by content extent - confirmed by reading
+    // that function directly). A real focus target is never itself
+    // 'hidden' (Phase 6 continuity forces it to 'visible' before this
+    // module ever sees it - see the node-loop's own comment on this same
+    // guarantee), so excluding Hidden nodes here can never break the
+    // focus-target lookup below. Deliberately NOT applied to
+    // recomputeLayoutIfNeeded()'s computeClusterLayout() input elsewhere
+    // in this file - that layout is intentionally STABLE across an
+    // incidental id-set change unrelated to graph structure (see that
+    // function's own header), and a Visual Layers preset toggle is exactly
+    // that kind of incidental UI filter, not a real graph change; only
+    // where visible nodes are FRAMED, not where they are LAID OUT, needs
+    // this exclusion.
     const positionsForCamera = currentNodes
+      .filter((n) => n.visualLayer !== 'hidden')
       .map((n) => {
         const p = layoutById.get(n.id);
         return p ? { id: n.id, x: p.x, y: p.y } : null;
@@ -1555,7 +1576,28 @@ export function mountUniverseLens(canvasEl, callbacks, tooltipEl) {
     // focusTargetId is the Collection pseudo-id, a synthetic node at the
     // Collection's own centroid (`orbitCenter`) is injected so
     // computeCameraFrame can find it exactly like any real selection. ---
+    // V1-UX-5 follow-up (real-browser-review finding): a Hidden-layer node
+    // must not pull the idle/no-selection camera centroid ("home") toward
+    // itself - computeCameraFrame()'s `home` is the plain average of every
+    // entry in `nodes` (engine/camera.js), so a preset that hides a large
+    // cluster would otherwise leave the remaining VISIBLE/Context nodes
+    // off-center in the viewport even though nothing about scale is
+    // affected (computeCameraFrame()'s scale is driven purely by the Depth
+    // slider's zoomLevel, never by content extent - confirmed by reading
+    // that function directly). A real focus target is never itself
+    // 'hidden' (Phase 6 continuity forces it to 'visible' before this
+    // module ever sees it - see the node-loop's own comment on this same
+    // guarantee), so excluding Hidden nodes here can never break the
+    // focus-target lookup below. Deliberately NOT applied to
+    // recomputeLayoutIfNeeded()'s computeClusterLayout() input elsewhere
+    // in this file - that layout is intentionally STABLE across an
+    // incidental id-set change unrelated to graph structure (see that
+    // function's own header), and a Visual Layers preset toggle is exactly
+    // that kind of incidental UI filter, not a real graph change; only
+    // where visible nodes are FRAMED, not where they are LAID OUT, needs
+    // this exclusion.
     const positionsForCamera = currentNodes
+      .filter((n) => n.visualLayer !== 'hidden')
       .map((n) => {
         const p = layoutById.get(n.id);
         return p ? { id: n.id, x: p.x, y: p.y } : null;
