@@ -46,6 +46,17 @@ const STATUS_LABEL = Object.freeze({
  * @param {(scenarioId: string) => void} callbacks.onStartScenario
  * @param {() => void} callbacks.onExploreFreely - "Explore freely" on the invitation: dismiss for this session only.
  * @param {() => void} callbacks.onDontShowAgain - persist invitation dismissal.
+ * @param {() => void} [callbacks.onResetTransient] - V1-DEMO-1: "Reset Demo"
+ *   action in the picker's header - resets the current investigation/
+ *   presentation state (see app.js's resetDemo('transient')). Omitted
+ *   entirely hides the control (this module has no opinion on WHAT a reset
+ *   does, only on rendering the affordance - same "caller wires the real
+ *   behavior" contract every other callback here follows).
+ * @param {() => void} [callbacks.onResetFull] - V1-DEMO-1: "Full Demo Reset"
+ *   - additionally clears guided-investigation progress/completion/
+ *   invitation-dismissal (see app.js's resetDemo('full')). This module
+ *   itself owns the confirmation prompt (a destructive action needs one
+ *   regardless of which surface exposes it), not the caller.
  * @returns {{ render: () => void, isPickerOpen: () => boolean, openPicker: () => void, closePicker: () => void, showCompletion: (payload: Object) => void, destroy: () => void }}
  */
 export function mountScenarioPicker(els, callbacks) {
@@ -57,6 +68,8 @@ export function mountScenarioPicker(els, callbacks) {
     onStartScenario,
     onExploreFreely,
     onDontShowAgain,
+    onResetTransient,
+    onResetFull,
   } = callbacks;
 
   let isOpen = false;
@@ -199,7 +212,11 @@ export function mountScenarioPicker(els, callbacks) {
       <div class="scenario-picker-dialog" role="dialog" aria-modal="true" aria-label="Guided Investigations">
         <header class="scenario-picker-header">
           <h2>Guided Investigations</h2>
-          <button type="button" data-picker-close aria-label="Close Guided Investigations">Close</button>
+          <div class="scenario-picker-header-actions">
+            ${typeof onResetTransient === 'function' ? '<button type="button" data-picker-reset-transient title="Restore the current investigation to a clean, presentation-ready state. Keeps your saved Visual Layers presets and preferences.">Reset Demo</button>' : ''}
+            ${typeof onResetFull === 'function' ? '<button type="button" data-picker-reset-full title="Reset Demo, plus clear guided-investigation progress and the first-use invitation dismissal. Does not delete your saved Visual Layers presets.">Full Demo Reset</button>' : ''}
+            <button type="button" data-picker-close aria-label="Close Guided Investigations">Close</button>
+          </div>
         </header>
         <p class="scenario-picker-intro">Optional walkthroughs of real, governed OpsConductor investigations. Exit any time and keep exploring freely.</p>
         <div class="scenario-picker-cards">
@@ -226,6 +243,19 @@ export function mountScenarioPicker(els, callbacks) {
       </div>
     `;
     pickerEl.querySelector('[data-picker-close]')?.addEventListener('click', closePicker);
+    pickerEl.querySelector('[data-picker-reset-transient]')?.addEventListener('click', () => {
+      onResetTransient();
+    });
+    pickerEl.querySelector('[data-picker-reset-full]')?.addEventListener('click', () => {
+      // Destructive-confirmation contract (matches app.js's own guided-
+      // investigation exit-confirmation pattern): a native confirm() is a
+      // real, keyboard-accessible, already-localized choice prompt - no
+      // need for a second bespoke modal on top of this one.
+      const confirmed = window.confirm(
+        'Full Demo Reset?\n\nThis clears guided-investigation progress, completion badges, and the "don\'t show again" invitation dismissal, in addition to resetting the current investigation view.\n\nYour saved Visual Layers presets are NOT deleted.'
+      );
+      if (confirmed) onResetFull();
+    });
     pickerEl.querySelectorAll('[data-scenario-start]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const scenarioId = btn.getAttribute('data-scenario-start');

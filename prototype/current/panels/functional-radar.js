@@ -359,6 +359,29 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
   }
 
   /**
+   * Demo Reset support: unconditionally normalize this module's local state
+   * back to fresh-mount defaults, unlike close() above (which no-ops when
+   * !isOpen, since closeForHandoff() deliberately leaves activeFunctionKey/
+   * activeViewMode/activeObjectTypeFilter/drilldown untouched on handoff -
+   * see that function's own header comment). A demo reset must not leave
+   * that "resume where handoff left off" state lying in wait for the next
+   * openFunction() call, so this bypasses the guard and clears everything
+   * close() clears regardless of the current isOpen/isWorkspace value.
+   */
+  function reset() {
+    isOpen = false;
+    isWorkspace = false;
+    activeFunctionKey = null;
+    activeViewMode = 'overview';
+    activeObjectTypeFilter = null;
+    listTableFilterState = {};
+    listTableSortState = null;
+    resetMemberDrilldown();
+    render();
+    notifyFullScreenChange();
+  }
+
+  /**
    * V1-UX-4 follow-up (investigation-continuity review): a SEPARATE, softer
    * exit than close() above, used ONLY for the "Open in Universe" handoff
    * from inside an active investigation (the member detail view's own
@@ -1388,6 +1411,7 @@ export function mountFunctionalRadarPanel(toggleEl, panelEl, callbacks) {
     isFullScreen() {
       return isOpen && isWorkspace;
     },
+    reset,
     destroy,
   };
 }

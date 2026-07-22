@@ -187,3 +187,47 @@ test('destroy() removes the module\'s document keydown listener without throwing
   const { controller } = mountFixture();
   assert.doesNotThrow(() => controller.destroy());
 });
+
+// ---------------------------------------------------------------------------
+// V1-DEMO-1: Reset Demo / Full Demo Reset controls in the picker header.
+// ---------------------------------------------------------------------------
+
+test('picker header renders no reset controls when onResetTransient/onResetFull are omitted (backward compatible)', () => {
+  const { controller, pickerEl } = mountFixture();
+  controller.openPicker();
+  assert.equal(pickerEl.querySelector('[data-picker-reset-transient]'), null);
+  assert.equal(pickerEl.querySelector('[data-picker-reset-full]'), null);
+});
+
+test('"Reset Demo" button calls onResetTransient with no confirmation prompt', () => {
+  let transientCalls = 0;
+  const { controller, pickerEl } = mountFixture({ onResetTransient: () => (transientCalls += 1) });
+  controller.openPicker();
+  const btn = pickerEl.querySelector('[data-picker-reset-transient]');
+  assert.ok(btn, 'expected a Reset Demo button once onResetTransient is provided');
+  btn.click();
+  assert.equal(transientCalls, 1);
+});
+
+test('"Full Demo Reset" button confirms before calling onResetFull', () => {
+  let fullCalls = 0;
+  // mountFixture() calls installMiniDocument(), which (re)installs a fresh
+  // globalThis.window - the stub must be attached AFTER that, or this
+  // reassignment gets clobbered by the fixture's own setup.
+  const { controller, pickerEl } = mountFixture({ onResetFull: () => (fullCalls += 1) });
+  globalThis.window.confirm = () => true;
+  controller.openPicker();
+  const btn = pickerEl.querySelector('[data-picker-reset-full]');
+  assert.ok(btn, 'expected a Full Demo Reset button once onResetFull is provided');
+  btn.click();
+  assert.equal(fullCalls, 1, 'confirmed -> onResetFull must fire');
+});
+
+test('"Full Demo Reset" button does NOT call onResetFull when the confirmation is declined', () => {
+  let fullCalls = 0;
+  const { controller, pickerEl } = mountFixture({ onResetFull: () => (fullCalls += 1) });
+  globalThis.window.confirm = () => false;
+  controller.openPicker();
+  pickerEl.querySelector('[data-picker-reset-full]').click();
+  assert.equal(fullCalls, 0, 'declining the confirmation must not run the destructive reset');
+});

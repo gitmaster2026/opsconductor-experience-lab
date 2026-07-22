@@ -248,7 +248,15 @@ export function mountGuidedInvestigationController(overlayEl, callbacks) {
   // sees the true "was some other overlay open at the moment Escape was
   // pressed" state before anything else has had a chance to react.
   function onKeydown(ev) {
-    if (ev.key === 'Escape' && isRunning(walkthrough)) requestExit();
+    // V1-DEMO-1 fix (confirmed demo-blocking defect, found via Playwright
+    // rehearsal): `walkthrough` is null until the FIRST `.run()` call ever
+    // happens (see this closure's own declaration above) - isRunning(null)
+    // throws (engine/guided-investigation.js's isRunning() reads
+    // `w.status` with no null guard, unlike render()'s own `!walkthrough
+    // || !isRunning(walkthrough)` check just above). Any Escape press
+    // before a guided scenario has ever run - e.g. closing an unrelated
+    // modal on a fresh app boot - crashed with an uncaught TypeError.
+    if (ev.key === 'Escape' && walkthrough && isRunning(walkthrough)) requestExit();
   }
   document.addEventListener('keydown', onKeydown, { capture: true });
 

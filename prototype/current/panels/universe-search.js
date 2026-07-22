@@ -223,5 +223,14 @@ export function mountUniverseSearchPanel(containerEl, callbacks) {
 
   render();
 
-  return { render, destroy, isOpen: () => isOpenState };
+  return {
+    render,
+    destroy,
+    isOpen: () => isOpenState,
+    // Demo Reset support: clears the query/results/active-index back to
+    // fresh-mount defaults and closes the dropdown - the exact same
+    // clearQuery() the Escape key and an outside click already trigger, so
+    // there is no new closing behavior here, just a programmatic caller.
+    reset: clearQuery,
+  };
 }
