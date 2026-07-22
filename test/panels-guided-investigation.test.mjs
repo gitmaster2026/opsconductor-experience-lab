@@ -146,6 +146,111 @@ test('next()/skip()/restart()/notify() before any run() are safe no-ops', () => 
   assert.equal(controller.getWalkthrough(), null);
 });
 
+// ---------------------------------------------------------------------------
+// V1-GUIDE-1: Back button, title/action/notice rendering, Skip->Exit label.
+// ---------------------------------------------------------------------------
+
+test('step 1 shows "Skip" (not "Exit") and no Back button; step 2+ shows "Exit" and a Back button', () => {
+  const { controller, overlayEl } = mountFixture();
+  controller.run(sampleSteps());
+
+  assert.equal(overlayEl.querySelector('[data-guided-back]'), null, 'no Back button on step 1');
+  assert.equal(overlayEl.querySelector('[data-guided-skip]').children[0]?.textContent, 'Skip');
+
+  controller.next(); // step-2
+  assert.ok(overlayEl.querySelector('[data-guided-back]'), 'Back button appears from step 2 onward');
+  assert.equal(overlayEl.querySelector('[data-guided-skip]').children[0]?.textContent, 'Exit');
+});
+
+test('back() returns to the previous step and re-applies its effects', () => {
+  const { controller, overlayEl, effects } = mountFixture();
+  controller.run(sampleSteps());
+  controller.next(); // -> step-2 (spotlight nr04:eco-1)
+  assert.equal(overlayEl.querySelector('[data-guided-step-id]').getAttribute('data-guided-step-id'), 'step-2');
+
+  controller.back();
+  assert.equal(overlayEl.querySelector('[data-guided-step-id]').getAttribute('data-guided-step-id'), 'step-1');
+  assert.deepEqual(effects.spotlight.at(-1), null, 'moving back off the spotlight step must clear it');
+  assert.deepEqual(effects.highlight.at(-1), '#lensUniverse', 're-entering step-1 must re-apply its highlight');
+});
+
+test('back() on the first step is a no-op (button is not even rendered, but calling it directly is still safe)', () => {
+  const { controller, overlayEl } = mountFixture();
+  controller.run(sampleSteps());
+  controller.back();
+  assert.equal(overlayEl.querySelector('[data-guided-step-id]').getAttribute('data-guided-step-id'), 'step-1');
+});
+
+test('clicking the rendered Back button advances the DOM the same as calling controller.back()', () => {
+  const { controller, overlayEl } = mountFixture();
+  controller.run(sampleSteps());
+  controller.next();
+  overlayEl.querySelector('[data-guided-back]').click();
+  assert.equal(overlayEl.querySelector('[data-guided-step-id]').getAttribute('data-guided-step-id'), 'step-1');
+});
+
+test('title/action/notice render when present on a step, and are absent when a step omits them', () => {
+  const { controller, overlayEl } = mountFixture();
+  controller.run([
+    {
+      id: 'rich-step',
+      kind: 'tooltip',
+      message: 'A business sentence.',
+      title: 'Step Title',
+      action: 'Select the thing.',
+      notice: 'Notice: something changed.',
+      advance: 'manualClick',
+    },
+  ]);
+  assert.ok(overlayEl.querySelector('.guided-investigation-title'));
+  assert.ok(overlayEl.querySelector('.guided-investigation-action'));
+  assert.ok(overlayEl.querySelector('.guided-investigation-notice'));
+
+  controller.run([{ id: 'plain-step', kind: 'highlight', advance: 'manualClick' }]);
+  assert.equal(overlayEl.querySelector('.guided-investigation-title'), null);
+  assert.equal(overlayEl.querySelector('.guided-investigation-action'), null);
+  assert.equal(overlayEl.querySelector('.guided-investigation-notice'), null);
+});
+
+test('when onRequestExit is provided, clicking Skip/Exit calls it INSTEAD of exiting immediately', () => {
+  let requestedExit = 0;
+  let skipCount = 0;
+  const doc = installMiniDocument();
+  const overlayEl = doc.createElement('div');
+  const controller = mountGuidedInvestigationController(overlayEl, {
+    onRequestExit: () => (requestedExit += 1),
+    onSkip: () => (skipCount += 1),
+  });
+  controller.run(sampleSteps());
+  overlayEl.querySelector('[data-guided-skip]').click();
+
+  assert.equal(requestedExit, 1);
+  assert.equal(skipCount, 0, 'onSkip must not fire until the caller itself calls controller.skip()');
+  assert.ok(!overlayEl.classList.contains('hidden'), 'the walkthrough must still be running - onRequestExit does not exit on its own');
+
+  controller.skip();
+  assert.equal(skipCount, 1);
+  assert.ok(overlayEl.classList.contains('hidden'));
+});
+
+test('without onRequestExit, clicking Skip/Exit exits immediately (unchanged pre-V1-GUIDE-1 behavior)', () => {
+  let skipCount = 0;
+  const { controller, overlayEl } = mountFixture({ onSkip: () => (skipCount += 1) });
+  controller.run(sampleSteps());
+  overlayEl.querySelector('[data-guided-skip]').click();
+  assert.equal(skipCount, 1);
+  assert.ok(overlayEl.classList.contains('hidden'));
+});
+
+test('the coachmark dialog carries dialog semantics (role=dialog, aria-modal, tabindex=-1) and is not a focus trap', () => {
+  const { controller, overlayEl } = mountFixture();
+  controller.run(sampleSteps());
+  const dialogEl = overlayEl.querySelector('[data-guided-step-id]');
+  assert.equal(dialogEl.getAttribute('role'), 'dialog');
+  assert.equal(dialogEl.getAttribute('aria-modal'), 'true');
+  assert.equal(dialogEl.getAttribute('tabindex'), '-1');
+});
+
 test('destroy() clears the overlay and cancels any pending auto-advance timer', async () => {
   const { controller, overlayEl } = mountFixture();
   controller.run([{ id: 'auto-step', kind: 'tooltip', message: 'auto', advance: 'auto', autoAdvanceMs: 20 }]);

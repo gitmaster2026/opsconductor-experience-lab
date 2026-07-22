@@ -178,8 +178,21 @@ already-shipped work) was found and fixed during V1-UX-2's research pass.
       objects, plus a new deterministic "Suggested next step" for objects
       with no real `next_action_summary`) - broader copy polish across
       every other surface/object remains open.
-11. **The Guided Investigation Framework has no real walkthrough content
-    yet** (V1-UX-5 Phase 8 built only the reusable state machine +
-    DOM controller, by explicit brief instruction) - NRS-01 and NRS-02
-    walkthroughs, to be authored against `engine/guided-investigation.js`/
-    `panels/guided-investigation.js`, remain open.
+11. ~~The Guided Investigation Framework has no real walkthrough content
+    yet~~ (V1-UX-5 Phase 8 built only the reusable state machine +
+    DOM controller, by explicit brief instruction) - **RESOLVED
+    (V1-GUIDE-1).** NRS-01 (Supplier Shortage → Manufacturing Recovery) and
+    NRS-02 (Engineering Change → Customer Impact) are now authored,
+    mounted, and tested against real, governed NR04 canonical relationships
+    - see `docs/GUIDED_INVESTIGATIONS.md` for the full validation manifest
+    and `CURRENT_STATE.md`'s own V1-GUIDE-1 session log. The "focus returns
+    to the exact application target after advancing" accessibility item
+    from that same sprint remains open, carried forward as V1.0 polish.
+
+## New this sprint: V1-GUIDE-1 Guided Investigations
+
+| Field / area | Classification | Note |
+|---|---|---|
+| `nr04:custesc:CESC-NR-2026-014` ("Customer Escalation") as part of the Horizon LNG / CPP-1000 recovery chain | **not governed for this narrative** (confirmed, not assumed) | The object's own real edges only reach an unrelated warranty object (`WAR-NR-2026-021`) and an unrelated employee (`VP-COMMERCIAL`) - zero edges into the commitment or the recovery recommendation. Neither NRS-01 nor NRS-02 references it; `nr04:customer-email:HLNG-RECOVERY-2026-0812` (real, governed, `communicates_recovery_status_for` the commitment) is the real customer-facing terminus used instead. See `docs/GUIDED_INVESTIGATIONS.md`'s NRS-02 gap #2. |
+| Guided Investigation "focus returns to the exact application target after advancing" (accessibility requirement) | **intentional placeholder** (remaining backlog) | Focus moves to the new coachmark on every step transition instead (which itself names the next target). Universe canvas nodes have no individual DOM element to focus at all (canvas hit-testing, not per-node DOM) - full per-surface focus-return plumbing was judged out of this sprint's scope. |
+| Guided Investigation completion/Keep-Restore choice UI | **derived_supported** (not a gap) | The completion summary/actions reuse the Scenario Picker's own modal surface (no second bespoke modal); the Exit Keep/Restore choice uses a native `window.confirm()` dialog rather than a third bespoke modal - a deliberate, documented implementation choice, not a missing feature. |

@@ -203,14 +203,16 @@ plan and status.
 
 ## Next implementation target
 
-**Current: V1-CONTENT-1 (Flagship Passport & Business-Language Completion)
-is implemented and tested** (see the session log immediately below for full
-detail). V1-UX-2A through V1-UX-2H, V1-UX-3, V1-UX-4, V1-UX-5, V1-FIX-1, and
-V1-CONTENT-1 are all implemented and tested (see `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s
-per-sprint sections and the session logs below); the items each sprint has
-explicitly carried forward as still-open (Progressive Risk Board owner/
-next-action enrichment; the `resolveVisibilityForSlice()` t2/t3 gating gap)
-remain open, by deliberate scope decision each time, not by oversight.
+**Current: V1-GUIDE-1 (Flagship Guided Investigations: NRS-01 and NRS-02)
+is implemented and tested** (see the session log immediately below for
+full detail; `docs/GUIDED_INVESTIGATIONS.md` is the full validation
+manifest and behavior spec). V1-UX-2A through V1-UX-2H, V1-UX-3, V1-UX-4,
+V1-UX-5, V1-FIX-1, V1-CONTENT-1, and V1-GUIDE-1 are all implemented and
+tested (see `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s per-sprint sections and the
+session logs below); the items each sprint has explicitly carried forward
+as still-open (Progressive Risk Board owner/next-action enrichment; the
+`resolveVisibilityForSlice()` t2/t3 gating gap) remain open, by deliberate
+scope decision each time, not by oversight.
 
 Per the founder's own post-V1-UX-5 assessment, the remaining work toward a
 V1.0 launch is:
@@ -226,13 +228,17 @@ V1.0 launch is:
   canonical objects) remains open, by that sprint's own explicit scoping
   decision. ~~A Universe Search hover-card z-index issue (hover cards
   should never block Universe Search interaction)~~ - **fixed by V1-FIX-1**,
-  see session log below.
-- **V1.0 polish (strongly recommended)**: the guided NRS-01 and NRS-02
-  walkthroughs, authored against the framework `engine/guided-investigation.js`/
-  `panels/guided-investigation.js` now provide (V1-UX-5 Phase 8) but do not
-  yet contain any real script content; transition/animation polish;
+  see session log below. ~~The guided NRS-01 and NRS-02 walkthroughs,
+  authored against the framework `engine/guided-investigation.js`/
+  `panels/guided-investigation.js` provide (V1-UX-5 Phase 8) but did not
+  yet contain any real script content~~ - **authored and mounted by
+  V1-GUIDE-1**, see that sprint's session log below and
+  `docs/GUIDED_INVESTIGATIONS.md`.
+- **V1.0 polish (strongly recommended)**: transition/animation polish;
   loading/empty-state messaging; a spacing/typography/icon consistency
-  pass.
+  pass; the "focus returns to the exact application target after
+  advancing" accessibility refinement `docs/GUIDED_INVESTIGATIONS.md`'s
+  own "Known limitation" section carries forward.
 - **Post-launch (V1.1)**: additional investigative lenses, Timeline
   replay, a supplier network view, inventory flow, program map,
   multi-user collaboration, richer saved workspaces - see whichever of the
@@ -531,3 +537,23 @@ Scope: derivation and presentation only. No ontology, schema, source snapshot da
 **Real browser verification (Playwright/Chromium, 1440px and 800px):** exercised both flagship paths end to end via Universe Search, confirming for each real object: Passport Overview shows a real business summary (not a restated label); Recommendations/Evidence sections show governed content where it exists (captured live: the NCR's Passport shows the governed "Recommendation Context" recommendation; the recovery recommendation's own Passport shows all 9 real governed supporting-evidence citations); honest empty states with a working navigation link where governed content genuinely doesn't exist (captured live: the prior drawing revision `DWG-NR-CPP-1000-210-REVB` correctly shows "No governed recommendation is linked to this object." / "No direct evidence record is available for this object." plus a working "Review the engineering change that documents this — ECO-NR-GOU-099" link in both sections); Hover Preview and Jarvis both echo the same business summary/evidence citations as Passport for the same selected object; the derived "Suggested next step" renders as a working clickable link distinct from a real "Next action" line. Zero unexpected console errors at either viewport (one pre-existing, unrelated `/favicon.ico` 404). 800px smoke-tested within the app's existing supported layout, per this sprint's own scope boundary (not a responsive redesign).
 
 **Known limitation:** the Functional Radar workspace's own entry interaction (via a Commitment Health Radar spoke click) was not independently screenshotted this session - the underlying wiring is verified correct by construction and by the Hover Preview/Passport/Jarvis three-way live check, but a dedicated Functional Radar capture is recommended for a future session rather than claimed here without one. The old curated demo objects (`CESC-NR-2026-014`, `FAT-NR-2026-3002`, `CAPA-NR-2026-047`, `WAR-NR-2026-021`, UUID-keyed) now coexist with real NR04-canonical objects reusing the same source identifiers (see `docs/UNSUPPORTED_UI_FIELD_REPORT.md`'s updated finding) - flagged for a future data/derive session, not touched this sprint (reconciling them would mean changing canonical object identifiers). Business-copy polish beyond the 24-object flagship allowlist remains open, by this sprint's own explicit scoping decision.
+
+## Session log — 2026-07-22 V1-GUIDE-1 Flagship Guided Investigations: NRS-01 and NRS-02
+
+Scope: guided-content authoring and UI wiring only. No redesign of the framework, navigation model, operational graph, Passport, Visual Layers, or canonical data. Full detail (the object-by-object validation manifest, both scenarios' step tables, the two real bugs found and fixed during Playwright verification, and the full accessibility/state-restoration/Visual-Layers behavior spec) is in the new `docs/GUIDED_INVESTIGATIONS.md` - this entry is a summary pointer, per this file's own established convention.
+
+**Before coding:** verified `main` at `4c1ac8c` (V1-CONTENT-1 merged), `npm run build` baseline **958 tests**; read `engine/guided-investigation.js`/`panels/guided-investigation.js` directly (4 step kinds, 5 advance modes, no `back()` transition existed); read `test/flagship-passport-coverage.test.mjs`'s `FLAGSHIP_ALLOWLIST` and cross-checked every claimed relationship directly against `src/data/nr04-canonical-universe.json`'s real `links` array (273 edges) rather than trusting docs.
+
+**What shipped:** `prototype/current/guided-investigations/{scenario-registry,nrs-01,nrs-02}.js` (pure scenario data, real `nr04:`-namespaced object ids and real governed relationships only - see `docs/GUIDED_INVESTIGATIONS.md`'s per-step validation tables); `panels/scenario-picker.js` (the restrained, non-blocking first-use invitation card + the permanent, keyboard-accessible "Guided Investigations" toolbar/picker/completion modal); `engine/guided-investigation-preferences.js` (invitation-dismissal/completion-status localStorage, following `engine/investigation-presets.js`'s exact injected-storage/versioned-envelope pattern, its own separate key); `engine/guided-investigation-state.js` (pure investigation-state capture/compare for Exit's Keep/Restore choice); `panels/guided-investigation.css`; full `app.js`/`index.html` wiring (mounts the framework's existing, previously-unmounted DOM controller, activates/restores the recommended Visual Layers preset without ever touching the user's saved default, and routes every walkthrough event through the SAME choke points every other feature already uses - `selectAndClearHighlight`, `store.setLens`/`setLayerState`/etc.).
+
+**Framework fix (the only one, minimal and symmetric):** added `back(walkthrough)` to `engine/guided-investigation.js` - the framework had `advance()` but no way to go back, a real gap exposed by the product contract's own "Back, Exit, Replay" requirement. 4 focused tests; all 25 pre-existing engine tests and all 11 pre-existing DOM-controller tests still pass unmodified (29/29 and 19/19 respectively, including 8 new DOM-controller tests for Back/title/action/notice/onRequestExit/dialog-semantics).
+
+**Two real bugs found only via Playwright (not visible from unit tests):** (1) a `waitForClick` step targeting the Visual Layers bar silently failed to advance because clicking it triggers that panel's own synchronous re-render, orphaning `ev.target` before `ev.target.closest()` ran - fixed by using `ev.composedPath()` (captured at dispatch time) instead; (2) pressing Escape to close the Visual Layers modal also silently exited the running walkthrough, because both modals' Escape listeners are on `document` and bubble-phase listeners fire in attachment order - fixed by registering the guided-investigation's Escape listener with `{ capture: true }`. Both are documented in full in `docs/GUIDED_INVESTIGATIONS.md`'s "Framework Review" section.
+
+**Canonical Object Validation, real gaps reported rather than invented:** the brief's own desired-flow steps imply a couple of direct relationships that do not exist in the real graph - see `docs/GUIDED_INVESTIGATIONS.md` for the full writeup. Most notably, `nr04:custesc:CESC-NR-2026-014` ("Customer Escalation" - the object whose NAME most literally matches "Customer Impact") has **zero real governed edge** into either chain; NRS-02 correctly uses `nr04:customer-email:HLNG-RECOVERY-2026-0812` (a real, governed, commitment-linked object) as its terminal step instead - asserted directly by a dedicated test.
+
+**Automated tests:** 85 new tests (`test/guided-investigations-scenario-registry.test.mjs` 38, `test/engine-guided-investigation-preferences.test.mjs` 11, `test/engine-guided-investigation-state.test.mjs` 6, `test/panels-scenario-picker.test.mjs` 18, plus the 4+8 framework tests above). `npm run build`: **1043/1043 tests** (958 baseline + 85 new), check-syntax and verify-field-map both PASSED.
+
+**Real browser verification (Playwright/Chromium, 1440px and ~800px):** 44/44 checks passed - full end-to-end NRS-01 and NRS-02 runs (every relationship click driving the walkthrough forward for real, including the auto-advance transition beats and the two scenarios' own "revisit via Universe Search" detours), Back/Exit/Replay, the Keep/Restore exit choice, completion summaries with all four required actions, Evidence/Source Records reachable on the final object, free exploration remaining available after completion, "Don't show this again" surviving a reload, the permanent picker toggle remaining available, zero unexpected console errors, and an 800px start/exit/replay smoke test. Screenshots captured for the invitation, picker, one coachmark per scenario, both completion screens, and the post-completion free-explore state.
+
+**Known limitation:** "focus returns to the exact application target element after the user advances" (one of the accessibility requirements) is not implemented - focus moves to the new coachmark on every step transition instead, which itself names the next target in its own `action` text. Given Universe canvas nodes have no individual DOM element to focus at all (canvas-based hit-testing, not per-node DOM), building full per-surface focus-return plumbing was judged out of this sprint's scope; carried forward as V1.0 polish.
