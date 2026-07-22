@@ -371,7 +371,24 @@ export function mountScopePanel(barEl, modalEl, callbacks) {
     modalEl.innerHTML = '';
   }
 
+  /**
+   * Demo Reset support: force the Scope Explorer closed and discard any
+   * in-progress Collection-building session (search text + pending member
+   * picks) - this module's own local, session-only UI state (see the
+   * pendingMembers comment above), never engine/state.js's scopeContext
+   * itself (a caller resets that separately via store.setScope(null)).
+   * Unconditional (no `if (!isOpen) return` guard, unlike closeModal()) so
+   * repeated calls are trivially idempotent and always leave this module in
+   * its fresh-mount state regardless of what it was doing beforehand.
+   */
+  function reset() {
+    isOpen = false;
+    searchQuery = '';
+    pendingMembers.clear();
+    render();
+  }
+
   render();
 
-  return { render, destroy };
+  return { render, destroy, reset };
 }

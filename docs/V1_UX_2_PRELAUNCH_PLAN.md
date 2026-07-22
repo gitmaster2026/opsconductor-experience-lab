@@ -846,3 +846,77 @@ not implemented - focus moves to the new coachmark on every step
 transition instead. Universe canvas nodes have no individual DOM element
 to focus at all (canvas hit-testing, not per-node DOM), so full per-
 surface focus-return plumbing was judged out of this sprint's scope.
+
+## Sprint V1-DEMO-1 — Founder Demo Package, Demo Reset, and Rehearsal Validation (2026-07-22)
+
+**Goal (from the brief):** produce a reliable, repeatable founder-demo
+package - a deterministic Demo Reset, a 10-15 minute and a 3-5 minute demo
+route, an operator runbook with a failure-recovery matrix, and rehearsal
+validation. Launch-readiness/demo-operations only - no new product
+features, no redesign of existing interactions.
+
+**Full detail lives in four new docs** - `docs/DEMO_STATE_AUDIT.md` (the
+state-and-reset manifest, the Demo Mode assessment, and the Playwright
+rehearsal report), `docs/FOUNDER_DEMO_LONG.md`, `docs/FOUNDER_DEMO_SHORT.md`,
+and `docs/FOUNDER_DEMO_RUNBOOK.md` (including the failure-recovery matrix).
+This section is a summary pointer, per this file's own established
+convention.
+
+**What shipped:** one "Reset Demo" / "Full Demo Reset" control added to
+the existing Scenario Picker's header (`panels/scenario-picker.js`); a new
+`resetDemo(mode)` orchestration in `app.js` that resets every canonical
+`engine/state.js` field in one atomic call and closes/clears every
+panel-local piece of transient UI state via existing or newly-added
+`reset()` methods (`panels/scope.js`, `panels/visual-layers.js`,
+`panels/functional-radar.js`, `panels/universe-search.js`,
+`panels/hover-preview.js`, `lenses/risk-board.js`'s `resetScope()`, and
+`engine/investigation-history.js`'s new `resetHistory()`); the two demo
+scripts and the operator runbook.
+
+**Demo Reset contract:** transient mode clears selection/focus/camera/
+lens/time/zoom/scope/Visual-Layers-view/Search/Hover-Preview/Risk-Board-
+recursion/the draggable Universe card offset/both navigation-history
+mechanisms and ends any active guided investigation, while preserving
+user-created Visual Layers presets, the saved default preset, the
+Functional Radar sync preference, and the guided-investigation "don't
+show again" dismissal. Full mode does everything transient mode does,
+requires a native confirmation, and additionally clears guided-
+investigation progress/completion/first-use invitation dismissal via the
+existing (previously unused-by-reset) `clearGuidedInvestigationPreferences()`.
+Neither mode ever touches the user's saved preset catalog.
+
+**Two real defects found via Playwright, not guessed at:** (1) a
+confirmed demo-blocking null-guard bug in `panels/guided-investigation.js`'s
+Escape listener - see `docs/GUIDED_INVESTIGATIONS.md`'s Framework Review
+addendum; (2) a demo-script content accuracy issue - one Universe Search
+fragment named in an early draft of the long script resolved to the wrong
+real object due to `engine/search.js`'s (correct, unchanged) alphabetical
+tie-break rule - fixed by documenting the unambiguous fragment instead.
+Full writeups in `docs/DEMO_STATE_AUDIT.md`.
+
+**Automated tests:** 23 new tests (`test/engine-investigation-history-live.test.mjs`
+6, `test/demo-reset-panels.test.mjs` 13, plus 4 new cases in
+`test/panels-scenario-picker.test.mjs`). `npm run build`: **1066/1066
+tests** (1043 baseline + 23 new), check-syntax and verify-field-map both
+PASSED.
+
+**Real browser verification (Playwright/Chromium):** 204/204 checks
+passed, 0 failures - messy-state transient reset, Full Demo Reset's
+localStorage effects, user-preset preservation across both modes,
+idempotency (5x repeated clicks), reset mid-guided-investigation, and
+**three consecutive full long-route rehearsals** (Risk Board → Universe
+Search → NRS-01 → NRS-02, Demo Reset between each) all completing both
+guided investigations with zero unexpected console errors, at 1440px,
+1280px, and 800px.
+
+**Demo Mode assessment:** no separate Demo Mode was built - a
+deterministic reset plus documentation was judged sufficient and more
+honest, per `docs/DEMO_STATE_AUDIT.md`'s own Phase 8 reasoning.
+
+**Known, honestly stated limitation:** the Risk Board's top-level
+`RB-CPP-HORIZON` card and the NR04 canonical commitment
+(`nr04:commitment:CUST-HORIZON-CPP-2026-09`) are two distinct, real
+objects for the same real-world customer commitment, not one clickable
+object - the demo scripts narrate this hand-off explicitly rather than
+treating them as interchangeable. See `docs/UNSUPPORTED_UI_FIELD_REPORT.md`'s
+new V1-DEMO-1 section for the full writeup.

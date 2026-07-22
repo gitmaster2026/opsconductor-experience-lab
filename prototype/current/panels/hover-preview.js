@@ -297,5 +297,21 @@ export function mountHoverPreview(el, callbacks) {
     el.classList.add('hidden');
   }
 
-  return { render, destroy };
+  /**
+   * Demo Reset support: hide immediately, bypassing HIDE_GRACE_MS - a
+   * demo reset needs the popover gone the instant it runs, not up to
+   * 300ms later. Ordinary hover-driven hides still go through
+   * scheduleHideIfStillEmpty()'s grace window unchanged; this is a
+   * separate, explicit "force it closed now" entry point.
+   */
+  function reset() {
+    following = false;
+    if (hideTimer !== null) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+    hideNow();
+  }
+
+  return { render, destroy, reset };
 }

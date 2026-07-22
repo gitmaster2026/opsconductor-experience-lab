@@ -483,7 +483,27 @@ export function mountVisualLayersPanel(barEl, modalEl, callbacks) {
     modalEl.innerHTML = '';
   }
 
+  /**
+   * Demo Reset support: force the modal closed and clear its own transient
+   * UI state (an in-progress rename, and any status/import-error note left
+   * over from a prior action) - never the user's persisted preset catalog
+   * (engine/investigation-presets.js owns that, and a demo reset must NOT
+   * delete user-created presets per the reset contract). The active
+   * layerState/activePresetId themselves are reset separately by the
+   * caller via store.setLayerState(fullVisibilityMap(), ...) - this
+   * function only cleans up the panel's OWN local closure state. No `if
+   * (!isOpen) return` guard (unlike closeModal()), so repeated calls are
+   * trivially idempotent.
+   */
+  function reset() {
+    isOpen = false;
+    renamingId = null;
+    statusNote = '';
+    importErrorNote = '';
+    render();
+  }
+
   render();
 
-  return { render, destroy, openModal, closeModal };
+  return { render, destroy, openModal, closeModal, reset };
 }

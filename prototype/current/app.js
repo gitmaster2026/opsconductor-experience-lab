@@ -61,7 +61,7 @@ import { mountHoverPreview } from './panels/hover-preview.js';
 import { mountJarvisPanel } from './panels/jarvis.js';
 import { mountScopePanel } from './panels/scope.js';
 import { mountVisualLayersPanel } from './panels/visual-layers.js';
-import { presetForFunctionalRadarKey } from './engine/visual-layers.js';
+import { presetForFunctionalRadarKey, fullVisibilityMap, FULL_ENTERPRISE_PRESET_ID } from './engine/visual-layers.js';
 import { initPresetStore, resolveDefaultPreset, getSyncFunctionalRadarWithVisualLayers } from './engine/investigation-presets.js';
 import { mountUniverseSearchPanel } from './panels/universe-search.js';
 import { mountFunctionalRadarPanel } from './panels/functional-radar.js';
@@ -71,7 +71,7 @@ import { mountRelationshipLegend } from './panels/relationship-legend.js';
 import { mountOperationalGrammarLegend } from './panels/operational-grammar-legend.js';
 import { mountSavedViewsManager } from './engine/saved-views.js';
 import { defaultContinuityAction } from './engine/lens-continuity.js';
-import { withHistorySuppressed } from './engine/investigation-history.js';
+import { withHistorySuppressed, resetHistory } from './engine/investigation-history.js';
 import { getBuiltInPreset } from './engine/visual-layers.js';
 import { mountGuidedInvestigationController } from './panels/guided-investigation.js';
 import { currentStep as guidedCurrentStep } from './engine/guided-investigation.js';
@@ -84,6 +84,7 @@ import {
   dismissInvitation,
   isScenarioCompleted,
   markScenarioCompleted,
+  clearGuidedInvestigationPreferences,
 } from './engine/guided-investigation-preferences.js';
 
 // ---------------------------------------------------------------------------
@@ -871,6 +872,124 @@ async function main() {
     guidedController.run(scenario.steps);
   }
 
+  // --- Demo Reset (V1-DEMO-1) ------------------------------------------------
+  //
+  // The founder-demo package's one required, deterministic reset action.
+  // "Reset current demo state" (mode: 'transient') clears every transient
+  // investigation/presentation surface this app owns - selection, focus,
+  // camera, time, zoom, scope, Visual Layers configuration, an active
+  // guided walkthrough (if any), every modal/workspace overlay, and both
+  // history mechanisms (focusTrail/nav-history-rail AND the richer
+  // investigation-history Back/Forward stack) - while PRESERVING
+  // user-created Visual Layers presets, the saved default preset, the
+  // Functional Radar sync preference, and the guided-investigation
+  // "don't show again" dismissal (none of those live in the fields this
+  // function touches; see engine/investigation-presets.js and
+  // engine/guided-investigation-preferences.js, neither of which this
+  // function ever calls in transient mode). "Full demo reset" (mode:
+  // 'full') does everything transient reset does AND additionally clears
+  // guided-investigation progress/completion/first-use invitation
+  // dismissal, restoring a pristine first-demo experience - it still never
+  // touches the user's saved preset catalog (docs/FOUNDER_DEMO_RUNBOOK.md's
+  // Demo Reset contract documents this distinction for operators).
+  //
+  // Every mutation below routes through the SAME public setters/panel
+  // methods every ordinary user interaction already uses (store.setState(),
+  // each panel's own reset()/close()/resetScope()) - there is no second,
+  // demo-only application state store or hidden code path (docs/
+  // FOUNDER_DEMO_RUNBOOK.md's Demo Mode Assessment explains why this
+  // sprint deliberately does not build a separate "Demo Mode").
+  //
+  // Idempotent: every panel-local reset() called below is safe to call
+  // repeatedly (each either has no `if already reset` guard at all - a
+  // reassignment to the same default value plus a render() is harmless -
+  // or, like functional-radar.js's plain close(), guards internally).
+  // Repeated Reset Demo clicks never register duplicate listeners (nothing
+  // here calls addEventListener) and never throw.
+  function resetDemo(mode = 'transient') {
+    // 1) End an active guided walkthrough (if any) BEFORE anything else -
+    // skip() clears its spotlight/highlight/camera-focus DOM effects and
+    // this app's own activeScenario/preScenarioState (finishGuidedScenario
+    // ('skipped') above), WITHOUT prompting the "restore previous view?"
+    // confirmation (that confirmation is onRequestExit's job, reached only
+    // via the walkthrough's own Skip/Exit button or Escape - a demo reset
+    // is itself an explicit, deliberate reset action, so it always keeps
+    // moving forward to the reset state below rather than restoring
+    // whatever view preceded the scenario).
+    if (activeScenario) guidedController.skip();
+
+    // 2) Close every independent modal/workspace/dropdown this app owns -
+    // "no open modal, dialog, picker, or completion panel" / "no invisible
+    // pointer-blocking overlay" in the Required Reset State.
+    scenarioPicker.closePicker();
+    savedViewsManager.close();
+    scopePanel.reset();
+    visualLayersPanel.reset();
+    functionalRadarPanel.reset();
+    universeSearchPanel.reset();
+    hoverPreviewPanel.reset();
+
+    // 3) Reset lens-local state no canonical store field represents.
+    riskBoardLens.resetScope();
+    universeLens.resetTooltipLayout();
+
+    // 4) Reset app.js's own transient, non-canonical state (see this
+    // module's header "Cross-lens highlight" section).
+    clearHighlightedIds();
+    passportTargetSection = null;
+
+    // 5) Reset every canonical engine/state.js field in ONE atomic
+    // setState call (a single notification/render pass), wrapped in
+    // withHistorySuppressed() so this transition is never itself recorded
+    // as an ordinary "back-able" navigation step - a demo reset must not
+    // let Back walk the presenter right back into the pre-reset state.
+    // resetHistory() then wipes any Back/Forward (and, via focusTrail
+    // below, Navigation History rail) state accumulated before this reset.
+    withHistorySuppressed(() => {
+      store.setState({
+        workspaceLens: 'universe',
+        leftPanelMode: 'dashboard',
+        selectedObjectId: null,
+        focusedCommitmentId: null,
+        // The same "current state" slice app boot itself lands on (see
+        // this file's own initial-time-slider wiring above) - the
+        // deliberate demo baseline, not the dataset's earliest slice.
+        timeSliceId: timeSliceRecords[initialSliceIndex].id,
+        zoomLevel: 0,
+        hoveredObjectId: null,
+        focusTrail: [],
+        cameraTarget: null,
+        cameraPhase: 'idle',
+        scopeContext: null,
+        // Required Reset State: "Full Enterprise Visual Layers preset" -
+        // always this exact preset on reset, regardless of whatever the
+        // user's own saved default preset is (that preference still
+        // governs ordinary app BOOT via resolveDefaultPreset() above; a
+        // demo reset is a different, presentation-specific contract).
+        layerState: fullVisibilityMap(),
+        activePresetId: FULL_ENTERPRISE_PRESET_ID,
+      });
+    });
+    resetHistory();
+
+    // 6) Full Demo Reset only: clear guided-investigation progress/
+    // completion/first-use invitation dismissal - restoring a pristine
+    // first-demo experience. Never touches the user's saved Visual Layers
+    // preset catalog (a different, unrelated persistence slice - see
+    // engine/investigation-presets.js's own module header) in either mode.
+    if (mode === 'full') {
+      clearGuidedInvestigationPreferences();
+      invitationDismissedThisSession = false;
+    }
+
+    // 7) The Scenario Picker's toggle/invitation/picker markup is NOT part
+    // of renderAll()'s render loop (see that function's own contents) -
+    // re-render it explicitly, since steps above (ending a scenario,
+    // clearing completion/invitation state on a full reset) can change
+    // what it should show.
+    scenarioPicker.render();
+  }
+
   const scenarioPicker = mountScenarioPicker(
     {
       toggleEl: els.guidedInvestigationsToggle,
@@ -899,6 +1018,8 @@ async function main() {
         invitationDismissedThisSession = true;
         dismissInvitation();
       },
+      onResetTransient: () => resetDemo('transient'),
+      onResetFull: () => resetDemo('full'),
     }
   );
 

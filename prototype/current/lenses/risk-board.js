@@ -984,9 +984,21 @@ export function mountRiskBoardLens(containerEl, callbacks) {
     containerEl.classList.remove('risk-editorial');
   }
 
+  /**
+   * Demo Reset support: collapse any active Risk Board recursion
+   * (site/object drilldown - see scopePath's own header comment) back to
+   * the Enterprise root, the same state a fresh mount starts at. Safe to
+   * call even when already at the root (scopePath already []): the
+   * reassignment is a no-op and render() is idempotent.
+   */
+  function resetScope() {
+    scopePath = [];
+    render();
+  }
+
   render();
 
-  return { render, resize, destroy };
+  return { render, resize, destroy, resetScope };
 }
 
 /** Minimal HTML-escaping for the small amount of dynamic text we inject via innerHTML. */

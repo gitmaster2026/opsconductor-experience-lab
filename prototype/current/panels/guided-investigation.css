@@ -154,6 +154,12 @@
   color: var(--text-primary);
 }
 
+.scenario-picker-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .scenario-picker-header button {
   appearance: none;
   border: 1px solid var(--panel-border);
@@ -163,6 +169,22 @@
   border-radius: 999px;
   cursor: pointer;
   font-size: 11px;
+}
+
+/* V1-DEMO-1: the two reset actions are demo-operations utilities, not part
+   of the scenario-browsing task itself - a quieter, unobtrusive treatment
+   (per the sprint brief's "do not make it a dominant primary navigation
+   action") than the default header button, distinguishing them from Close
+   without competing with it. */
+.scenario-picker-header-actions [data-picker-reset-transient],
+.scenario-picker-header-actions [data-picker-reset-full] {
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.scenario-picker-header-actions [data-picker-reset-transient]:hover,
+.scenario-picker-header-actions [data-picker-reset-full]:hover {
+  opacity: 1;
 }
 
 .scenario-picker-intro {

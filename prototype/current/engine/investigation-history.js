@@ -235,3 +235,20 @@ export function canGoForward() {
   ensureSubscribed();
   return stacks.future.length > 0;
 }
+
+/**
+ * Demo Reset support: wipe both the past and future stacks so
+ * panels/shared-investigation-state.js's Back/Forward buttons immediately
+ * report nothing to go back/forward to, without touching the live store's
+ * canonical state (a caller resetting engine/state.js's own fields does
+ * that separately - see app.js's resetDemo()). Re-baselines lastSnapshot
+ * against the CURRENT store state (if already subscribed) so the next
+ * genuinely-new navigation is compared against where things actually are
+ * post-reset, not a stale pre-reset snapshot - the same resync
+ * withHistorySuppressed() already performs after its own `fn` runs.
+ * Idempotent: calling this with already-empty stacks is a safe no-op.
+ */
+export function resetHistory() {
+  stacks = { past: [], future: [] };
+  if (isSubscribed) lastSnapshot = captureSnapshot(getState());
+}

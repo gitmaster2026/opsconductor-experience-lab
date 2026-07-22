@@ -123,6 +123,23 @@ shim cannot reproduce):
    "was something else open" state before any bubble-phase listener has
    had a chance to react.
 
+**Addendum, found during V1-DEMO-1's rehearsal (2026-07-22):** a third
+real bug in the same family - `panels/guided-investigation.js`'s Escape
+listener called `isRunning(walkthrough)` with no null guard.
+`walkthrough` is `null` until the very first `.run()` call ever happens
+(see this module's own `let walkthrough = null;` above), and
+`engine/guided-investigation.js`'s `isRunning = (w) => w.status === 'running'`
+has no defensive check - so pressing Escape to close ANY unrelated modal
+(Visual Layers, Scope Explorer, Functional Radar, Saved Views) on a fresh
+app boot, before a guided scenario had ever started, threw an uncaught
+`TypeError: Cannot read properties of null (reading 'status')`. This sat
+undetected here because every prior verification pass happened to run a
+scenario before testing Escape on another modal. **Fix**: `walkthrough &&
+isRunning(walkthrough)` at the call site, mirroring the identical guard
+this same file's own `render()` function already uses two lines away.
+See `docs/DEMO_STATE_AUDIT.md`'s Phase 9 section for the full rehearsal
+context this was found in.
+
 ## Canonical Object Validation
 
 Both walkthroughs live entirely inside the real NR04 canonical graph
