@@ -79,6 +79,8 @@ import {
   sourceSystemCategory,
   groupSourceRecordsBySystem,
   documentPurposeLabel,
+  evidenceRelationLabel,
+  deriveNextInvestigativeAction,
 } from '../engine/business-language.js';
 
 function escapeHtml(value) {
@@ -180,7 +182,7 @@ function recommendationBadgeHtml(rec) {
   return grammarBadgeHtml(rec ?? {});
 }
 
-function renderOverviewSection(overview, businessImpact, nextAction, sourceIdentifier, objectKey) {
+function renderOverviewSection(overview, businessImpact, nextAction, sourceIdentifier, objectKey, relationships) {
   // Sprint UX-2C: progressive detail — headline (type + label) first, then
   // the operational explanation (summary), then business context (impact /
   // next action), then ERP metadata (identifier) as a visually-secondary
@@ -188,6 +190,13 @@ function renderOverviewSection(overview, businessImpact, nextAction, sourceIdent
   const typeNoun = objectNoun(overview.objectType, { domain: overview.domain, nr04_object_key: objectKey });
   const domainText = overview.domain ? domainLabel(overview.domain) : '';
   const erpId = formatErpIdentifier(sourceIdentifier, objectKey);
+  // V1-CONTENT-1 Phase 4: a real, governed next_action_summary always wins.
+  // Only when the object has none of its own do we fall back to a
+  // deterministic, relationship-driven suggestion (engine/business-language.js's
+  // deriveNextInvestigativeAction()) - clearly labeled "Suggested next step"
+  // (never "Next action") so its DERIVED provenance stays visible and is
+  // never confused with the real governed field.
+  const suggestedNext = !nextAction ? deriveNextInvestigativeAction(relationships) : null;
   return `
     <header class="passport-overview">
       <div class="passport-overview-type">${grammarMarkerHtml({ type: overview.objectType, objectKey, domain: overview.domain, risk_state: overview.risk_state }, { size: 15, lead: true, title: typeNoun })}${escapeHtml(typeNoun)}${domainText && domainText !== typeNoun ? ` · ${escapeHtml(domainText)}` : ''}</div>
@@ -195,6 +204,11 @@ function renderOverviewSection(overview, businessImpact, nextAction, sourceIdent
       ${overview.summary ? `<p class="passport-overview-summary">${escapeHtml(overview.summary)}</p>` : ''}
       ${businessImpact ? `<p class="passport-overview-impact"><strong>Why it matters:</strong> ${escapeHtml(businessImpact)}</p>` : ''}
       ${nextAction ? `<p class="passport-overview-next"><strong>Next action:</strong> ${escapeHtml(nextAction)}</p>` : ''}
+      ${
+        suggestedNext
+          ? `<p class="passport-overview-next passport-overview-next--derived"><strong>Suggested next step:</strong> <button type="button" class="passport-inline-link" data-select-id="${escapeHtml(suggestedNext.targetObjectId)}">${escapeHtml(suggestedNext.text)}</button></p>`
+          : ''
+      }
       <dl class="passport-overview-meta">
         ${overview.status ? `<div><dt>Status</dt><dd>${escapeHtml(overview.status)}</dd></div>` : ''}
         ${overview.customer ? `<div><dt>Customer</dt><dd>${escapeHtml(overview.customer)}</dd></div>` : ''}
@@ -265,13 +279,42 @@ function renderRelationshipsSection(relationships) {
   `;
 }
 
-function renderRecommendationsSection(recommendations) {
+/**
+ * V1-CONTENT-1 Phase 3: an honest, specific empty state for a Passport
+ * section with no governed content - never generic filler ("No data",
+ * "Nothing here", "Coming soon"). When a deterministic next investigative
+ * action can be derived from the object's own real relationships (the SAME
+ * engine/business-language.js helper the Overview's "Suggested next step"
+ * uses - reused here, not duplicated, so the wording never drifts), the
+ * empty state also offers a concrete internal navigation action to where the
+ * related, potentially useful information actually lives - only ever shown
+ * when that destination genuinely exists.
+ *
+ * @param {string} message
+ * @param {Array<Object>} relationships
+ * @returns {string}
+ */
+function renderEmptySectionState(message, relationships) {
+  const suggestion = deriveNextInvestigativeAction(relationships ?? []);
+  return `
+    <div class="dash-section-empty">
+      ${escapeHtml(message)}
+      ${
+        suggestion
+          ? `<button type="button" class="passport-inline-link passport-empty-nav" data-select-id="${escapeHtml(suggestion.targetObjectId)}">${escapeHtml(suggestion.text)}</button>`
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderRecommendationsSection(recommendations, relationships) {
   const list = Array.isArray(recommendations) ? recommendations : [];
   if (list.length === 0) {
     return `
       <section class="passport-section" data-passport-section="recommendations">
         <h3 class="passport-section-title">Recommendations</h3>
-        <div class="dash-section-empty">No recommendations for this object yet.</div>
+        ${renderEmptySectionState('No governed recommendation is linked to this object.', relationships)}
       </section>
     `;
   }
@@ -302,13 +345,13 @@ function renderRecommendationsSection(recommendations) {
   `;
 }
 
-function renderEvidenceSection(evidence) {
+function renderEvidenceSection(evidence, relationships) {
   const list = Array.isArray(evidence) ? evidence : [];
   if (list.length === 0) {
     return `
       <section class="passport-section" data-passport-section="evidence">
         <h3 class="passport-section-title">Evidence</h3>
-        <div class="dash-section-empty">No evidence linked to this object yet.</div>
+        ${renderEmptySectionState('No direct evidence record is available for this object.', relationships)}
       </section>
     `;
   }
@@ -329,7 +372,7 @@ function renderEvidenceSection(evidence) {
             <button type="button" class="passport-entry passport-entry-select ${ev.visibleAtSlice ? '' : 'is-dormant'}" ${ev.id ? `data-select-id="${escapeHtml(ev.id)}"` : 'disabled'}>
               <div class="passport-entry-head">
                 <span class="ovg-entry-tag-group">${evidenceMarker(ev)}<span class="passport-entry-tag">${escapeHtml((ev.evidence_type ?? 'evidence').replace(/_/g, ' '))}</span></span>
-                <span class="ovg-entry-tag-group">${evidenceBadgeHtml(ev)}<span class="citation-chip">${escapeHtml(ev.id ?? '')}</span></span>
+                <span class="ovg-entry-tag-group">${evidenceBadgeHtml(ev)}<span class="passport-evidence-relation">${escapeHtml(evidenceRelationLabel(ev))}</span><span class="citation-chip">${escapeHtml(ev.id ?? '')}</span></span>
               </div>
               ${ev.evidence_summary ? `<p class="passport-entry-summary">${escapeHtml(ev.evidence_summary)}</p>` : ''}
               <div class="passport-entry-foot">
@@ -358,11 +401,21 @@ function renderOperationalHistorySection(operationalHistory) {
   `;
 
   if (events.length === 0) {
+    // V1-CONTENT-1 Phase 3: honest, specific empty state - distinguishes
+    // "this object has real occurred/due dates, just no separate discrete
+    // timeline-events.json entries beyond them" (dating row shown right
+    // above this message) from "genuinely nothing dated is known" (no
+    // dating row at all).
+    const hasDating = Boolean(dating.occurred_at || dating.due_at || dating.isCurrent !== null);
     return `
       <section class="passport-section" data-passport-section="timeline">
         <h3 class="passport-section-title">Timeline / Operational History</h3>
-        ${dating.occurred_at || dating.due_at || dating.isCurrent !== null ? datingRow : ''}
-        <div class="dash-section-empty">No recorded history events for this object.</div>
+        ${hasDating ? datingRow : ''}
+        <div class="dash-section-empty">${
+          hasDating
+            ? 'No additional operational-history events are present in this snapshot beyond the occurred/due dates shown above.'
+            : 'No operational-history events or effective dates are present in this snapshot for this object.'
+        }</div>
       </section>
     `;
   }
@@ -427,13 +480,13 @@ function renderRepresentativeDrilldownSection(drilldown) {
   `;
 }
 
-function renderSourceRecordsSection(sourceRecords) {
+function renderSourceRecordsSection(sourceRecords, relationships) {
   const list = Array.isArray(sourceRecords) ? sourceRecords : [];
   if (list.length === 0) {
     return `
       <section class="passport-section passport-source-records" data-passport-section="source">
         <h3 class="passport-section-title">Source Records</h3>
-        <div class="dash-section-empty">No source lineage recorded.</div>
+        ${renderEmptySectionState('No source lineage is recorded directly on this object.', relationships)}
       </section>
     `;
   }
@@ -758,10 +811,10 @@ export function mountPassportPanel(el, callbacks) {
           ${renderRecursiveInvestigationCard(buildRecursiveModelFromPassport(collectionPassport))}
           ${renderCurrentRiskSection(collectionPassport.currentRisk)}
           ${renderRelationshipsSection(collectionPassport.relationships)}
-          ${renderRecommendationsSection(collectionPassport.recommendations)}
-          ${renderEvidenceSection(collectionPassport.evidence)}
+          ${renderRecommendationsSection(collectionPassport.recommendations, collectionPassport.relationships)}
+          ${renderEvidenceSection(collectionPassport.evidence, collectionPassport.relationships)}
           ${renderOperationalHistorySection(collectionPassport.operationalHistory)}
-          ${renderSourceRecordsSection(collectionPassport.sourceRecords)}
+          ${renderSourceRecordsSection(collectionPassport.sourceRecords, collectionPassport.relationships)}
           ${renderDocumentsSection(collectionPassport.documents)}
         </div>
       `;
@@ -783,14 +836,15 @@ export function mountPassportPanel(el, callbacks) {
           passport.overview?.nextAction ?? null,
           passport.overview?.sourceIdentifier ?? null,
           passport.overview?.objectKey ?? null,
+          passport.relationships ?? [],
         )}
         ${renderRecursiveInvestigationCard(buildRecursiveModelFromPassport(passport))}
         ${renderCurrentRiskSection(passport.currentRisk)}
         ${renderRelationshipsSection(passport.relationships)}
-        ${renderRecommendationsSection(passport.recommendations)}
-        ${renderEvidenceSection(passport.evidence)}
+        ${renderRecommendationsSection(passport.recommendations, passport.relationships)}
+        ${renderEvidenceSection(passport.evidence, passport.relationships)}
         ${renderOperationalHistorySection(passport.operationalHistory)}
-        ${renderSourceRecordsSection(passport.sourceRecords)}
+        ${renderSourceRecordsSection(passport.sourceRecords, passport.relationships)}
         ${renderDocumentsSection(passport.documents)}
         ${renderRepresentativeDrilldownSection(bundle?.representativeDrilldown ?? null)}
       </div>

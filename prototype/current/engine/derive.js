@@ -780,6 +780,17 @@ export function buildUniverseGraph(snapshot) {
       owner_role: obj.owner_role ?? null,
       business_impact_summary: obj.business_impact_summary ?? null,
       next_action_summary: obj.next_action_summary ?? null,
+      // V1-CONTENT-1: real evidence_summary/provenance passthrough (already
+      // real columns on every operational-objects.json/nr04-canonical-
+      // universe.json row - confirmed present on all 9 curated + all 162
+      // NR04 canonical objects) that were never previously carried onto the
+      // node, even though engine/operational-language.js's operationalSummary()
+      // was already written and documented to consume node.evidence_summary
+      // as its 2nd-priority fallback. Wiring it here is what actually closes
+      // that gap rather than leaving operationalSummary() permanently unable
+      // to reach its own documented 2nd branch.
+      evidence_summary: obj.evidence_summary ?? null,
+      provenance: obj.provenance ?? null,
       // V1-UX-1b Task 7 (Representative demo-derived drilldowns): real raw
       // per-object-type structured data nr04-canonical-universe.json's
       // scenario source already carries (e.g. an ECO's current_revision/
@@ -1670,7 +1681,16 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
     customer: node.customer ?? null,
     supplier: node.supplier ?? null,
     program: node.program ?? null,
-    summary: preAuthored ? preAuthored.overview : buildFallbackOverview(node),
+    // V1-CONTENT-1: prefer the object's own real evidence_summary ("what
+    // happened") over the generic label-based buildFallbackOverview()
+    // template - evidence_summary is a real, governed narrative sentence
+    // (see the node-field comment above) that exists on every operational
+    // object and reads far more like an actual "what happened" answer than
+    // restating the label/status. Deliberately NOT businessImpact here -
+    // that field is "why it matters" and is already rendered as its own,
+    // separate overview line just below; using it for both would duplicate
+    // the same sentence twice in the same header.
+    summary: preAuthored ? preAuthored.overview : (node.evidence_summary ?? buildFallbackOverview(node)),
     businessImpact: node.business_impact_summary ?? null,
     nextAction: node.next_action_summary ?? null,
     sourceIdentifier: node.sourceIdentifier ?? null,
@@ -1754,6 +1774,42 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
       visibleAtSlice: visibility.visibleRecommendationIds.includes(r.id),
     }));
 
+  // --- 4b. Governed NR04 recommendation-context entries (V1-CONTENT-1) --------
+  // The pre-NR04 curated recommendations.json/evidence.json mechanism above
+  // has no equivalent for the real NR04 canonical GOU (Golden Operational
+  // Universe) flagship chain - those 162 objects carry no `recommendation`-
+  // typed node anywhere (confirmed: nr04-canonical-universe.json has no
+  // object_type: 'recommendation' row). The real governed equivalent is a
+  // `recommendation-context` node (object_type 'other',
+  // detail.semantic_role === 'recommendation_context', e.g.
+  // "Recommendation Context — Protect Horizon CPP-1000 through recovery
+  // machining and premium freight") that cites other objects via a real
+  // `uses_evidence` edge. When such a node cites objectId as evidence,
+  // objectId is "explicitly targeted by a recommendation... connected
+  // through a governed recommendation relationship" (this sprint's own
+  // Recommendations rule) - surfaced here using the SAME entry shape
+  // (id/status/category/evidence_summary/created_at/visibleAtSlice) the
+  // pre-existing recommendations.json entries above already use, so
+  // passport.js's existing renderRecommendationsSection() renders both
+  // without any template change. Always visibleAtSlice: true - NR04
+  // canonical objects are explicitly excluded from the old narrative
+  // time-gating (see resolveVisibilityForSlice()'s own `narrativeObjects`
+  // filter above), so they are never subject to a "not yet visible at this
+  // time slice" state.
+  const governedRecommendationEntries = relatedEdges
+    .filter((e) => e.relationship_type === 'uses_evidence' && e.to_id === objectId)
+    .map((e) => graph.nodes.find((n) => n.id === e.from_id))
+    .filter((n) => n && n.detail && n.detail.semantic_role === 'recommendation_context')
+    .filter((n) => !recommendationEntries.some((r) => r.id === n.id))
+    .map((n) => ({
+      id: n.id,
+      status: n.status,
+      category: n.detail?.semantic_role ?? 'recommendation_context',
+      evidence_summary: n.evidence_summary,
+      created_at: n.occurred_at,
+      visibleAtSlice: true,
+    }));
+
   // --- 5. Evidence --------------------------------------------------------------
   let evidenceIds = preAuthored ? preAuthored.evidence_ids : [];
   if (!preAuthored) {
@@ -1776,6 +1832,34 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
       source_record_id: e.source_record_id,
       evidence_summary: e.evidence_summary,
       visibleAtSlice: visibility.visibleEvidenceIds.includes(e.id),
+    }));
+
+  // --- 5b. Governed NR04 supporting-evidence entries (V1-CONTENT-1) -----------
+  // Mirror of 4b above, from the opposite direction: when objectId itself
+  // ISSUES a real `uses_evidence` edge (e.g. NCR-NR-GOU-301 cites the
+  // measurement record that documents its own nonconformance, or a
+  // recommendation-context node cites the supplier advisory/NCR/MRB/
+  // shipment/purchase-order/work-order chain it protects a commitment with),
+  // the cited object is real, governed supporting evidence for objectId -
+  // "carries an explicit governed relationship" (this sprint's own Evidence
+  // rule). Tagged evidenceRelation: 'supporting' (the pre-existing
+  // evidence.json entries above never carry this field at all, since they
+  // are each tied 1:1 to a specific recommendation via source_record_id,
+  // not a graph citation) - see engine/business-language.js's
+  // evidenceRelationLabel() for the honest direct/supporting distinction
+  // this labels.
+  const governedEvidenceEntries = relatedEdges
+    .filter((e) => e.relationship_type === 'uses_evidence' && e.from_id === objectId)
+    .map((e) => graph.nodes.find((n) => n.id === e.to_id))
+    .filter((n) => n && !evidenceEntries.some((ev) => ev.id === n.id))
+    .map((n) => ({
+      id: n.id,
+      evidence_type: n.type,
+      source_table: n.sourceTable ?? null,
+      source_record_id: n.sourceRecordId ?? null,
+      evidence_summary: n.evidence_summary ?? n.label,
+      visibleAtSlice: true,
+      evidenceRelation: 'supporting',
     }));
 
   // --- 6. Operational History (timeline + effective dating) ----------------------
@@ -1811,6 +1895,11 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
   };
 
   // --- 7. Source Records --------------------------------------------------------
+  // Includes the V1-CONTENT-1 governedEvidenceEntries (5b above) so a
+  // flagship object's real NR04 uses_evidence citations also surface their
+  // own source lineage here, not just in the Evidence section - the same
+  // "every entry traceable to a real source record" guarantee this section
+  // already gives the pre-existing evidence.json-sourced entries.
   const sourceRecordEntries = [
     {
       sourceTable: node.sourceTable ?? null,
@@ -1818,6 +1907,12 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
       sourceIdentifier: node.sourceIdentifier ?? null,
     },
     ...evidenceEntries.map((e) => ({
+      sourceTable: e.source_table,
+      sourceRecordId: e.source_record_id,
+      sourceIdentifier: null,
+      viaEvidenceId: e.id,
+    })),
+    ...governedEvidenceEntries.map((e) => ({
       sourceTable: e.source_table,
       sourceRecordId: e.source_record_id,
       sourceIdentifier: null,
@@ -1838,8 +1933,8 @@ export function buildPassportViewModel(snapshot, objectId, sliceIndex) {
     overview,
     currentRisk,
     relationships: relationshipEntries,
-    recommendations: recommendationEntries,
-    evidence: evidenceEntries,
+    recommendations: [...recommendationEntries, ...governedRecommendationEntries],
+    evidence: [...evidenceEntries, ...governedEvidenceEntries],
     operationalHistory: {
       events: historyEntries,
       effectiveDating,
@@ -1916,9 +2011,19 @@ export function buildHoverPreviewViewModel(snapshot, objectId, sliceIndex) {
       : null;
 
   const relatedEdges = graph.edges.filter((e) => e.from_id === objectId || e.to_id === objectId);
+  // V1-CONTENT-1: a `uses_evidence` edge (either direction) is a real,
+  // governed evidence citation in its own right - NR04 canonical objects
+  // never carry an `evidence`-typed node (confirmed absent from
+  // nr04-canonical-universe.json's object_type vocabulary), so the original
+  // type==='evidence' check alone always undercounted evidence for every
+  // flagship NR04 object even though buildPassportViewModel's Evidence
+  // section (5b) already surfaces these same citations - this keeps the
+  // Hover Preview's count consistent with what Passport actually shows for
+  // the same object, per this sprint's cross-surface consistency
+  // requirement.
   const evidenceCount = relatedEdges.filter((e) => {
     const otherId = e.from_id === objectId ? e.to_id : e.from_id;
-    return graph.nodes.find((n) => n.id === otherId)?.type === 'evidence';
+    return e.relationship_type === 'uses_evidence' || graph.nodes.find((n) => n.id === otherId)?.type === 'evidence';
   }).length;
 
   const commitmentId = resolveCommitmentForObject(snapshot, objectId);
@@ -1947,6 +2052,15 @@ export function buildHoverPreviewViewModel(snapshot, objectId, sliceIndex) {
     owner_name: node.owner_name ?? null,
     owner_role: node.owner_role ?? null,
     business_impact_summary: node.business_impact_summary ?? null,
+    // V1-CONTENT-1: real evidence_summary passthrough (see the node-field
+    // comment in buildUniverseGraph's operational-objects loop) - this is
+    // what finally lets engine/operational-language.js's operationalSummary()
+    // (already imported by panels/hover-preview.js, already documented as
+    // "business_impact_summary > evidence_summary > next_action_summary >
+    // label") reach its own already-written 2nd-priority branch instead of
+    // silently skipping straight from business_impact_summary to
+    // next_action_summary for every object that doesn't have the former.
+    evidence_summary: node.evidence_summary ?? null,
     next_action_summary: node.next_action_summary ?? null,
     commitmentId,
     commitmentLabel: commitmentNode ? commitmentNode.label : null,
@@ -3209,6 +3323,8 @@ export const KNOWN_OUTPUT_FIELDS = Object.freeze({
   direction: { category: 'derived_supported', note: 'derived from comparing a relationship edge\'s from_id/to_id against the Passport subject id - not a stored field' },
   events: { category: 'derived_supported', note: 'field-map.md Passport: Operational History (timeline events), nested list of timeline-events.json rows' },
   viaEvidenceId: { category: 'supported', note: 'field-map.md Passport: Evidence, cross-reference id linking a Source Records entry back to its evidence row' },
+  // --- V1-CONTENT-1: governed NR04 uses_evidence recommendation/evidence entries ---
+  evidenceRelation: { category: 'derived_supported', note: 'field-map.md Passport: Evidence, structural label distinguishing pre-existing evidence.json-sourced entries (no field = "direct evidence") from real NR04 uses_evidence graph citations ("supporting" = "supporting evidence") - see engine/business-language.js evidenceRelationLabel(), never fabricated' },
 
   // --- buildJarvisViewModel ---
   currentContext: { category: 'derived_supported', note: 'field-map.md Jarvis: Current Context' },

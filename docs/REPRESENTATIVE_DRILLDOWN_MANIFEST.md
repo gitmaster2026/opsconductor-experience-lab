@@ -85,3 +85,27 @@ outside this allowlist, by design.
   own export contract already defines.
 - Not operational truth to be acted on - it is illustrative detail for a
   fixed historical scenario snapshot.
+
+## Related: the V1-CONTENT-1 flagship Passport-enrichment allowlist
+
+Sprint V1-CONTENT-1 (Flagship Passport & Business-Language Completion)
+audited this same real chain in full - not just the 6 Demo-derived Detail
+anchors above, but the two complete real investigation paths they sit on
+(engineering-change: commitment → ECO → drawing revisions → work order →
+NCR → MRB → inspection/measurement evidence; supply/manufacturing-recovery:
+commitment → supplier advisory → purchase order → rework demand → recovery
+work order → recovery recommendation → premium-freight shipment) - and
+fixed a real Passport/business-language DERIVATION gap for it (the
+`recommendations.json`/`evidence.json` mechanism these 6 anchors' own
+Recommendations/Evidence Passport sections still correctly fall back to had
+no equivalent for any real NR04 canonical object; the real governed
+equivalent - a `recommendation-context` node's `uses_evidence` citations,
+and every object's own real `evidence_summary` field - simply wasn't wired
+up). See `docs/field-map.md`'s "V1-CONTENT-1" section for the exact
+derivation additions and `test/flagship-passport-coverage.test.mjs`'s
+`FLAGSHIP_ALLOWLIST` (24 objects, a superset of this manifest's 6 anchors)
+for the full documented object list. This manifest's own scope (Demo-derived
+Detail sections) is unchanged - the two efforts are complementary, not
+overlapping: this file governs one small `detail`-column passthrough
+section; V1-CONTENT-1 governs the Recommendations/Evidence/Overview-summary
+sections every Passport already has.

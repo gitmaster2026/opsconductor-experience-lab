@@ -21,7 +21,7 @@ report" table for the full list - summarized here for completeness:
 |---|---|
 | `nr04-golden-operational-universe.snapshot.json` governed sections (shortageExceptions, shortageRecommendations, recommendationEvidence, shortageRecommendationEvents, decisionOutcomeObservations, demandRevenueAtRisk, executiveOperationalHealthSummary, executiveRevenueSummary, plannerWorkQueue) | **missing export** - no live `ops export snapshot` run exists in either repository yet |
 | `allocations.json` | **missing production capability** - production's own Mapping Manifest lists allocations/allocation_runs as "Gap - not implemented" |
-| Curated flagship objects with no NR04 real equivalent (`CESC-NR-2026-014`, `FAT-NR-2026-3002`, `CAPA-NR-2026-047`, `WAR-NR-2026-021`) | **intentional placeholder** - retained only because docs/PANEL_SPECIFICATIONS.md and existing tests treat them as the flagship path's terminal steps |
+| Curated flagship objects with no NR04 real equivalent (`CESC-NR-2026-014`, `FAT-NR-2026-3002`, `CAPA-NR-2026-047`, `WAR-NR-2026-021`) | **intentional placeholder** - retained only because docs/PANEL_SPECIFICATIONS.md and existing tests treat them as the flagship path's terminal steps. **Update (V1-CONTENT-1):** this classification is now stale for the identifier text, if not the object rows - a later NR04 production re-export (the same one V1-CI-1/PR #29 reconciled the graph-object count for) added real NR04-canonical objects that reuse these same source identifiers (`nr04:custesc:CESC-NR-2026-014`, `nr04:fat:FAT-NR-2026-3002`, `nr04:capa:CAPA-NR-2026-047`, `nr04:warranty:WAR-NR-2026-021`) as distinct graph nodes alongside the original curated UUID-keyed rows. V1-CONTENT-1 did not touch, merge, or deduplicate these - doing so would mean changing canonical object identifiers/operational graph relationships, explicitly out of this sprint's scope - it only flags the finding here for a future data/derive session to assess whether the two curated-vs-canonical rows for the same real-world object should be reconciled. |
 | Risk Board / Recommendations / Evidence / Dashboard shortage-qty, coverage_pct, revenue_at_risk figures | **demo-derived detail** - pre-NR04 planner-narrative numbers, not sourced from a live NR04 governed export |
 
 ## New this sprint: Commitment Health Radar (Task 1)
@@ -154,16 +154,30 @@ already-shipped work) was found and fixed during V1-UX-2's research pass.
     section. Three items surfaced by the founder's own post-V1-UX-5
     review remain open, carried forward here rather than silently
     dropped:
-    - **Passport enrichment**: several NR04 canonical objects show empty
+    - ~~**Passport enrichment**: several NR04 canonical objects show empty
       Recommendations/Evidence/Timeline/business-impact sections because
       the governed source data doesn't yet reach them, not because the
-      Passport renderer has a gap - still open.
-    - **Universe Search hover-card z-index**: the Hover Passport Preview
-      can visually sit over the Universe Search dropdown, blocking a
-      search interaction underneath it - still open.
-    - **Business-copy polish**: the "what happened"/"why it matters"/
-      "next step" explanatory text across surfaces could read more
-      plainly for a first-time non-technical viewer - still open.
+      Passport renderer has a gap~~ - **RESOLVED for the real flagship
+      allowlist (V1-CONTENT-1)**, see `docs/field-map.md`'s "V1-CONTENT-1"
+      section and `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own new sprint section.
+      The Recommendations/Evidence derivation gap (no `recommendation`/
+      `evidence`-typed node exists anywhere in the real NR04 canonical
+      graph; the real governed equivalent - a `recommendation-context`
+      node's `uses_evidence` citations, plus every object's own real
+      `evidence_summary` field - was never wired to the Passport) is fixed
+      for objects reachable through it; genuinely absent governed data now
+      renders an honest, specific empty state instead of a blank section.
+      Not claimed for all 162 NR04 objects, by design - see that sprint's
+      own "flagship allowlist" scoping rationale.
+    - ~~**Universe Search hover-card z-index**~~ - **RESOLVED (V1-FIX-1)**,
+      see `CURRENT_STATE.md`'s own session log.
+    - **Business-copy polish**: partially addressed for the flagship
+      allowlist by V1-CONTENT-1 (real `evidence_summary`/business-impact
+      text now surfaces consistently across Universe/Hover Preview/
+      Passport/Jarvis/Risk Board drilldown/Functional Radar for those
+      objects, plus a new deterministic "Suggested next step" for objects
+      with no real `next_action_summary`) - broader copy polish across
+      every other surface/object remains open.
 11. **The Guided Investigation Framework has no real walkthrough content
     yet** (V1-UX-5 Phase 8 built only the reusable state machine +
     DOM controller, by explicit brief instruction) - NRS-01 and NRS-02

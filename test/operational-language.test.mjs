@@ -280,6 +280,17 @@ test('objectNoun: other-typed directory object resolves via object_key prefix', 
   assert.equal(objectNoun('other', { nr04_object_key: 'asset:PLT-200:CERTIFIED-WELDING' }), 'Asset Group');
 });
 
+test('objectNoun: V1-CONTENT-1 flagship narrative object_key prefixes resolve to a real noun instead of falling through to a generic domain label', () => {
+  assert.equal(objectNoun('other', { nr04_object_key: 'recommendation-context:NR-GOU-CPP-RECOVERY', domain: 'planning' }), 'Recommendation');
+  assert.equal(objectNoun('other', { nr04_object_key: 'signal:EXEC-NR-GOU-001', domain: 'governance' }), 'Executive Signal');
+  assert.equal(objectNoun('other', { nr04_object_key: 'briefing:EXEC-BRIEF-NR-GOU-WK31', domain: 'governance' }), 'Executive Briefing');
+  assert.equal(objectNoun('other', { nr04_object_key: 'demand:RWK-NR-CPP-0719', domain: 'planning' }), 'Demand');
+  assert.equal(objectNoun('other', { nr04_object_key: 'inspection:IR-NR-CPP-0719', domain: 'quality' }), 'Inspection');
+  assert.equal(objectNoun('other', { nr04_object_key: 'lot:LOT-APX-C1088', domain: 'supplier' }), 'Material Lot');
+  assert.equal(objectNoun('other', { nr04_object_key: 'measurement:MEAS-NR-CPP-0719-B', domain: 'quality' }), 'Measurement Record');
+  assert.equal(objectNoun('other', { nr04_object_key: 'cert:CMTR-APX-C1088-H7726', domain: 'quality' }), 'Material Certification');
+});
+
 test('objectNoun: other-typed object with no key/domain falls back to generic Operational Object', () => {
   assert.equal(objectNoun('other'), 'Operational Object');
   assert.equal(objectNoun('other', {}), 'Operational Object');
