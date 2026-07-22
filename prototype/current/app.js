@@ -530,9 +530,17 @@ async function main() {
   // every lens (Universe/Risk Board/Commitment Health Radar) since hover
   // already funnels through the single state.hoveredObjectId field (see
   // this module's header comment on why no per-lens plumbing is needed).
+  // V1-FIX-1 (Search Hover-Preview Interception Fix): `getSearchActive`
+  // reads `universeSearchPanel.isOpen()`, wired up via a plain closure over
+  // the `const` declared further below - safe because this callback is
+  // only ever INVOKED later (inside render(), on a subsequent event), by
+  // which point `universeSearchPanel` is already assigned; see that
+  // panel's own header comment for why suppression - not a z-index bump -
+  // is the actual fix.
   const hoverPreviewPanel = mountHoverPreview(els.hoverPreview, {
     getBundle: () => timeline.getDerivedBundle(),
     onProbe: (id) => probeObject(id),
+    getSearchActive: () => universeSearchPanel.isOpen(),
   });
 
   // V5 Phase 3.5 (docs/V5_HANDOVER.md §9.1-§9.3): the Scope Bar + Scope
@@ -569,6 +577,13 @@ async function main() {
   const universeSearchPanel = mountUniverseSearchPanel(els.universeSearch, {
     getBundle: () => timeline.getDerivedBundle(),
     onSelect: (id) => probeObject(id),
+    // V1-FIX-1: force the Hover Preview to re-evaluate its own
+    // `getSearchActive()` gate the instant the dropdown opens/closes -
+    // typing a query is local module state, never routed through
+    // store.setHovered()/store.setScope()/etc., so nothing would otherwise
+    // trigger renderAll()'s hoverPreviewPanel.render() call in time (see
+    // panels/hover-preview.js's own root-cause comment).
+    onOpenChange: () => hoverPreviewPanel.render(),
   });
 
   // V1-UX-2B (Progressive Risk Board + Functional Radar): "what is

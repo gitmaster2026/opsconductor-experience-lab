@@ -59,13 +59,18 @@ function formatDate(dateStr) {
  *   takes the user into the Depth Lens / deeper investigation context (this
  *   app wires it to select the object AND switch to the Universe lens so
  *   its relationship focus mode opens immediately - see app.js).
+ * @param {() => boolean} [callbacks.getSearchActive] - V1-FIX-1 (Search
+ *   Hover-Preview Interception Fix): when this returns true, the popover
+ *   suppresses itself entirely for that render - see the root-cause note
+ *   above render() below for why suppression (not a z-index reshuffle) is
+ *   the fix.
  * @returns {{ render: () => void, destroy: () => void }}
  */
 export function mountHoverPreview(el, callbacks) {
   if (!el || typeof el.appendChild !== 'function') {
     throw new Error('mountHoverPreview: el must be a DOM element');
   }
-  const { getBundle, onProbe } = callbacks ?? {};
+  const { getBundle, onProbe, getSearchActive } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountHoverPreview: callbacks.getBundle is required');
   }
@@ -161,7 +166,52 @@ export function mountHoverPreview(el, callbacks) {
     });
   }
 
+  // V1-FIX-1 (Search Hover-Preview Interception Fix): root cause. This
+  // popover is `position: fixed` with an explicit `z-index: 30`, mounted as
+  // a descendant of #mainLayout - none of its ancestors up to <body>
+  // establish their own stacking context, so it participates DIRECTLY in
+  // the document ROOT stacking context at level 30. panels/universe-
+  // search.js's results dropdown (`.universe-search-results`, z-index: 20)
+  // lives inside `header.toolbar`, which - despite carrying its own
+  // authored `z-index: 10` - is `position: static`, so that z-index is
+  // never applied to ITS OWN position in the root context (z-index only
+  // takes effect on positioned boxes); `backdrop-filter` still forces the
+  // toolbar to establish a stacking context for ITS OWN descendants, which
+  // traps the dropdown's z-index: 20 as a purely LOCAL value that can never
+  // out-rank a POSITIVE root-level z-index anywhere else on the page.
+  // Net effect, confirmed via real Chromium `elementsFromPoint()` (not
+  // assumed): the results dropdown's z-index: 20 can never win against the
+  // popover's root-level 30, no matter how high a number is authored
+  // locally inside the toolbar - a one-line z-index bump on
+  // `.universe-search-results` alone cannot fix this. Reordering the
+  // popover to also render inside/below the toolbar's own stacking context
+  // would fix the stacking math but changes this module's DOM mount point
+  // and every other surface's relationship to it (Passport, Visual Layers,
+  // Risk Board, Functional Radar) - a broader change than a "Search is
+  // open" interaction bug warrants.
+  //
+  // Fix: suppress the popover outright - skip rendering entirely - for any
+  // render() call made while Universe Search is open (`getSearchActive()`),
+  // exactly one of this module's own documented options ("Hover Preview
+  // may... temporarily suppress itself... while Search is active"). Search
+  // results remain the only interactive surface at their own screen
+  // position with nothing else ever painted there; hover state itself
+  // (`state.hoveredObjectId`) is left completely untouched, so ordinary
+  // Hover Preview behavior resumes on the very next render() once Search
+  // closes - see panels/universe-search.js's `onOpenChange` callback, which
+  // forces that next render() to happen immediately rather than waiting on
+  // an unrelated store change.
   function render() {
+    if (typeof getSearchActive === 'function' && getSearchActive()) {
+      following = false;
+      if (hideTimer !== null) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      hideNow();
+      return;
+    }
+
     const bundle = getBundle();
     const preview = bundle?.hoverPreview ?? null;
 

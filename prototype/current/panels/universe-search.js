@@ -51,13 +51,23 @@ function escapeHtml(value) {
  *   chosen result's id. app.js wires this to probeObject() so a search
  *   result behaves exactly like every other investigative trigger in the
  *   app (see module header).
- * @returns {{ render: () => void, destroy: () => void }}
+ * @param {() => void} [callbacks.onOpenChange] - V1-FIX-1 (Search
+ *   Hover-Preview Interception Fix): called whenever the results dropdown
+ *   transitions open<->closed. This module's query state is local (never
+ *   routed through engine/state.js), so typing a query does NOT run through
+ *   app.js's store-subscribed `renderAll()` - nothing else in the app would
+ *   otherwise learn "Search just opened" in time. app.js wires this to
+ *   force an immediate `hoverPreviewPanel.render()` so the Hover Preview
+ *   (panels/hover-preview.js's own `getSearchActive` check) suppresses
+ *   itself the instant the dropdown opens, rather than lagging behind until
+ *   some unrelated store change happens to trigger the next render.
+ * @returns {{ render: () => void, destroy: () => void, isOpen: () => boolean }}
  */
 export function mountUniverseSearchPanel(containerEl, callbacks) {
   if (!containerEl || typeof containerEl.appendChild !== 'function') {
     throw new Error('mountUniverseSearchPanel: containerEl must be a DOM element');
   }
-  const { getBundle, onSelect } = callbacks ?? {};
+  const { getBundle, onSelect, onOpenChange } = callbacks ?? {};
   if (typeof getBundle !== 'function') {
     throw new Error('mountUniverseSearchPanel: callbacks.getBundle is required');
   }
@@ -68,6 +78,10 @@ export function mountUniverseSearchPanel(containerEl, callbacks) {
   let activeIndex = -1;
   /** @type {Array<{ id: string, label: string, type: string|null, matchTier: string }>} */
   let currentResults = [];
+  // V1-FIX-1: tracks the dropdown's own open/closed state so isOpen() and
+  // the onOpenChange transition notice below both reflect the SAME value
+  // render() just computed - never re-derived separately from `query`.
+  let isOpenState = false;
 
   function clearQuery() {
     query = '';
@@ -106,6 +120,10 @@ export function mountUniverseSearchPanel(containerEl, callbacks) {
     // show). Keep the dropdown open to show that message whenever there's
     // an active query, whether or not it matched.
     const isOpen = trimmed.length > 0;
+    if (isOpen !== isOpenState) {
+      isOpenState = isOpen;
+      if (typeof onOpenChange === 'function') onOpenChange(isOpenState);
+    }
 
     containerEl.innerHTML = `
       <div class="universe-search-field">
@@ -205,5 +223,5 @@ export function mountUniverseSearchPanel(containerEl, callbacks) {
 
   render();
 
-  return { render, destroy };
+  return { render, destroy, isOpen: () => isOpenState };
 }
