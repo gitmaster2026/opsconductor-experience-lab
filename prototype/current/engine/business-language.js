@@ -164,6 +164,20 @@ export function universeNodeHeadline(node, objectNoun) {
     primary = revenueHeadline;
   } else if (hasText(node?.business_impact_summary)) {
     primary = node.business_impact_summary;
+  } else if (hasText(node?.evidence_summary)) {
+    // V1-CONTENT-1: the flagship NR04 GOU objects (ECOs, NCRs, MRBs, work
+    // orders, supplier advisories...) almost never carry a populated
+    // business_impact_summary of their own (that field is real but only
+    // populated on the commitment record itself - confirmed against
+    // nr04-canonical-universe.json) but DO always carry a real, governed
+    // evidence_summary sentence describing what actually happened ("NCR
+    // records dimensional nonconformance on one received CPP-1000 casting
+    // set..."). Falling back to it here - one priority slot below the
+    // (rarer) business_impact_summary - is what makes Universe/Risk Board
+    // drilldown/Functional Radar member detail show a real "what happened"
+    // headline for these objects instead of falling all the way through to
+    // the bare label.
+    primary = node.evidence_summary;
   } else if (hasText(node?.next_action_summary)) {
     primary = node.next_action_summary;
   } else if (hasText(node?.customer)) {
@@ -324,4 +338,114 @@ export const DOCUMENT_SYSTEM_PURPOSE = Object.freeze({
 export function documentPurposeLabel(doc) {
   const system = hasText(doc?.system) ? doc.system : 'Network Folder';
   return DOCUMENT_SYSTEM_PURPOSE[system] ?? 'Supporting Record';
+}
+
+// ---------------------------------------------------------------------------
+// V1-CONTENT-1: deterministic "what to inspect next" derivation
+// ---------------------------------------------------------------------------
+//
+// Phase 4 of the flagship Passport/business-language sprint: every flagship
+// object should expose ONE specific next investigative action. A real,
+// governed `next_action_summary` (when present - today, only the NR04
+// canonical commitment record itself has one) always wins; this function is
+// the fallback for objects that don't have one, deriving a deterministic
+// suggestion from an ACTUAL governed relationship already on the object's
+// Passport (never invented, never generic "review this object" filler).
+//
+// The map below is keyed by the real `relationship_type` values this Lab's
+// NR04 canonical graph actually carries (nr04-canonical-universe.json's
+// `links`), split by direction (a relationship reads differently depending
+// on whether the selected object is the FROM or TO side) - confirmed against
+// the live flagship chain (Horizon LNG CPP-1000: commitment -> ECO ->
+// drawing revisions -> work order -> NCR -> MRB -> supplier advisory ->
+// purchase order -> rework demand -> recovery work order -> shipment).
+// Relationship types this Lab's graph carries but that aren't in this map
+// simply produce no suggestion (honest absence, not a generic filler) -
+// deliberately scoped to the flagship allowlist's own real relationship
+// vocabulary rather than attempting exhaustive coverage of every type.
+
+const NEXT_ACTION_BY_RELATIONSHIP = Object.freeze({
+  outgoing: {
+    documents_prior_revision: (label) => `Inspect the superseded drawing revision — ${label}`,
+    requires_effectivity_review_of: (label) => `Review the affected work order — ${label}`,
+    uses_engineering_disposition: (label) => `Review the engineering change (ECO) — ${label}`,
+    dispositions: (label) => `Review the disposed nonconformance (NCR) — ${label}`,
+    affects_lot: (label) => `Review the affected material lot — ${label}`,
+    supplier_quality_issue_for: (label) => `Review the supplier tied to this issue — ${label}`,
+    fulfills_rework_demand: (label) => `Review the rework demand this fulfills — ${label}`,
+    supports_outside_operation: (label) => `Review the outside-processing purchase order — ${label}`,
+    protects_delivery: (label) => `Review the customer commitment this protects — ${label}`,
+    supports_commitment: (label) => `Review the customer commitment this supports — ${label}`,
+    issued_by: (label) => `Review the supplier that issued this — ${label}`,
+    affected_by: (label) => `Review the supplier advisory affecting this — ${label}`,
+    causes: (label) => `Review the promise revision this caused — ${label}`,
+    supersedes: (label) => `Compare against the superseded drawing revision — ${label}`,
+    inspects: (label) => `Review the inspected material lot — ${label}`,
+    created_by_engineering_disposition: (label) => `Review the engineering change behind this demand — ${label}`,
+  },
+  incoming: {
+    dispositions: (label) => `Review the MRB disposition — ${label}`,
+    documents_prior_revision: (label) => `Review the engineering change that documents this — ${label}`,
+    supersedes: (label) => `Review the current drawing revision that supersedes this — ${label}`,
+    affects_lot: (label) => `Review the nonconformance affecting this lot — ${label}`,
+    supports_commitment: (label) => `Review the work order supporting this commitment — ${label}`,
+    protects_delivery: (label) => `Review the shipment protecting this delivery — ${label}`,
+    uses_engineering_disposition: (label) => `Review the MRB that used this engineering change — ${label}`,
+    requires_effectivity_review_of: (label) => `Review the engineering change requiring this review — ${label}`,
+    causes: (label) => `Review the supplier advisory that caused this — ${label}`,
+    fulfills_rework_demand: (label) => `Review the recovery work order fulfilling this demand — ${label}`,
+  },
+});
+
+/**
+ * Deterministically derive ONE "what to inspect next" suggestion from an
+ * object's already-resolved Passport relationships, for use only when the
+ * object has no real, governed `next_action_summary` of its own. Picks the
+ * first relationship (in the Passport's existing stable order) whose
+ * (direction, relationshipType) pair is in NEXT_ACTION_BY_RELATIONSHIP;
+ * returns null when nothing matches (an honest "no derivable next step"
+ * rather than a generic "review this object" filler).
+ *
+ * @param {Array<{ direction: 'outgoing'|'incoming', relationshipType: string, relatedObjectId: string, relatedObjectLabel: string|null }>} relationships
+ *   - a Passport's already-computed relationships array (any stable order;
+ *   this function does not re-sort - pass it already-ordered if a specific
+ *   priority is desired).
+ * @returns {{ text: string, targetObjectId: string, targetLabel: string }|null}
+ */
+export function deriveNextInvestigativeAction(relationships) {
+  const list = Array.isArray(relationships) ? relationships : [];
+  for (const rel of list) {
+    const byDirection = NEXT_ACTION_BY_RELATIONSHIP[rel?.direction];
+    const template = byDirection ? byDirection[rel?.relationshipType] : null;
+    if (typeof template === 'function' && hasText(rel?.relatedObjectId)) {
+      const label = hasText(rel?.relatedObjectLabel) ? rel.relatedObjectLabel : rel.relatedObjectId;
+      return {
+        text: template(label),
+        targetObjectId: rel.relatedObjectId,
+        targetLabel: label,
+      };
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Evidence relation labeling — direct vs supporting
+// ---------------------------------------------------------------------------
+//
+// engine/derive.js's buildPassportViewModel() tags every governed-graph-
+// sourced evidence entry (a real `uses_evidence` edge, NR04-canonical only)
+// with `evidenceRelation: 'supporting'`; pre-existing evidence.json-sourced
+// entries (the older curated flagship's recommendation-linked evidence) never
+// carry this field at all. This is a structural distinction (which
+// derivation path produced the entry), not a guess - see that function's own
+// comment for why "supporting" (not "direct") is the honest, provable label
+// for a `uses_evidence` graph citation.
+
+/**
+ * @param {{ evidenceRelation?: string|null }} evidenceEntry
+ * @returns {string} 'Direct evidence' | 'Supporting evidence'
+ */
+export function evidenceRelationLabel(evidenceEntry) {
+  return evidenceEntry?.evidenceRelation === 'supporting' ? 'Supporting evidence' : 'Direct evidence';
 }

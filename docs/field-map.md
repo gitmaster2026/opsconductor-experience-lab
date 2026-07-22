@@ -416,6 +416,60 @@ presentation-state coordinator over `engine/state.js`'s existing
 never imported by `derive.js`, so it is likewise unaffected by
 `scripts/verify-field-map.mjs`.
 
+## V1-CONTENT-1 — Flagship Passport & Business-Language Completion
+
+Passport enrichment and business-language completion for the real flagship
+NR04 canonical graph (Horizon LNG Partners / CPP-1000 Golden Operational
+Universe narrative) - a derivation/presentation sprint only. No ontology,
+schema, source snapshot data, canonical object identifiers, operational
+graph relationships, Risk calculations, or Timeline engine semantics were
+touched. Root cause (confirmed by direct code reading, not assumed): the
+Passport's Recommendations/Evidence/Overview-summary derivation was written
+entirely around the pre-NR04 curated demo's `recommendations.json`/
+`evidence.json` mechanism (5 shortage recommendations, keyed by
+`demand_signal_id`), which has no equivalent for the 162-object NR04
+canonical graph - those objects carry no `recommendation`- or `evidence`-
+typed node anywhere (`nr04-canonical-universe.json`'s `object_type`
+vocabulary has neither). The real governed equivalent already existed in the
+data (a `recommendation-context` node - `detail.semantic_role ===
+'recommendation_context'` - citing other objects via a real `uses_evidence`
+edge, and every object's own real `evidence_summary` field) but was never
+wired to the Passport, Universe, Risk Board drilldown, Functional Radar
+member detail, or Hover Preview - a derivation gap, not a data gap.
+
+| UI / Presentation Field | Source / Derivation | Status |
+|---|---|---|
+| `node.evidence_summary` (on every Universe graph node, via `buildUniverseGraph()`'s operational-objects loop) | Direct passthrough of the real, already-existing `evidence_summary` column on every `operational-objects.json`/`nr04-canonical-universe.json` row - present in the source data since before this sprint, simply never carried onto the node until now | supported |
+| `node.provenance` (on every Universe graph node) | Direct passthrough of the real, already-existing `provenance` column (`nr04_canonical_snapshot` / `demo_derived_detail`) | supported |
+| Passport Overview `summary`, when no pre-authored `operational-passports.json` record exists | Prefers the object's own real `evidence_summary` ("what happened") over the prior generic label/status template (`buildFallbackOverview()`, still the final fallback) - never fabricated, always a real governed sentence when present | derived_supported |
+| Passport `recommendations` - governed NR04 entries | A `recommendation-context` node (`detail.semantic_role === 'recommendation_context'`) that cites the selected object via a real `uses_evidence` edge is surfaced as a recommendation targeting that object, using the SAME entry shape (`id`/`status`/`category`/`evidence_summary`/`created_at`/`visibleAtSlice`) the pre-existing `recommendations.json`-sourced entries already use - additive, never replaces the existing derivation | derived_supported |
+| Passport `evidence` - governed NR04 entries | Any real, outgoing `uses_evidence` edge from the selected object is surfaced as supporting evidence, using the target node's own real `evidence_summary`/`sourceTable`/`sourceRecordId` - additive to the existing `evidence.json`-sourced entries | derived_supported |
+| `evidenceRelation` (Passport evidence entries) | Structural label (`'supporting'` on the new governed-graph-citation entries above; absent/`undefined` on the pre-existing `evidence.json`-sourced entries, rendered as "Direct evidence") distinguishing the two derivation paths - never a guess, purely which code path produced the entry. See `engine/business-language.js`'s `evidenceRelationLabel()` | derived_supported |
+| Hover Passport Preview `evidence_summary` | Same real passthrough as the node field above, exposed on `buildHoverPreviewViewModel()`'s return value so `engine/operational-language.js`'s `operationalSummary()` (already documented/tested with this exact priority chain, previously imported but never actually called by `panels/hover-preview.js`) can finally reach its own already-written 2nd-priority branch | supported |
+| Hover Passport Preview `evidenceCount` | Now also counts `uses_evidence`-typed edges (either direction), not only edges whose other endpoint is an `evidence`-typed node (which no NR04 canonical object ever is) - keeps the Hover Preview's count consistent with what Passport's Evidence section (above) actually shows for the same object | derived_supported |
+| `universeNodeHeadline()`'s primary-line priority chain (Universe canvas labels, Risk Board recursive-drilldown pseudo-cells, Functional Radar member detail - all three already call this ONE shared function directly on the raw graph node) | Extended to fall back to `node.evidence_summary` between `business_impact_summary` and `next_action_summary` - the same real field/priority position `operationalSummary()` already used, so Universe/Risk Board/Functional Radar and Hover Preview/Passport now agree on which field leads when `business_impact_summary` is absent (the common case for flagship NR04 objects other than the commitment itself) | derived_supported |
+| `objectNoun()`'s `PREFIX_NOUN` map (`engine/operational-language.js`) | 8 new entries for real, observed `nr04_object_key` prefixes the flagship narrative uses that previously fell through to a generic domain-based label: `recommendation-context` → Recommendation, `signal` → Executive Signal, `briefing` → Executive Briefing, `demand` → Demand, `inspection` → Inspection, `lot` → Material Lot, `measurement` → Measurement Record, `cert` → Material Certification | derived_supported |
+| `deriveNextInvestigativeAction()` (`engine/business-language.js`, new) | A deterministic relationship-type → action-phrase lookup (direction-aware: `outgoing`/`incoming`, keyed by the real `relationship_type` values the flagship NR04 chain actually carries) that picks the first Passport relationship with a known template and returns `{ text, targetObjectId, targetLabel }`. Used ONLY as a fallback when the object has no real, governed `next_action_summary` of its own - rendered as a visually distinct "Suggested next step" (never "Next action") so its derived provenance stays visible. Relationship types with no template produce no suggestion (honest absence, not generic filler) | derived_supported |
+| Passport Overview `suggestedNext` / empty-section navigation hint (`panels/passport.js`'s `renderEmptySectionState()`) | Reuses the SAME `deriveNextInvestigativeAction()` call, so the wording is byte-identical wherever it appears (Overview and any empty Recommendations/Evidence/Source-Records section) - a shared pure helper, not two independently-worded copies | derived_supported |
+
+Honest empty-state text (Phase 3, `panels/passport.js`): every Passport
+section with no governed content now renders a specific message naming what
+is actually absent ("No governed recommendation is linked to this object.",
+"No direct evidence record is available for this object.", "No additional
+operational-history events are present in this snapshot beyond the
+occurred/due dates shown above.") instead of the prior, already-reasonably-
+specific but less-precise wording - never generic filler ("No data",
+"Nothing here", "Coming soon"). Where a deterministic navigation target
+exists, the empty state also offers one concrete internal link to it.
+
+Flagship allowlist (`test/flagship-passport-coverage.test.mjs`'s
+`FLAGSHIP_ALLOWLIST`, 24 objects): the real Horizon LNG Partners / CPP-1000
+Golden Operational Universe (GOU) narrative's two chains - see that test
+file's own header for the full object list and
+`docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md` for the 6-object subset this
+allowlist extends (unchanged, still the canonical Demo-derived Detail
+anchor set).
+
 ## UX hypotheses
 
 Add any desired but unsupported field here instead of placing it directly in prototypes.

@@ -524,6 +524,18 @@ export function objectNoun(objectType, node) {
       program: 'Program',
       asset: 'Asset Group',
       company: 'Organization',
+      // V1-CONTENT-1: flagship NR04 GOU narrative objects whose object_type
+      // is the `other` catch-all - real, observed nr04_object_key prefixes
+      // (see nr04-canonical-universe.json) that previously fell through to
+      // a generic domain-based label.
+      'recommendation-context': 'Recommendation',
+      signal: 'Executive Signal',
+      briefing: 'Executive Briefing',
+      demand: 'Demand',
+      inspection: 'Inspection',
+      lot: 'Material Lot',
+      measurement: 'Measurement Record',
+      cert: 'Material Certification',
     };
     if (PREFIX_NOUN[prefix]) return PREFIX_NOUN[prefix];
     if (domain && DOMAIN_LABEL[domain]) return DOMAIN_LABEL[domain];

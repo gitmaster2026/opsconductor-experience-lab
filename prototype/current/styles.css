@@ -1460,6 +1460,49 @@ body {
   font-style: italic;
 }
 
+/* V1-CONTENT-1: honest empty-state navigation. renderEmptySectionState()
+   (panels/passport.js) wraps its message text in .dash-section-empty
+   unchanged (same muted/italic treatment as every other empty state
+   already had) and, only when a real destination exists, adds one inline
+   button styled like a link rather than a full button - a low-emphasis
+   affordance appropriate for "here's somewhere useful to look next," not a
+   primary action competing with the section content above it. */
+.passport-inline-link {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 4px;
+  display: block;
+  font: inherit;
+  font-size: 11.5px;
+  font-style: normal;
+  color: var(--cyan-accent);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  opacity: 1;
+}
+.passport-inline-link:hover,
+.passport-inline-link:focus-visible {
+  color: var(--text-primary);
+}
+
+/* Evidence entries sourced from a real NR04 uses_evidence graph citation
+   (engine/derive.js buildPassportViewModel 5b) carry an honest "Supporting
+   evidence" tag distinct from the pre-existing evidence.json entries'
+   implicit "Direct evidence" - see engine/business-language.js
+   evidenceRelationLabel(). Reuses the citation-chip's muted secondary
+   register rather than a new visual language. */
+.passport-evidence-relation {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
 /* ---------------------------------------------------------------------------
    Dashboard panel
    ---------------------------------------------------------------------------

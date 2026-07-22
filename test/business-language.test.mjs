@@ -12,6 +12,8 @@ import {
   documentPurposeLabel,
   SOURCE_TABLE_SYSTEM,
   DOCUMENT_SYSTEM_PURPOSE,
+  deriveNextInvestigativeAction,
+  evidenceRelationLabel,
 } from '../prototype/current/engine/business-language.js';
 
 // ---------------------------------------------------------------------------
@@ -120,7 +122,27 @@ test('universeNodeHeadline falls back to business_impact_summary when there is n
   assert.equal(primary, 'Two of six required components remain unavailable');
 });
 
-test('universeNodeHeadline falls back to next_action_summary when no revenue or impact summary exists', () => {
+test('universeNodeHeadline falls back to evidence_summary when there is no revenue figure or business_impact_summary', () => {
+  // V1-CONTENT-1: the real, common shape for the flagship NR04 GOU objects
+  // (ECOs, NCRs, MRBs...) - business_impact_summary is null on nearly all of
+  // them (only the commitment record itself has one), but evidence_summary
+  // is always real and populated.
+  const { primary } = universeNodeHeadline(
+    { type: 'ncr', evidence_summary: 'NCR records dimensional nonconformance on one received CPP-1000 casting set.', label: 'NCR-NR-GOU-301' },
+    noun
+  );
+  assert.equal(primary, 'NCR records dimensional nonconformance on one received CPP-1000 casting set.');
+});
+
+test('universeNodeHeadline prefers business_impact_summary over evidence_summary when both are present', () => {
+  const { primary } = universeNodeHeadline(
+    { type: 'contract_milestone', business_impact_summary: 'Missed delivery risks outage-window loss.', evidence_summary: 'Customer commitment record ties Horizon LNG September delivery.', label: 'CUST-HORIZON-CPP-2026-09' },
+    noun
+  );
+  assert.equal(primary, 'Missed delivery risks outage-window loss.');
+});
+
+test('universeNodeHeadline falls back to next_action_summary when no revenue, impact summary, or evidence_summary exists', () => {
   const { primary } = universeNodeHeadline({ type: 'other', next_action_summary: 'Confirm alternate supplier by Friday', label: 'X' }, noun);
   assert.equal(primary, 'Confirm alternate supplier by Friday');
 });
@@ -272,4 +294,72 @@ test('DOCUMENT_SYSTEM_PURPOSE has no entry that disagrees with documentPurposeLa
   for (const [system, purpose] of Object.entries(DOCUMENT_SYSTEM_PURPOSE)) {
     assert.equal(documentPurposeLabel({ system }), purpose);
   }
+});
+
+// ---------------------------------------------------------------------------
+// deriveNextInvestigativeAction
+// ---------------------------------------------------------------------------
+
+test('deriveNextInvestigativeAction picks the first relationship whose (direction, type) has a known template', () => {
+  const relationships = [
+    { direction: 'outgoing', relationshipType: 'no_template_for_this', relatedObjectId: 'x', relatedObjectLabel: 'X' },
+    { direction: 'outgoing', relationshipType: 'documents_prior_revision', relatedObjectId: 'nr04:drawing:REVB', relatedObjectLabel: 'DWG-REVB' },
+    { direction: 'incoming', relationshipType: 'dispositions', relatedObjectId: 'nr04:mrb:MRB-1', relatedObjectLabel: 'MRB-1' },
+  ];
+  const result = deriveNextInvestigativeAction(relationships);
+  assert.deepEqual(result, {
+    text: 'Inspect the superseded drawing revision — DWG-REVB',
+    targetObjectId: 'nr04:drawing:REVB',
+    targetLabel: 'DWG-REVB',
+  });
+});
+
+test('deriveNextInvestigativeAction is direction-aware - the same relationship type produces different text depending on direction', () => {
+  const outgoing = deriveNextInvestigativeAction([
+    { direction: 'outgoing', relationshipType: 'dispositions', relatedObjectId: 'nr04:ncr:NCR-1', relatedObjectLabel: 'NCR-1' },
+  ]);
+  const incoming = deriveNextInvestigativeAction([
+    { direction: 'incoming', relationshipType: 'dispositions', relatedObjectId: 'nr04:mrb:MRB-1', relatedObjectLabel: 'MRB-1' },
+  ]);
+  assert.notEqual(outgoing.text, incoming.text);
+  assert.match(outgoing.text, /nonconformance \(NCR\)/);
+  assert.match(incoming.text, /MRB disposition/);
+});
+
+test('deriveNextInvestigativeAction falls back to the relatedObjectId when no label is present', () => {
+  const result = deriveNextInvestigativeAction([
+    { direction: 'outgoing', relationshipType: 'affects_lot', relatedObjectId: 'nr04:lot:LOT-1', relatedObjectLabel: null },
+  ]);
+  assert.equal(result.targetLabel, 'nr04:lot:LOT-1');
+  assert.ok(result.text.includes('nr04:lot:LOT-1'));
+});
+
+test('deriveNextInvestigativeAction returns null for an empty list, non-array input, or when nothing matches a known template', () => {
+  assert.equal(deriveNextInvestigativeAction([]), null);
+  assert.equal(deriveNextInvestigativeAction(null), null);
+  assert.equal(deriveNextInvestigativeAction(undefined), null);
+  assert.equal(
+    deriveNextInvestigativeAction([{ direction: 'outgoing', relationshipType: 'some_unmapped_type', relatedObjectId: 'x', relatedObjectLabel: 'X' }]),
+    null
+  );
+});
+
+test('deriveNextInvestigativeAction never returns a suggestion whose target is missing (defensive against a malformed relationship entry)', () => {
+  const result = deriveNextInvestigativeAction([
+    { direction: 'outgoing', relationshipType: 'documents_prior_revision', relatedObjectId: null, relatedObjectLabel: 'DWG-REVB' },
+  ]);
+  assert.equal(result, null);
+});
+
+// ---------------------------------------------------------------------------
+// evidenceRelationLabel
+// ---------------------------------------------------------------------------
+
+test('evidenceRelationLabel labels a supporting (graph-citation) entry honestly', () => {
+  assert.equal(evidenceRelationLabel({ evidenceRelation: 'supporting' }), 'Supporting evidence');
+});
+
+test('evidenceRelationLabel defaults pre-existing (no evidenceRelation field) entries to Direct evidence', () => {
+  assert.equal(evidenceRelationLabel({ id: 'evidence-shortage-cpp' }), 'Direct evidence');
+  assert.equal(evidenceRelationLabel({}), 'Direct evidence');
 });

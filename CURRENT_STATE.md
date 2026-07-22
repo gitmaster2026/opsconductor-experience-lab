@@ -203,25 +203,30 @@ plan and status.
 
 ## Next implementation target
 
-**Current: V1-FIX-1 (Search Hover-Preview Interception Fix) is implemented
-and tested** (see the session log immediately below for full detail).
-V1-UX-2A through V1-UX-2H, V1-UX-3, V1-UX-4, V1-UX-5, and V1-FIX-1 are all
-implemented and tested (see `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s per-sprint
-sections and the session logs below); the items each sprint has explicitly
-carried forward as still-open (Progressive Risk Board owner/next-action
-enrichment; the `resolveVisibilityForSlice()` t2/t3 gating gap) remain
-open, by deliberate scope decision each time, not by oversight.
+**Current: V1-CONTENT-1 (Flagship Passport & Business-Language Completion)
+is implemented and tested** (see the session log immediately below for full
+detail). V1-UX-2A through V1-UX-2H, V1-UX-3, V1-UX-4, V1-UX-5, V1-FIX-1, and
+V1-CONTENT-1 are all implemented and tested (see `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s
+per-sprint sections and the session logs below); the items each sprint has
+explicitly carried forward as still-open (Progressive Risk Board owner/
+next-action enrichment; the `resolveVisibilityForSlice()` t2/t3 gating gap)
+remain open, by deliberate scope decision each time, not by oversight.
 
 Per the founder's own post-V1-UX-5 assessment, the remaining work toward a
 V1.0 launch is:
 
-- **V1.0 launch blockers**: Passport enrichment (populate Recommendations/
+- ~~**V1.0 launch blockers**: Passport enrichment (populate Recommendations/
   Evidence/Timeline/business-impact summaries for the NR04 canonical
   objects instead of showing empty sections where governed data doesn't
   yet reach them); business-copy polish ("what happened"/"why it
-  matters"/"next step" explanatory text). ~~A Universe Search hover-card
-  z-index issue (hover cards should never block Universe Search
-  interaction)~~ - **fixed by V1-FIX-1**, see session log below.
+  matters"/"next step" explanatory text).~~ - **resolved for the real
+  flagship allowlist by V1-CONTENT-1**, see that sprint's session log below
+  and `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own new section. Business-copy
+  polish beyond the 24-object flagship allowlist (the other ~138 NR04
+  canonical objects) remains open, by that sprint's own explicit scoping
+  decision. ~~A Universe Search hover-card z-index issue (hover cards
+  should never block Universe Search interaction)~~ - **fixed by V1-FIX-1**,
+  see session log below.
 - **V1.0 polish (strongly recommended)**: the guided NRS-01 and NRS-02
   walkthroughs, authored against the framework `engine/guided-investigation.js`/
   `panels/guided-investigation.js` now provide (V1-UX-5 Phase 8) but do not
@@ -508,3 +513,21 @@ Scope: narrow V1 launch-blocker fix only, interaction-layer. No architecture, on
 **Real browser verification (Playwright/Chromium, three viewports - 1440px, 800px, 400px):** at each width, confirmed Hover Preview works normally while Search is closed (canvas hover shows the popover); suppresses immediately (hidden, zero children) the instant Search opens; across 44 total real search-result clicks (two real queries, "Horizon" and "Apex", combined - `engine/search.js` caps results at 8/query so a single query cannot reach 10) `document.elementFromPoint()` never once resolved inside `.hover-preview`, and every click's resulting Passport selection matched the clicked result's own label (zero mismatches); Hover Preview resumed correctly once Search closed; zero unexpected console errors at any viewport. A direct before/after comparison at 1440px, hovering the exact same search-result row at the exact same screen coordinates: **before** (baseline `3faec41`) - `elementFromPoint()` at the overlap region resolves inside `.hover-preview`, with a screenshot showing the popover visually covering three dropdown rows; **after** (this fix) - the same point resolves to the `.universe-search-result` button, with a real click on it correctly selecting "Horizon LNG Partners." Evidence (screenshots + elementFromPoint JSON logs) captured this session; screenshots are not committed to the repository (no prior screenshot-evidence convention exists here - `docs/` is text-only) and are instead attached directly to the pull request / delivered to the requester.
 
 **Known limitation:** the Universe canvas itself collapses to 0 width at the ~400px viewport in this app's existing responsive layout - confirmed identical on the unmodified `3faec41` baseline via a direct comparison, so this is a pre-existing, out-of-scope layout characteristic, not a regression from this fix. The Search-suppression contract itself was still fully verified working correctly at that width (dropdown renders, suppression fires, clicks select correctly, zero console errors) - only the canvas-hover half of the manual QA checklist is not meaningfully exercisable there.
+
+## Session log — 2026-07-22 V1-CONTENT-1 Flagship Passport & Business-Language Completion
+
+Scope: derivation and presentation only. No ontology, schema, source snapshot data, canonical object identifiers, operational graph relationships, Supabase, export pipeline, Visual Layers architecture, preset persistence, Guided Investigation state machine, Risk calculations, Timeline engine semantics, or navigation architecture changed. Full detail (audit manifest, exact derivation additions, per-phase breakdown, browser verification) is in `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own new "Sprint V1-CONTENT-1" section - this entry is a summary pointer, per this file's own established convention.
+
+**Root cause found (verified against the live 162-object NR04 canonical graph, not assumed):** the Passport's Recommendations/Evidence derivation was written entirely around the pre-NR04 curated demo's `recommendations.json`/`evidence.json` mechanism, which has no equivalent anywhere in the real NR04 canonical graph - none of its 162 objects is `recommendation`- or `evidence`-typed. The real governed equivalent already existed in the source data (a `recommendation-context` node citing other objects via a real `uses_evidence` edge, plus every object's own real `evidence_summary` field) but was never wired to the Passport, Universe, Hover Preview, Risk Board drilldown, Functional Radar member detail, or Jarvis - a derivation gap, not genuinely-absent data. `engine/operational-language.js`'s `operationalSummary()` had even already been written and documented with the exact right priority chain to consume `node.evidence_summary`; `panels/hover-preview.js` had imported it but never once called it (a dead import).
+
+**What shipped:** `evidence_summary`/`provenance` passthroughs onto every Universe graph node; Passport Overview `summary` now prefers the real `evidence_summary` over a generic label/status template; Passport `recommendations`/`evidence` additively surface governed NR04 `uses_evidence` citations (a `recommendation-context` node targeting the selected object as a recommendation; an outgoing `uses_evidence` edge as `evidenceRelation: 'supporting'` evidence, honestly distinct from the pre-existing entries' implicit "Direct evidence"); honest, specific empty-state text for every Passport section with no governed content, with a concrete internal navigation link where a deterministic one exists (new `renderEmptySectionState()`); `engine/business-language.js`'s `universeNodeHeadline()` (already the one shared function Universe canvas labels, Risk Board's recursive-drilldown pseudo-cells, and Functional Radar's member detail all call directly) now falls back to `evidence_summary`, closing the "what happened" gap on all three surfaces simultaneously with zero changes to any of those three files; new `deriveNextInvestigativeAction()` (a deterministic, direction-aware relationship-type → action-phrase lookup) renders as a "Suggested next step" only when the object has no real `next_action_summary`; `engine/operational-language.js`'s `objectNoun()` gained 8 `PREFIX_NOUN` entries for real flagship object-key prefixes; `panels/hover-preview.js`'s dead `operationalSummary` import is now actually called.
+
+**Flagship allowlist** (`test/flagship-passport-coverage.test.mjs`'s `FLAGSHIP_ALLOWLIST`, 24 objects, documented in `docs/field-map.md`): the real Horizon LNG Partners / CPP-1000 Golden Operational Universe narrative's two chains - engineering-change (commitment → ECO → drawing revisions → work order → NCR → MRB → inspection/measurement evidence → material lot) and supply/manufacturing-recovery (commitment → supplier advisory → PO → rework demand → recovery work order → recovery recommendation → premium-freight shipment → customer escalation), the same real chain `docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md`'s own 6 anchors already sit on. Deliberately not "every object with a `nr04_object_key`" (162 objects).
+
+**Cross-surface consistency achieved almost entirely "for free"** by the app's own pre-existing architecture: `panels/jarvis.js` and `panels/functional-radar.js`'s member-detail evidence/source-records list already read directly from `bundle.passport.overview.summary`/`.evidence`/`.sourceRecords`; `lenses/risk-board.js`'s recursive-drilldown pseudo-cells and `panels/functional-radar.js`'s member detail already call `universeNodeHeadline()` directly on the raw graph node. Fixing the derivation once therefore fixed all of these simultaneously - confirmed live via Playwright, not just reasoned about.
+
+**Automated tests:** new `test/flagship-passport-coverage.test.mjs` (100 tests: per-flagship-object business-summary/canonical-id/section-shape/next-action/traceability assertions plus 3 dedicated per-chain connectivity tests), `test/panels-passport-content-completeness.test.mjs` (11 tests: honest empty states, evidence direct/supporting labeling, Overview Suggested-next-step, byte-identical wording cross-check), `test/panels-hover-preview-content-completeness.test.mjs` (3 tests: the `operationalSummary()` wiring fix). Extended `test/business-language.test.mjs` (+9: `evidence_summary` fallback priority, `deriveNextInvestigativeAction`, `evidenceRelationLabel`) and `test/operational-language.test.mjs` (+1, covering all 8 new `PREFIX_NOUN` entries). `npm run build`: **958/958 tests** (834 baseline + 124 new), check-syntax 54/54, verify-field-map PASSED (`evidenceRelation` is the only genuinely new derived field name registered; `evidence_summary`/`provenance` are raw passthroughs needing no registration). `npm run lint`: same 2 pre-existing `==`/`!=` errors, zero new.
+
+**Real browser verification (Playwright/Chromium, 1440px and 800px):** exercised both flagship paths end to end via Universe Search, confirming for each real object: Passport Overview shows a real business summary (not a restated label); Recommendations/Evidence sections show governed content where it exists (captured live: the NCR's Passport shows the governed "Recommendation Context" recommendation; the recovery recommendation's own Passport shows all 9 real governed supporting-evidence citations); honest empty states with a working navigation link where governed content genuinely doesn't exist (captured live: the prior drawing revision `DWG-NR-CPP-1000-210-REVB` correctly shows "No governed recommendation is linked to this object." / "No direct evidence record is available for this object." plus a working "Review the engineering change that documents this — ECO-NR-GOU-099" link in both sections); Hover Preview and Jarvis both echo the same business summary/evidence citations as Passport for the same selected object; the derived "Suggested next step" renders as a working clickable link distinct from a real "Next action" line. Zero unexpected console errors at either viewport (one pre-existing, unrelated `/favicon.ico` 404). 800px smoke-tested within the app's existing supported layout, per this sprint's own scope boundary (not a responsive redesign).
+
+**Known limitation:** the Functional Radar workspace's own entry interaction (via a Commitment Health Radar spoke click) was not independently screenshotted this session - the underlying wiring is verified correct by construction and by the Hover Preview/Passport/Jarvis three-way live check, but a dedicated Functional Radar capture is recommended for a future session rather than claimed here without one. The old curated demo objects (`CESC-NR-2026-014`, `FAT-NR-2026-3002`, `CAPA-NR-2026-047`, `WAR-NR-2026-021`, UUID-keyed) now coexist with real NR04-canonical objects reusing the same source identifiers (see `docs/UNSUPPORTED_UI_FIELD_REPORT.md`'s updated finding) - flagged for a future data/derive session, not touched this sprint (reconciling them would mean changing canonical object identifiers). Business-copy polish beyond the 24-object flagship allowlist remains open, by this sprint's own explicit scoping decision.

@@ -258,7 +258,21 @@ export function mountHoverPreview(el, callbacks) {
       ${preview.status ? `<div class="hover-preview-line"><strong>Status</strong> ${escapeHtml(preview.status)}</div>` : ''}
       ${preview.owner_name ? `<div class="hover-preview-line"><strong>Owner</strong> ${escapeHtml(preview.owner_name)}${preview.owner_role ? ` (${escapeHtml(preview.owner_role)})` : ''}</div>` : ''}
       ${preview.commitmentLabel ? `<div class="hover-preview-line"><strong>Commitment</strong> ${escapeHtml(preview.commitmentLabel)}</div>` : ''}
-      ${preview.business_impact_summary ? `<div class="hover-preview-line hover-preview-impact">${escapeHtml(preview.business_impact_summary)}</div>` : ''}
+      ${(() => {
+        // V1-CONTENT-1: operationalSummary() (business_impact_summary >
+        // evidence_summary > next_action_summary > label) is the "what
+        // happened / what this is" line for compact surfaces per its own
+        // documented contract - previously imported but never actually
+        // called here, so this popover only ever showed business_impact_summary
+        // directly and silently skipped every flagship NR04 object that has
+        // no business_impact_summary of its own but DOES have a real
+        // evidence_summary. Suppressed when it would just repeat the bare
+        // label (nothing more to say than the title already shown above).
+        const summary = operationalSummary(preview);
+        return summary && summary !== preview.label
+          ? `<div class="hover-preview-line hover-preview-impact">${escapeHtml(summary)}</div>`
+          : '';
+      })()}
       <div class="hover-preview-line hover-preview-counts">
         <span>${preview.relationshipCount} relationship${preview.relationshipCount === 1 ? '' : 's'}</span>
         <span>${preview.evidenceCount > 0 ? `${preview.evidenceCount} evidence record${preview.evidenceCount === 1 ? '' : 's'}` : 'no evidence linked'}</span>

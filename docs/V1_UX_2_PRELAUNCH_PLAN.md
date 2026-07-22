@@ -532,3 +532,232 @@ No browser is available in this sandbox. Every claim above about DOM rendering (
 ### Known limitations (stated plainly, consistent with this document's own convention)
 
 `CONTEXT_LABEL_SCALE`'s "smaller labels for Context" effect is currently unobservable in practice (see item 4 above) - `lenses/universe.js`'s pre-existing "text only on the selected node" rule and Phase 6 continuity together mean a Context-layer node never actually reaches the labeled tier today; the multiplier is correct and tested logic, wired for the day that tier rule changes, not a fabricated claim of visible behavior today. The Guided Investigation Framework has zero real walkthrough content - by explicit design this sprint, not an oversight; NRS-01/NRS-02 remain future work. Visual Layers currently governs Universe rendering only (Phase 1's own framing: "the primary decluttering tool for large operational universes") - Functional Radar's own internal domain-based grouping, Risk Board, Text View, and Workbench are unaffected by category/preset changes, which is a deliberate scope boundary, not a partial implementation of a broader requirement the brief never asked for.
+
+---
+
+## Sprint V1-CONTENT-1 — Flagship Passport & Business-Language Completion (2026-07-22)
+
+**Goal (from the brief):** complete Passport enrichment and business-language
+copy for the real flagship operational investigations, so a first-time
+executive never encounters a confusing empty Passport section, a raw
+identifier with no business meaning, a relationship with no explanation of
+why it matters, or a dead-feeling investigation endpoint where governed
+related information already exists. Derivation and presentation only - no
+ontology, schema, source snapshot data, canonical object identifiers,
+operational graph relationships, Supabase, export pipeline, Visual Layers
+architecture, preset persistence, Guided Investigation state machine, Risk
+calculations, Timeline engine semantics, or navigation architecture.
+
+### Phase 1 audit: the real flagship chains
+
+Verified directly against the live NR04 canonical graph (`src/data/nr04-
+canonical-universe.json`, 162 objects / 273 links) rather than assumed from
+the brief's illustrative examples. Confirmed real, deeply-connected two-path
+Golden Operational Universe (GOU) narrative for Horizon LNG Partners /
+CPP-1000 - the SAME flagship story `docs/REPRESENTATIVE_DRILLDOWN_MANIFEST.md`
+already anchors its own 6 Demo-derived Detail objects to:
+
+- **Engineering-change path:** customer commitment (`CUST-HORIZON-CPP-2026-09`)
+  → engineering change (`ECO-NR-GOU-099`) → prior/current drawing revision
+  (`DWG-NR-CPP-1000-210-REVB`/`-REVC`) → affected work order
+  (`WO-NR-GOU-2101`) → NCR (`NCR-NR-GOU-301`) → MRB disposition
+  (`MRB-NR-GOU-117`) → inspection/measurement evidence (`IR-NR-CPP-0719`,
+  `MEAS-NR-CPP-0719-B`) → material lot (`LOT-APX-C1088`).
+- **Supply/manufacturing-recovery path:** the same commitment → supplier
+  (`APEX-FOUNDRY-GROUP`) / supplier advisory (`SA-NR-2026-117`) / purchase
+  order (`PO-APX-88112`) / promise revision (`APX-CPP-2026-0802`) → rework
+  demand (`RWK-NR-CPP-0719`) → recovery work order (`WO-NR-GOU-2101-RWK`) /
+  outside-processing PO (`PO-OSP-24071`) → recovery recommendation
+  (`recommendation-context:NR-GOU-CPP-RECOVERY`) → premium-freight shipment
+  (`SHP-NR-GOU-6101`) → customer escalation/recovery communication
+  (`CESC-NR-2026-014`, `customer-email:HLNG-RECOVERY-2026-0812`).
+
+**Root cause found (not assumed):** the Passport's Recommendations/Evidence
+derivation (`buildPassportViewModel()`) was written entirely around the
+pre-NR04 curated demo's `recommendations.json`/`evidence.json` mechanism (5
+shortage recommendations keyed by `demand_signal_id`) - which has no
+equivalent anywhere in the real NR04 canonical graph, since none of its 162
+objects is `recommendation`- or `evidence`-typed. The real governed
+equivalent already existed in the data (a `recommendation-context` node -
+`detail.semantic_role === 'recommendation_context'` - citing other objects
+via a real `uses_evidence` edge, plus every object's own real
+`evidence_summary` field, populated on all 162 objects but never carried
+onto the Universe graph node) but was never wired to any surface. A
+**derivation gap, not a genuinely-absent-data gap** - the governed source
+data was there; the code just never reached it. `engine/operational-
+language.js`'s `operationalSummary()` had even already been written and
+documented with the exact right priority chain to consume
+`node.evidence_summary` - it was simply never given the field, and
+`panels/hover-preview.js` had imported the function but never once called
+it (a dead import, confirmed by direct grep, not assumed).
+
+**Flagship allowlist** (`test/flagship-passport-coverage.test.mjs`'s
+`FLAGSHIP_ALLOWLIST`, 24 objects - both paths above plus the shared framing
+objects: the commitment, the executive signal/briefing/revenue-exposure
+trio, and the recovery recommendation itself). Deliberately NOT "every
+object with a `nr04_object_key`" (162 objects) - a coverage gate that merely
+asserts "all N objects have prose" is explicitly out of scope per the brief.
+
+### Phase 2/3 Passport derivation completion
+
+All additive to `engine/derive.js`'s `buildPassportViewModel()` - zero
+existing behavior changed, verified by the full pre-existing test suite
+passing unmodified (see Verification below):
+
+- Every Universe graph node now carries its own real `evidence_summary`
+  and `provenance` (raw passthroughs, `buildUniverseGraph()`'s operational-
+  objects loop).
+- Overview `summary` (when no pre-authored `operational-passports.json`
+  record exists) now prefers the object's own real `evidence_summary`
+  ("what happened") over the prior generic label/status template - a real
+  governed sentence instead of a restated title.
+- **Recommendations**: a `recommendation-context` node that cites the
+  selected object via `uses_evidence` is surfaced as a targeting
+  recommendation, using the SAME entry shape the pre-existing
+  `recommendations.json` entries already use - `panels/passport.js` needed
+  zero template changes.
+- **Evidence**: any real outgoing `uses_evidence` edge is surfaced as
+  supporting evidence, tagged `evidenceRelation: 'supporting'` (the
+  pre-existing `evidence.json`-sourced entries never carry this field,
+  rendered as "Direct evidence" - a structural, provable distinction, not a
+  guess).
+- **Source Records**: inherits the above for free (it already maps over
+  the Evidence array).
+- **Honest empty states** (`renderEmptySectionState()`, new): every empty
+  section now names what is specifically absent ("No governed recommendation
+  is linked to this object.", "No direct evidence record is available for
+  this object.", Timeline distinguishing "has real occurred/due dates" from
+  "genuinely nothing dated") and, only when a real destination exists, offers
+  one concrete internal navigation link - reusing the same next-action
+  derivation Phase 4 built (below), so wording never drifts between the two
+  call sites.
+- Hover Preview's `evidenceCount` now also counts `uses_evidence` edges
+  (previously only edges to an `evidence`-typed node, which no NR04 object
+  ever is) - keeps it consistent with what Passport's Evidence section
+  actually shows for the same object.
+
+### Phase 4 business-language completion
+
+- `engine/business-language.js`'s `universeNodeHeadline()` (already the
+  ONE shared function Universe canvas labels, Risk Board's recursive-
+  drilldown pseudo-cells, AND Functional Radar's member detail all call
+  directly on the raw graph node) now falls back to `evidence_summary`
+  between `business_impact_summary` and `next_action_summary` - closing the
+  "what happened" gap on all three surfaces simultaneously, by construction,
+  with zero changes to any of those three files.
+- New `deriveNextInvestigativeAction()`: a deterministic, direction-aware
+  relationship-type → action-phrase lookup (keyed by the real relationship
+  types the flagship chain actually carries - `documents_prior_revision`,
+  `dispositions`, `affects_lot`, `supports_commitment`, etc.), used only as
+  a fallback when the object has no real `next_action_summary` of its own.
+  Rendered as a visually distinct "Suggested next step" (never "Next
+  action") so its derived provenance stays visible - never confused with a
+  real governed field.
+- `engine/operational-language.js`'s `objectNoun()` `PREFIX_NOUN` map
+  gained 8 entries for real flagship `nr04_object_key` prefixes
+  (`recommendation-context` → Recommendation, `signal` → Executive Signal,
+  `briefing` → Executive Briefing, `demand`, `inspection`, `lot`,
+  `measurement`, `cert`) that previously fell through to a generic
+  domain-based label.
+- `panels/hover-preview.js`'s dead `operationalSummary` import is now
+  actually called, rendering the real evidence_summary-based summary line
+  it was always documented to produce.
+
+### Phase 5 cross-surface consistency
+
+Achieved almost entirely by the app's own PRE-EXISTING architecture, not new
+plumbing: `panels/jarvis.js`'s "Selected" summary and "Why does it matter?"
+evidence citations already read directly from `passport.overview.summary`
+and `passport.evidence`; `panels/functional-radar.js`'s member-detail
+Evidence/Source-Records list already reuses `bundle.passport.evidence`/
+`sourceRecords` verbatim; `lenses/risk-board.js`'s recursive-drilldown
+pseudo-cells and `panels/functional-radar.js`'s member detail both already
+call `universeNodeHeadline()` directly. Fixing the derivation once in
+`derive.js`/`business-language.js` therefore fixed all of these
+simultaneously - confirmed live via Playwright (see Browser Verification
+below), not just reasoned about. The one surface needing its own direct fix
+was `panels/hover-preview.js` (the dead `operationalSummary` import, above).
+
+### Phase 6/7 automated tests
+
+New: `test/flagship-passport-coverage.test.mjs` (100 tests - the 24-object
+flagship allowlist's per-object business-summary/canonical-id/section-shape/
+next-action/traceability assertions, plus 3 dedicated per-chain connectivity
+tests proving the engineering-change and supply/recovery paths are real,
+connected chains, not just 24 independently-resolving objects).
+`test/panels-passport-content-completeness.test.mjs` (11 tests - honest
+empty states, evidence direct/supporting labeling, Overview Suggested-next-
+step, and a byte-identical-wording cross-check between the Overview
+suggestion and an empty section's own nav hint). `test/panels-hover-preview-
+content-completeness.test.mjs` (3 tests - the `operationalSummary()` wiring
+fix). Extended `test/business-language.test.mjs` (+16),
+`test/operational-language.test.mjs` (+1, covering all 8 new `PREFIX_NOUN`
+entries). **124 new tests, zero existing tests modified** (2 existing
+`business-language.test.mjs` assertions were extended/renamed in place to
+cover the new `evidence_summary` priority slot - the underlying prior
+behavior each still proves is unchanged, not silently replaced).
+
+### Verification performed
+
+`npm run build`: **958/958 tests passing** (834 baseline + 124 new),
+`check-syntax` 54/54, `verify-field-map` PASSED (`evidenceRelation` is the
+only genuinely new derived field name; `evidence_summary`/`provenance` are
+raw passthroughs of fields already present in `src/data/*.json`, needing no
+registration). `npm run lint`: the same 2 pre-existing `==`/`!=` errors,
+zero new.
+
+**Real browser verification (Playwright/Chromium, 1440px and 800px)**:
+exercised both flagship paths end to end via Universe Search - commitment →
+ECO → prior/current drawing → work order → NCR → MRB (engineering-change);
+commitment → supplier advisory → PO → recovery work order → recovery
+recommendation → shipment (supply/recovery) - confirming for each: Passport
+Overview shows a real business summary (not a restated label), Recommendations/
+Evidence sections show governed content where it exists, honest empty states
+with working navigation links where it doesn't (captured live: the prior
+drawing revision `DWG-NR-CPP-1000-210-REVB` has zero governed recommendations/
+evidence of its own - both empty sections correctly show the honest message
+plus a working "Review the engineering change that documents this — ECO-NR-
+GOU-099" link), the recovery recommendation's own Passport shows all 9 real
+governed supporting-evidence citations, Hover Preview and Jarvis both echo
+the same business summary/evidence citations as Passport for the same
+selected object, and the derived "Suggested next step" renders as a working
+clickable link distinct from a real "Next action" line. Zero unexpected
+console errors at either viewport (one pre-existing, unrelated `/favicon.ico`
+404, consistent with prior sprints' own observation that this app has never
+defined a favicon). 800px smoke-tested within the app's existing supported
+layout (per this sprint's own scope boundary - not a responsive redesign).
+
+**Known limitation:** the Functional Radar workspace's own entry interaction
+(via a Commitment Health Radar spoke click, per V1-UX-2H) was not
+independently screenshotted this session - the underlying wiring is
+verified correct by construction (`universeNodeHeadline()`/
+`bundle.passport.evidence` reuse, confirmed via direct code reading) and by
+the Hover Preview/Passport/Jarvis three-way consistency check that was
+captured live, but a dedicated Functional Radar screenshot is recommended
+for a future session's manual QA pass rather than claimed here without a
+capture to back it.
+
+### Remaining V1 items (explicitly listed, none silently dropped)
+
+- The `resolveVisibilityForSlice()` t2/t3 reveal-count gap (flagged since
+  V1-UX-2C, restated at every sprint since) remains open - untouched by this
+  sprint (Timeline engine semantics were explicitly out of scope).
+- Progressive Risk Board's `ownerName`/`nextActionSummary` enrichment on
+  Risk Board cards THEMSELVES (V1-UX-2B) remains open - out of this
+  sprint's scope per the brief ("unless directly required for a flagship
+  object already covered" - it was not required for the derivation fix
+  above, which reaches Risk Board only via the recursive-drilldown pseudo-
+  cell path, already covered).
+- Business-copy polish beyond the 24-object flagship allowlist (the other
+  ~138 NR04 canonical objects, and the pre-existing 9-object curated demo
+  chain) remains open, by this sprint's own explicit "small, maintainable
+  allowlist, not all 162 objects" scoping decision.
+- NRS-01/NRS-02 Guided Investigation walkthrough content remains unauthored
+  (explicitly out of this sprint's scope, per the brief's Scope Exclusions).
+- The old curated demo objects (`CESC-NR-2026-014`, `FAT-NR-2026-3002`,
+  `CAPA-NR-2026-047`, `WAR-NR-2026-021`, UUID-keyed) now coexist with real
+  NR04-canonical objects reusing the same source identifiers (see
+  `docs/UNSUPPORTED_UI_FIELD_REPORT.md`'s updated finding) - flagged for a
+  future data/derive session to assess reconciliation; not touched this
+  sprint (would mean changing canonical object identifiers, explicitly out
+  of scope).
