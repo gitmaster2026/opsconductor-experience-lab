@@ -72,6 +72,19 @@ import { mountOperationalGrammarLegend } from './panels/operational-grammar-lege
 import { mountSavedViewsManager } from './engine/saved-views.js';
 import { defaultContinuityAction } from './engine/lens-continuity.js';
 import { withHistorySuppressed } from './engine/investigation-history.js';
+import { getBuiltInPreset } from './engine/visual-layers.js';
+import { mountGuidedInvestigationController } from './panels/guided-investigation.js';
+import { currentStep as guidedCurrentStep } from './engine/guided-investigation.js';
+import { mountScenarioPicker } from './panels/scenario-picker.js';
+import { SCENARIOS, getScenarioById, interactionDepth } from './guided-investigations/scenario-registry.js';
+import { captureInvestigationState } from './engine/guided-investigation-state.js';
+import {
+  initGuidedInvestigationPreferences,
+  isInvitationDismissed,
+  dismissInvitation,
+  isScenarioCompleted,
+  markScenarioCompleted,
+} from './engine/guided-investigation-preferences.js';
 
 // ---------------------------------------------------------------------------
 // DOM references (same element ids as the previous prototype iteration, so
@@ -115,6 +128,10 @@ const els = {
   nodeTooltip: document.getElementById('nodeTooltip'),
   hoverPreview: document.getElementById('hoverPreview'),
   savedViewsManager: document.getElementById('savedViewsManager'),
+  guidedInvestigationsToggle: document.getElementById('guidedInvestigationsToggle'),
+  guidedInvestigationInvitation: document.getElementById('guidedInvestigationInvitation'),
+  scenarioPicker: document.getElementById('scenarioPicker'),
+  guidedInvestigationOverlay: document.getElementById('guidedInvestigationOverlay'),
 };
 
 // ---------------------------------------------------------------------------
@@ -192,6 +209,13 @@ async function main() {
   const restoredDefault = resolveDefaultPreset();
   store.setLayerState(restoredDefault.categoryStates, restoredDefault.presetId);
 
+  // V1-GUIDE-1: hydrate the Guided Investigation preference slice
+  // (invitation dismissal, scenario completion status) - a SEPARATE small
+  // localStorage envelope from the Visual Layers preset catalog above, per
+  // that module's own header ("persists ONLY the Visual Layers preset
+  // slice, nothing else").
+  initGuidedInvestigationPreferences();
+
   const timeline = initTimeline({
     store: { getState: store.getState, subscribe: store.subscribe },
     getSnapshot: () => snapshot,
@@ -251,6 +275,24 @@ async function main() {
   function selectAndClearHighlight(id) {
     clearHighlightedIds();
     store.selectObject(id);
+    // V1-GUIDE-1: the SAME choke point every explicit selection in this app
+    // already routes through (Universe/Risk Board/Passport relationship
+    // rows/Search/etc.) is what feeds a running Guided Investigation its
+    // waitForSelection/waitForInvestigationCompletion events - "use normal
+    // application actions," not a parallel selection mechanism. Reading
+    // `activeScenario`/`guidedController` here is safe even though both are
+    // declared further down this same function body: this closure only
+    // ever RUNS on a later user interaction, by which point both are
+    // already assigned (see engine/guided-investigation-state.js's own
+    // header on why this module never needs to know that itself).
+    if (activeScenario) {
+      const step = guidedCurrentStep(guidedController.getWalkthrough());
+      if (step?.advance === 'waitForInvestigationCompletion' && id === activeScenario.terminalObjectId) {
+        guidedController.notify({ type: 'investigationCompletion' });
+      } else {
+        guidedController.notify({ type: 'selection', objectId: id });
+      }
+    }
   }
 
   // --- Probe / "Open in Universe" (V1-UX-1b Task 3, corrected by V1-UX-4) --
@@ -681,6 +723,213 @@ async function main() {
   // object grammar appears everywhere), so it is mounted once in the toolbar
   // and needs no per-render update (the grammar itself never changes).
   mountOperationalGrammarLegend(els.operationalGrammarLegend);
+
+  // --- Guided Investigations (V1-GUIDE-1) -----------------------------------
+  //
+  // Optional walkthroughs authored against the framework V1-UX-5 Phase 8
+  // built (engine/guided-investigation.js + panels/guided-investigation.js -
+  // unmounted until now) and the real NR04 chains
+  // guided-investigations/{scenario-registry,nrs-01,nrs-02}.js document.
+  // This orchestration is the only place that knows what a "scenario" is;
+  // the framework itself stays exactly the generic step-machine it always
+  // was. Every effect below routes through the SAME store mutators/choke
+  // points (store.selectObject/focusObject/setLens/setLayerState,
+  // selectAndClearHighlight, probeObject) every other feature in this app
+  // already uses - "use normal application actions and state transitions,"
+  // per the sprint brief, not a parallel demonstration-only mechanism.
+
+  /** @type {Object|null} the scenario currently running, or null. */
+  let activeScenario = null;
+  /** @type {import('./engine/guided-investigation-state.js').CapturedInvestigationState|null} */
+  let preScenarioState = null;
+  // "Do not automatically reopen the invitation after the user chooses
+  // Explore Freely" - session-only (NOT persisted; only "Don't show this
+  // again" persists, via engine/guided-investigation-preferences.js).
+  let invitationDismissedThisSession = false;
+
+  function applyGuidedSpotlight(objectId) {
+    document.querySelectorAll('.guided-spotlight').forEach((el) => el.classList.remove('guided-spotlight'));
+    if (!objectId) return;
+    document.querySelectorAll(`[data-select-id="${objectId}"]`).forEach((el) => el.classList.add('guided-spotlight'));
+  }
+
+  function applyGuidedHighlight(selector) {
+    document.querySelectorAll('.guided-highlight').forEach((el) => el.classList.remove('guided-highlight'));
+    if (!selector) return;
+    document.querySelectorAll(selector).forEach((el) => el.classList.add('guided-highlight'));
+  }
+
+  function applyGuidedCameraFocus(objectId) {
+    applyGuidedSpotlight(objectId);
+    if (!objectId) return;
+    // Only actually move the camera if the object is really in the current
+    // graph (defensive - this app's snapshot is static, so this is not
+    // expected to ever be false in practice, but focusObject() on an id the
+    // active lens has no node for would be a silent no-op at best).
+    const inGraph = timeline.getDerivedBundle().universe.nodes.some((n) => n.id === objectId);
+    if (inGraph) store.focusObject(objectId);
+  }
+
+  function finishGuidedScenario(outcome) {
+    if (!activeScenario) return;
+    const finished = activeScenario;
+    if (outcome === 'completed') {
+      markScenarioCompleted(finished.id);
+      // Completion Behavior: "keep the final selected object and
+      // investigation context by default" - preScenarioState is simply
+      // discarded, nothing is restored.
+      const other = SCENARIOS.find((s) => s.id !== finished.id) ?? null;
+      activeScenario = null;
+      preScenarioState = null;
+      scenarioPicker.showCompletion({
+        scenarioId: finished.id,
+        title: finished.title,
+        summary: finished.completionSummary,
+        otherScenarioId: other?.id ?? null,
+        otherScenarioTitle: other?.title ?? null,
+      });
+    } else {
+      // 'skipped' (Skip the intro OR Exit mid-step - the engine's skip()
+      // state covers both). restoreCapturedState() was already applied (or
+      // not) by the exit-confirmation flow below BEFORE calling
+      // guidedController.skip(), so this branch only clears local state.
+      activeScenario = null;
+      preScenarioState = null;
+    }
+  }
+
+  /** @param {import('./engine/guided-investigation-state.js').CapturedInvestigationState} captured */
+  function restoreCapturedState(captured) {
+    if (!captured) return;
+    store.setLens(captured.workspaceLens);
+    store.selectObject(captured.selectedObjectId);
+    store.focusObject(captured.cameraTarget);
+    store.setCameraPhase(captured.cameraPhase);
+    store.setTimeSlice(captured.timeSliceId);
+    store.setLayerState({ ...captured.layerState }, captured.activePresetId);
+  }
+
+  const guidedController = mountGuidedInvestigationController(els.guidedInvestigationOverlay, {
+    onHighlight: applyGuidedHighlight,
+    onSpotlight: applyGuidedSpotlight,
+    onCameraFocus: applyGuidedCameraFocus,
+    onComplete: () => finishGuidedScenario('completed'),
+    onSkip: () => finishGuidedScenario('skipped'),
+    // Exit Behavior: "On Exit, offer: Keep current investigation view /
+    // Restore previous view." A native confirm() dialog is a real,
+    // keyboard-accessible, already-localized choice prompt - no need for a
+    // second bespoke modal on top of the one the Scenario Picker already
+    // has for completion. OK = restore; Cancel = keep the current view (the
+    // product contract's own recommended default when a choice must be
+    // made quickly).
+    onRequestExit: () => {
+      // Real defect found via Playwright verification: this app already has
+      // several independent, unrelated document-level Escape listeners
+      // (Visual Layers, Scope Explorer, Functional Radar, Saved Views - see
+      // app.js's own pre-existing Escape-deselect listener comment). All of
+      // them fire for the SAME keypress since they're all bound to
+      // `document`. Without this guard, pressing Escape to close one of
+      // those OTHER modals while a walkthrough is running ALSO fired this
+      // exit-confirmation, silently exiting the walkthrough as an
+      // unintended side effect of dismissing an unrelated popup. If any
+      // other overlay is currently open, let that modal's own Escape
+      // handler close IT first - the guided investigation itself was never
+      // what the user was trying to dismiss.
+      const otherOverlayOpen = document.querySelector(
+        '.visual-layers-overlay:not(.hidden), .scope-explorer-overlay:not(.hidden), .functional-radar-overlay:not(.hidden), .saved-views-overlay:not(.hidden), .scenario-picker-overlay:not(.hidden)'
+      );
+      if (otherOverlayOpen) return;
+      const restore = window.confirm(
+        'Exit this guided investigation?\n\nOK - Restore the view you had before starting.\nCancel - Keep your current investigation view.'
+      );
+      if (restore) restoreCapturedState(preScenarioState);
+      guidedController.skip();
+    },
+  });
+
+  function startGuidedScenario(scenarioId) {
+    const scenario = getScenarioById(scenarioId);
+    if (!scenario) return;
+    const bundle = timeline.getDerivedBundle();
+    const allIds = new Set(bundle.universe.nodes.map((n) => n.id));
+    const unavailable = scenario.requiredObjectIds.filter((id) => !allIds.has(id));
+    if (unavailable.length > 0) {
+      // Fallback behavior: stop rather than run a walkthrough against
+      // missing objects - see this scenario's own fallbackMessage.
+      console.error(`Guided Investigation "${scenario.id}" cannot start - missing objects:`, unavailable);
+      window.alert(scenario.fallbackMessage);
+      return;
+    }
+    activeScenario = scenario;
+    // Investigation-State Handling: capture the minimum state needed to
+    // restore on an early Exit, BEFORE any of this scenario's own mutations.
+    preScenarioState = captureInvestigationState(store.getState());
+    store.setLens(scenario.startingState.lens);
+    store.setLeftPanel(scenario.startingState.leftPanel);
+    const preset = getBuiltInPreset(scenario.recommendedPresetId);
+    if (preset) store.setLayerState({ ...preset.categoryStates }, preset.id);
+    guidedController.run(scenario.steps);
+  }
+
+  const scenarioPicker = mountScenarioPicker(
+    {
+      toggleEl: els.guidedInvestigationsToggle,
+      invitationEl: els.guidedInvestigationInvitation,
+      pickerEl: els.scenarioPicker,
+    },
+    {
+      getScenarios: () =>
+        SCENARIOS.map((s) => ({
+          id: s.id,
+          title: s.title,
+          businessDescription: s.businessDescription,
+          stepCount: s.steps.length,
+          interactionDepth: interactionDepth(s),
+        })),
+      getScenarioStatus: (scenarioId) => {
+        if (activeScenario?.id === scenarioId) return 'in_progress';
+        return isScenarioCompleted(scenarioId) ? 'completed' : 'not_started';
+      },
+      isInvitationVisible: () => !isInvitationDismissed() && !invitationDismissedThisSession,
+      onStartScenario: (scenarioId) => startGuidedScenario(scenarioId),
+      onExploreFreely: () => {
+        invitationDismissedThisSession = true;
+      },
+      onDontShowAgain: () => {
+        invitationDismissedThisSession = true;
+        dismissInvitation();
+      },
+    }
+  );
+
+  // V1-GUIDE-1: forwards a real click to the guided controller ONLY when
+  // the CURRENT step is actually waiting for one (advance === 'waitForClick')
+  // AND the click landed inside that step's own declared target - e.g.
+  // "click the Visual Layers bar to acknowledge the active preset." Scoped
+  // to the current step's own selector (not a blanket "forward every
+  // click"), so this never fires spuriously for clicks on unrelated
+  // controls, and never runs at all outside an active walkthrough.
+  document.addEventListener('click', (ev) => {
+    if (!activeScenario) return;
+    const step = guidedCurrentStep(guidedController.getWalkthrough());
+    if (!step || step.advance !== 'waitForClick' || !step.waitForClickTarget) return;
+    // V1-GUIDE-1 root-cause fix: a target like '#visualLayersBar' contains
+    // its OWN interactive control (the preset-open button), whose own click
+    // handler runs first (bubble order: target's own listeners fire before
+    // a document-level listener) and synchronously RE-RENDERS that bar's
+    // innerHTML - detaching `ev.target` from the live tree before this
+    // listener runs. `ev.target.closest(...)` on an already-orphaned node
+    // silently returns null even though the click plainly landed inside
+    // the bar. `ev.composedPath()` is captured by the browser AT DISPATCH
+    // TIME (before any listener/mutation), so it reflects the real
+    // ancestor chain the click actually happened in, immune to whatever a
+    // same-target click handler does afterward.
+    const path = typeof ev.composedPath === 'function' ? ev.composedPath() : [ev.target];
+    const matched = path.some((node) => typeof node?.matches === 'function' && node.matches(step.waitForClickTarget));
+    if (matched) {
+      guidedController.notify({ type: 'click', target: step.waitForClickTarget });
+    }
+  });
 
   // --- Generic [data-select-id] hover wiring (V1-UX-1b Task 2) --------------
   //

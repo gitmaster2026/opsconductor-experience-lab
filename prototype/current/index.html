@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="panels/functional-radar-workspace.css" />
   <link rel="stylesheet" href="risk-board-recursion.css" />
   <link rel="stylesheet" href="panels/visual-layers.css" />
+  <link rel="stylesheet" href="panels/guided-investigation.css" />
 </head>
 <body>
   <div id="app">
@@ -32,6 +33,7 @@
       </div>
       <div id="universeSearch" class="universe-search" role="search"></div>
       <div id="functionalRadarToggle" class="functional-radar-toggle"></div>
+      <div id="guidedInvestigationsToggle" class="guided-investigations-toggle-mount"></div>
       <div id="operationalGrammarLegend" class="ovg-legend" role="region" aria-label="Operational Visual Grammar"></div>
       <div class="spacer"></div>
       <div id="sharedInvestigationState" class="shared-investigation-state" role="region" aria-label="Shared investigation state"></div>
@@ -70,6 +72,9 @@
     <div id="visualLayersPanel" class="visual-layers-overlay hidden"></div>
     <div id="functionalRadarPanel" class="functional-radar-overlay hidden"></div>
     <div id="savedViewsManager" class="saved-views-overlay hidden"></div>
+    <div id="guidedInvestigationInvitation" class="guided-invitation-mount hidden"></div>
+    <div id="scenarioPicker" class="scenario-picker-overlay hidden"></div>
+    <div id="guidedInvestigationOverlay" class="guided-investigation-overlay hidden"></div>
   </div>
   <script type="module" src="app.js"></script>
   <script type="module" src="panels/shared-investigation-state.js"></script>

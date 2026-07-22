@@ -761,3 +761,88 @@ capture to back it.
   future data/derive session to assess reconciliation; not touched this
   sprint (would mean changing canonical object identifiers, explicitly out
   of scope).
+- ~~NRS-01/NRS-02 Guided Investigation walkthrough content remains
+  unauthored~~ - **RESOLVED (V1-GUIDE-1)**, see that sprint's own section
+  below.
+
+## Sprint V1-GUIDE-1 — Flagship Guided Investigations: NRS-01 and NRS-02 (2026-07-22)
+
+**Goal (from the brief):** author, mount, and verify NRS-01 (Supplier
+Shortage → Manufacturing Recovery) and NRS-02 (Engineering Change →
+Customer Impact) as optional guided investigations using the existing
+Guided Investigation framework - content and application-action wiring
+only. Do not redesign the framework, navigation model, operational graph,
+Passport, Visual Layers, or canonical data.
+
+**Full detail lives in the new `docs/GUIDED_INVESTIGATIONS.md`** - the
+object-by-object canonical validation manifest for both scenarios (step
+number, business concept, canonical id, relationship, destination,
+availability, governed-edge confirmation, fallback), the framework review
+findings (one minimal `back()` addition; two real bugs found and fixed via
+Playwright verification), the Entry Experience/Investigation-State-
+Handling/Visual-Layers/Exit/Completion/Accessibility behavior spec, and
+the full test/Playwright verification results. This section is a summary
+pointer, per this file's own established convention (see the V1-CONTENT-1
+section above for the same pattern).
+
+**What shipped:** `prototype/current/guided-investigations/{scenario-
+registry,nrs-01,nrs-02}.js` (pure data, real `nr04:` object ids and real
+governed relationships only); `panels/scenario-picker.js` (first-use
+invitation + permanent picker + completion modal); `engine/guided-
+investigation-preferences.js` (localStorage, its own key, following
+`engine/investigation-presets.js`'s established pattern exactly);
+`engine/guided-investigation-state.js` (pure investigation-state capture/
+compare for Exit's Keep/Restore choice); full `app.js`/`index.html`
+wiring mounting the framework's existing, previously-unmounted DOM
+controller.
+
+**Canonical Object Validation - the real story, not the brief's assumed
+one:** both scenarios live entirely inside the real NR04 canonical graph,
+verified edge-by-edge against `src/data/nr04-canonical-universe.json`.
+Two real gaps were found and reported rather than invented around: (1) no
+direct edge exists between the supplier-advisory/PO branch and the
+recovery-work-order branch (NRS-01 routes through the shared recovery
+recommendation instead); (2) `nr04:custesc:CESC-NR-2026-014` ("Customer
+Escalation" - the object whose name most literally matches "Customer
+Impact") has zero real governed edge into either chain at all - NRS-02
+uses the real, governed `nr04:customer-email:HLNG-RECOVERY-2026-0812`
+instead. Full validation tables in `docs/GUIDED_INVESTIGATIONS.md`.
+
+**Framework Review:** confirmed the 4 step kinds, 5 advance modes,
+cancellation/listener-cleanup/terminal-states/duplicate-event-handling/
+restart behavior all work exactly as V1-UX-5 Phase 8 built them. Found one
+real gap the product contract needed and the framework didn't have: a
+`back()` transition (only `advance()` existed). Added it - minimal,
+symmetric to `advance()`'s own shape, 4 new focused tests, all 25
+pre-existing engine tests and 11 pre-existing DOM-controller tests still
+pass unmodified.
+
+**Two real bugs found only via Playwright** (not visible from unit tests):
+a `waitForClick` target-detection bug (`ev.target.closest()` failing
+against a same-click self-re-rendering container - fixed via
+`ev.composedPath()`), and an Escape-key listener-ordering bug (closing an
+unrelated modal also silently exited the running walkthrough - fixed via
+`{ capture: true }`). Both are the kind of defect this sprint's own
+"Real Browser Verification" requirement exists to catch.
+
+**Automated tests:** 85 new tests across 6 files (scenario-registry
+validation against the real live snapshot, preferences persistence,
+state-capture purity, picker DOM lifecycle, plus the framework's own
+`back()`/DOM-controller additions). `npm run build`: **1043/1043 tests**
+(958 baseline + 85 new), check-syntax and verify-field-map both PASSED.
+
+**Real browser verification (Playwright/Chromium, 1440px and ~800px):**
+44/44 checks passed - full end-to-end runs of both scenarios (every
+relationship click driving the walkthrough forward for real), Back/Exit/
+Replay/the Keep-Restore exit choice, completion summaries with all four
+required actions, regression checks (Free Explore, Universe Search, Risk
+Board lens switch, "Don't show this again" surviving a reload, no stray
+open overlays), zero unexpected console errors, and an 800px start/exit/
+replay smoke test.
+
+**Known limitation carried forward:** "focus returns to the exact
+application target after advancing" (one accessibility requirement) is
+not implemented - focus moves to the new coachmark on every step
+transition instead. Universe canvas nodes have no individual DOM element
+to focus at all (canvas hit-testing, not per-node DOM), so full per-
+surface focus-return plumbing was judged out of this sprint's scope.

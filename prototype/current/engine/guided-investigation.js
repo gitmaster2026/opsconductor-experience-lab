@@ -187,6 +187,27 @@ export function advance(walkthrough) {
 }
 
 /**
+ * V1-GUIDE-1: move to the PREVIOUS step. A no-op (returns the same
+ * reference) when not currently 'running' (mirrors advance()'s own guard)
+ * or already on the first step (index 0) - there is no "back into idle"
+ * state; Skip/Exit is the only way out of step 0, not Back. Added because
+ * authoring NRS-01/NRS-02 exposed a real gap: the product contract
+ * ("Back, Exit, Replay... work" - accessibility requirements list
+ * keyboard-accessible Back explicitly) has no engine primitive to build
+ * on - advance() only ever moves forward. This is the minimal, symmetric
+ * counterpart to advance() (same guard shape, same "return same reference
+ * when inapplicable" convention), not a general redesign.
+ *
+ * @param {WalkthroughState} walkthrough
+ * @returns {WalkthroughState}
+ */
+export function back(walkthrough) {
+  if (walkthrough.status !== 'running') return walkthrough;
+  if (walkthrough.index <= 0) return walkthrough;
+  return { ...walkthrough, index: walkthrough.index - 1 };
+}
+
+/**
  * @param {WalkthroughState} walkthrough
  * @returns {WalkthroughStep|null} the current step, or null when not running.
  */

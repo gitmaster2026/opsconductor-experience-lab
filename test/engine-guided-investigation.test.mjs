@@ -15,6 +15,7 @@ import {
   restart,
   skip,
   advance,
+  back,
   currentStep,
   isIdle,
   isRunning,
@@ -156,6 +157,52 @@ test('restart() returns to step 0 and running from ANY prior status', () => {
     assert.equal(restarted.index, 0);
     assert.equal(currentStep(restarted).id, 'step-1');
   }
+});
+
+// ---------------------------------------------------------------------------
+// back() (V1-GUIDE-1: added while authoring NRS-01/NRS-02 - see this
+// module's own comment on back() for why).
+// ---------------------------------------------------------------------------
+
+test('back() moves to the previous step while running', () => {
+  let w = start(createWalkthrough(sampleSteps()));
+  w = advance(w);
+  w = advance(w);
+  assert.equal(currentStep(w).id, 'step-3');
+  w = back(w);
+  assert.equal(currentStep(w).id, 'step-2');
+  w = back(w);
+  assert.equal(currentStep(w).id, 'step-1');
+});
+
+test('back() is a no-op on the first step (index 0) - Back does not exit to idle', () => {
+  const w = start(createWalkthrough(sampleSteps()));
+  assert.equal(currentStep(w).id, 'step-1');
+  const backed = back(w);
+  assert.equal(backed, w);
+  assert.equal(currentStep(backed).id, 'step-1');
+});
+
+test('back() is a no-op when not running (idle/completed/skipped)', () => {
+  const idle = createWalkthrough(sampleSteps());
+  assert.equal(back(idle), idle);
+
+  let completed = start(createWalkthrough([{ id: 'only', kind: 'highlight', advance: 'manualClick' }]));
+  completed = advance(completed);
+  assert.ok(isCompleted(completed));
+  assert.equal(back(completed), completed);
+
+  const skipped = skip(start(createWalkthrough(sampleSteps())));
+  assert.equal(back(skipped), skipped);
+});
+
+test('advance() then back() then advance() again returns to the same step (round-trip)', () => {
+  let w = start(createWalkthrough(sampleSteps()));
+  w = advance(w); // step-2
+  w = advance(w); // step-3
+  w = back(w); // step-2
+  w = advance(w); // step-3
+  assert.equal(currentStep(w).id, 'step-3');
 });
 
 // ---------------------------------------------------------------------------
