@@ -203,15 +203,14 @@ plan and status.
 
 ## Next implementation target
 
-**Current: V1-UX-5 (Visual Layers, Investigation Presets & Documentation
-Cleanup) is implemented and tested** (see
-`docs/V1_UX_2_PRELAUNCH_PLAN.md`'s own "Sprint V1-UX-5" section for full
-detail). V1-UX-2A through V1-UX-2H, V1-UX-3, V1-UX-4, and V1-UX-5 are all
-implemented and tested (see that document's per-sprint sections and the
-session logs below); the items each sprint has explicitly carried forward
-as still-open (Progressive Risk Board owner/next-action enrichment; the
-`resolveVisibilityForSlice()` t2/t3 gating gap) remain open, by deliberate
-scope decision each time, not by oversight.
+**Current: V1-FIX-1 (Search Hover-Preview Interception Fix) is implemented
+and tested** (see the session log immediately below for full detail).
+V1-UX-2A through V1-UX-2H, V1-UX-3, V1-UX-4, V1-UX-5, and V1-FIX-1 are all
+implemented and tested (see `docs/V1_UX_2_PRELAUNCH_PLAN.md`'s per-sprint
+sections and the session logs below); the items each sprint has explicitly
+carried forward as still-open (Progressive Risk Board owner/next-action
+enrichment; the `resolveVisibilityForSlice()` t2/t3 gating gap) remain
+open, by deliberate scope decision each time, not by oversight.
 
 Per the founder's own post-V1-UX-5 assessment, the remaining work toward a
 V1.0 launch is:
@@ -219,9 +218,10 @@ V1.0 launch is:
 - **V1.0 launch blockers**: Passport enrichment (populate Recommendations/
   Evidence/Timeline/business-impact summaries for the NR04 canonical
   objects instead of showing empty sections where governed data doesn't
-  yet reach them); a Universe Search hover-card z-index issue (hover cards
-  should never block Universe Search interaction); business-copy polish
-  ("what happened"/"why it matters"/"next step" explanatory text).
+  yet reach them); business-copy polish ("what happened"/"why it
+  matters"/"next step" explanatory text). ~~A Universe Search hover-card
+  z-index issue (hover cards should never block Universe Search
+  interaction)~~ - **fixed by V1-FIX-1**, see session log below.
 - **V1.0 polish (strongly recommended)**: the guided NRS-01 and NRS-02
   walkthroughs, authored against the framework `engine/guided-investigation.js`/
   `panels/guided-investigation.js` now provide (V1-UX-5 Phase 8) but do not
@@ -492,3 +492,19 @@ persists ONLY the user preset catalog, the chosen default, and the sync preferen
 **Verification:** `npm run build` PASSED - **824/824 tests** (804 prior + 20 new, all in `test/engine-investigation-presets.test.mjs`: save/reload, default restoration, corrupted-storage fallback, version mismatch, deleted-default fallback, built-in immutability, sync-preference persistence, `clearPersistedPresetData`), check-syntax 54/54, verify-field-map PASSED. `npm run lint`: same 2 pre-existing errors, zero new. Real browser (Playwright/Chromium): a full save → set-default → toggle-sync-off → **real page reload** round trip confirmed the default preset auto-applies at boot, the user preset and its Default badge survive, and the sync preference survives; Sync On/Off both verified against a real Commitment Health Radar spoke click into the Functional Radar workspace; a corrupted `localStorage` value was confirmed to fall back to Full Enterprise with zero console errors and without breaking boot; a golden-path smoke test (Universe Search → select → Passport/Evidence) confirmed the existing investigation flow is unaffected. **Note on "NRS-01/NRS-02 smoke paths":** no such content exists anywhere in this repository - those names are this sprint's own forward-looking placeholders for future Guided Investigation Framework scripts (Phase 8's own explicit scope: framework only, no content), not an existing artifact to smoke-test. The golden-path smoke test above (the same canonical Universe → Search → Passport → Evidence/Timeline investigation this repo's other sprints already use for regression checks) is what was actually run and is the closest honest equivalent available today.
 
 Remaining open items, unchanged from the prior session log: Passport enrichment, the Universe Search hover-card z-index issue, business-copy polish (all founder-flagged, pre-existing, out of this follow-up's scope), and the still-unauthored NRS-01/NRS-02 walkthrough content itself.
+
+## Session log — 2026-07-22 V1-FIX-1 Search Hover-Preview Interception Fix
+
+Scope: narrow V1 launch-blocker fix only, interaction-layer. No architecture, ontology, schema, snapshot data, operational graph, Visual Layers behavior, preset persistence, Functional Radar, Risk Board, Passport derivation, Guided Investigation framework, Timeline, or Supabase change.
+
+**The confirmed defect:** the Hover Passport Preview (`panels/hover-preview.js`) could visually overlap AND intercept real pointer clicks intended for the Universe Search results dropdown (`panels/universe-search.js`), reproduced repeatedly in real Chromium via `document.elementFromPoint()` (not a Playwright selector artifact).
+
+**Root cause (verified, not assumed - a one-line z-index bump alone could not have fixed this):** `#hoverPreview` is `position: fixed` with an explicit `z-index: 30`, and none of its ancestors up to `<body>` establish a stacking context, so it participates DIRECTLY in the document ROOT stacking context at level 30. The search results dropdown's authored `z-index: 20` lives inside `header.toolbar`, which is `position: static` - meaning that authored z-index is never actually applied to the toolbar's OWN position in the root context (z-index only takes effect on positioned boxes), while `backdrop-filter` still forces the toolbar to establish a stacking context for ITS OWN descendants. The dropdown's `z-index: 20` is trapped as a purely local value inside that context and can never out-rank a positive root-level z-index anywhere else on the page - confirmed directly via real Chromium `elementsFromPoint()` at the exact overlap region (`hoverPreview` painted on top of the search result button underneath it), not reasoned about from CSS alone.
+
+**Fix (interaction-layer, not CSS-only):** `panels/universe-search.js` now exposes `isOpen()` (the dropdown's own open/closed state) and fires a new `onOpenChange(open)` callback on every open<->closed transition. `panels/hover-preview.js` accepts a new `getSearchActive` callback and suppresses itself entirely - zero DOM content rendered, nothing left at that screen position to intercept a click - for any `render()` call made while Search is open. `app.js` wires `onOpenChange: () => hoverPreviewPanel.render()` so the popover reacts the instant Search opens; this was necessary (not optional robustness) because Search's query is local module state never routed through `engine/state.js`, so nothing else would otherwise trigger `renderAll()`'s `hoverPreviewPanel.render()` call in time. Hover state itself (`state.hoveredObjectId`) is never touched, so ordinary Hover Preview behavior resumes automatically - and immediately, via the same `onOpenChange` hook - the instant Search closes; it never becomes permanently hidden. Files changed: `prototype/current/panels/hover-preview.js`, `prototype/current/panels/universe-search.js`, `prototype/current/app.js` (wiring only). Zero lines changed in `lenses/universe.js`, `engine/state.js`, `engine/derive.js`, `panels/visual-layers.js`, `panels/functional-radar.js`, `panels/passport.js`, or any Supabase/data file.
+
+**Automated tests:** new `test/panels-search-hover-interaction.test.mjs` (8 tests, using the existing `test/fixtures/mini-dom.mjs` real-DOM-lifecycle shim - this is an interaction/DOM-lifecycle bug, not a pure-logic bug, the same class of bug that fixture was originally built for) - proves the suppression contract behaviorally (zero interactive `[data-probe-id]` content renders while Search is open, not just a CSS class check), the `isOpen()`/`onOpenChange` transition contract, and a full cross-module integration test wiring both panels exactly as `app.js` does: an already-visible Hover Preview suppresses the instant Search opens, a real click on a search result still selects the correct object, and Hover Preview resumes the instant Search closes. `npm run build`: **834/834 tests** (826 baseline + 8 new), check-syntax 54/54, verify-field-map PASSED. `npm run lint`: same 2 pre-existing `==`/`!=` warnings, zero new.
+
+**Real browser verification (Playwright/Chromium, three viewports - 1440px, 800px, 400px):** at each width, confirmed Hover Preview works normally while Search is closed (canvas hover shows the popover); suppresses immediately (hidden, zero children) the instant Search opens; across 44 total real search-result clicks (two real queries, "Horizon" and "Apex", combined - `engine/search.js` caps results at 8/query so a single query cannot reach 10) `document.elementFromPoint()` never once resolved inside `.hover-preview`, and every click's resulting Passport selection matched the clicked result's own label (zero mismatches); Hover Preview resumed correctly once Search closed; zero unexpected console errors at any viewport. A direct before/after comparison at 1440px, hovering the exact same search-result row at the exact same screen coordinates: **before** (baseline `3faec41`) - `elementFromPoint()` at the overlap region resolves inside `.hover-preview`, with a screenshot showing the popover visually covering three dropdown rows; **after** (this fix) - the same point resolves to the `.universe-search-result` button, with a real click on it correctly selecting "Horizon LNG Partners." Evidence (screenshots + elementFromPoint JSON logs) captured this session; screenshots are not committed to the repository (no prior screenshot-evidence convention exists here - `docs/` is text-only) and are instead attached directly to the pull request / delivered to the requester.
+
+**Known limitation:** the Universe canvas itself collapses to 0 width at the ~400px viewport in this app's existing responsive layout - confirmed identical on the unmodified `3faec41` baseline via a direct comparison, so this is a pre-existing, out-of-scope layout characteristic, not a regression from this fix. The Search-suppression contract itself was still fully verified working correctly at that width (dropdown renders, suppression fires, clicks select correctly, zero console errors) - only the canvas-hover half of the manual QA checklist is not meaningfully exercisable there.
